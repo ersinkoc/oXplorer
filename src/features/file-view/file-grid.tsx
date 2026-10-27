@@ -8,6 +8,7 @@ import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
 import type { FileEntry } from "@/lib/ipc";
+import { isSearchPath } from "@/lib/search-path";
 import type { PaneId } from "@/stores/workspace-store";
 
 const CELL_WIDTH = 104;
@@ -58,7 +59,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
         onMouseDown={view.onBackgroundMouseDown}
         onContextMenu={view.onBackgroundContextMenu}
         onScroll={view.onScroll}
-        data-drop-dir={tab.path}
+        data-drop-dir={isSearchPath(tab.path) ? undefined : tab.path}
         className="relative min-h-0 flex-1 overflow-y-auto outline-none [contain:strict]"
       >
         {body ?? (

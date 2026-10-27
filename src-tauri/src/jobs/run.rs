@@ -5,6 +5,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use super::archive;
 use super::fsops;
 use super::names;
 use super::types::{
@@ -66,6 +67,8 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Duplicate { .. } => "Duplicate",
         JobSpec::Trash { .. } => "Move to Trash",
         JobSpec::Delete { .. } => "Delete",
+        JobSpec::Compress { .. } => "Compress",
+        JobSpec::Extract { .. } => "Extract",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -93,6 +96,8 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         }
         JobSpec::Trash { paths } => job.trash(validate_all(&paths)?),
         JobSpec::Delete { paths } => job.delete(validate_all(&paths)?),
+        JobSpec::Compress { sources, format } => job.compress(validate_all(&sources)?, format)?,
+        JobSpec::Extract { archives } => job.extract(validate_all(&archives)?),
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
     Ok(job.finish(label))
@@ -395,6 +400,76 @@ impl Runner<'_> {
             }
         }
         Ok(())
+    }
+
+    /// Archive work reports bytes; a cancel surfaces as `Interrupted`.
+    fn archive_result<T>(&mut self, path: &Path, result: io::Result<T>) -> Option<T> {
+        match result {
+            Ok(v) => Some(v),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {
+                self.stopped = true;
+                None
+            }
+            Err(e) => {
+                self.failures.push(err(path, &e));
+                None
+            }
+        }
+    }
+
+    fn compress(&mut self, sources: Vec<PathBuf>, format: archive::ArchiveFormat) -> Result<(), AppError> {
+        let parent = sources.first().and_then(|s| s.parent()).map(Path::to_path_buf);
+        if sources.iter().any(|s| s.parent().map(Path::to_path_buf) != parent) {
+            return Err(AppError::InvalidPath {
+                path: sources.first().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
+                reason: "items to compress must be in the same folder".into(),
+            });
+        }
+        let Some(dest) = archive::archive_path(&sources, format) else { return Ok(()) };
+        let sizes: Vec<(u64, u32)> = sources.iter().map(|s| tree_size(s)).collect();
+        self.r.planned(sizes.iter().map(|s| s.0).sum(), 1);
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            archive::compress(&sources, &dest, format, &mut |n| {
+                done += n;
+                r.progress(done, 0, &dest);
+                !r.cancelled()
+            })
+        };
+        if self.archive_result(&dest, result).is_some() {
+            self.log.push(Done::Created(dest));
+        }
+        Ok(())
+    }
+
+    fn extract(&mut self, archives: Vec<PathBuf>) {
+        let units: Vec<u64> = archives.iter().map(|a| archive::work_units(a)).collect();
+        self.r.planned(units.iter().sum(), u32::try_from(archives.len()).unwrap_or(u32::MAX));
+        for (archive, total) in archives.iter().zip(units) {
+            if self.should_stop() {
+                break;
+            }
+            let before = self.done_bytes;
+            let result = {
+                let r = &mut *self.r;
+                let mut done = before;
+                archive::extract(archive, &mut |n| {
+                    done += n;
+                    r.progress(done, 0, archive);
+                    !r.cancelled()
+                })
+            };
+            if let Some(out) = self.archive_result(archive, result) {
+                self.log.push(Done::Created(out));
+            }
+            if self.stopped {
+                break;
+            }
+            self.done_bytes = before + total;
+            self.done_items += 1;
+            self.r.progress(self.done_bytes, self.done_items, archive);
+        }
     }
 
     fn finish(self, label: String) -> JobOutcome {

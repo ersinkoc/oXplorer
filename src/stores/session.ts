@@ -1,4 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { parseSearchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION } from "@/lib/selection";
 import { DEFAULT_SORT, type SortConfig } from "@/lib/sort";
 import {
@@ -89,7 +90,8 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 function restoreTab(raw: unknown): TabState | null {
-  if (!isRecord(raw) || typeof raw.path !== "string" || !raw.path.startsWith("/")) return null;
+  if (!isRecord(raw) || typeof raw.path !== "string") return null;
+  if (!raw.path.startsWith("/") && !parseSearchPath(raw.path)) return null;
   const path = raw.path;
   const h = isRecord(raw.history) ? raw.history : {};
   const stack = Array.isArray(h.stack) ? h.stack.filter((p): p is string => typeof p === "string") : [];
@@ -105,7 +107,7 @@ function restoreTab(raw: unknown): TabState | null {
   const tab = newTab(path, {
     id: typeof raw.id === "string" ? raw.id : undefined,
     history,
-    view: { mode: v.mode === "icons" ? "icons" : "list", sort, filter: "" },
+    view: { mode: v.mode === "icons" || v.mode === "columns" ? v.mode : "list", sort, filter: "" },
     selection: EMPTY_SELECTION,
     pinned: raw.pinned === true,
   });

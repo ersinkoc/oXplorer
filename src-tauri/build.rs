@@ -31,6 +31,18 @@ const COMMANDS: &[&str] = &[
     "quick_look_visible",
     "preview_text",
     "allow_preview",
+    "pty_open",
+    "pty_write",
+    "pty_resize",
+    "pty_close",
+    "search_start",
+    "search_cancel",
+    "favorite_tags",
+    "batch_rename",
+    "edit_tags",
+    "menu_items",
+    "set_shortcuts",
+    "open_settings",
 ];
 
 fn main() {

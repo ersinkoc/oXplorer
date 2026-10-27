@@ -10,7 +10,10 @@ import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
 import { entrySizeLabel, formatDate, kindLabel } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
+import { parent, tildify } from "@/lib/path";
+import { parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
+import { useSearchInfo } from "@/stores/search-store";
 import { type PaneId, useWorkspace } from "@/stores/workspace-store";
 
 const ROW_HEIGHT = 24;
@@ -30,6 +33,16 @@ export function FileList({ pane }: { pane: PaneId }) {
   });
 
   const body = statusBody(dir, entries, !!tab.view.filter);
+  // Search results: the last column says where each item is (or the matching line).
+  const search = parseSearchPath(tab.path);
+  const home = useApp((s) => s.home);
+  const matches = useSearchInfo((s) => s.searches[tab.path]?.matches);
+  const detail = (entry: FileEntry): string | undefined => {
+    if (!search) return undefined;
+    const m = matches?.get(entry.path);
+    if (m) return `${m.line}: ${m.text}`;
+    return tildify(parent(entry.path) ?? "/", home);
+  };
 
   return (
     <div
@@ -39,6 +52,7 @@ export function FileList({ pane }: { pane: PaneId }) {
       <ListHeader
         sort={tab.view.sort}
         onSort={(sort) => useWorkspace.getState().updateView({ sort }, pane)}
+        kindLabel={search ? (search.mode === "content" ? "Match" : "Where") : undefined}
       />
       <div
         ref={scrollRef}
@@ -52,7 +66,7 @@ export function FileList({ pane }: { pane: PaneId }) {
         onMouseDown={view.onBackgroundMouseDown}
         onContextMenu={view.onBackgroundContextMenu}
         onScroll={view.onScroll}
-        data-drop-dir={tab.path}
+        data-drop-dir={search ? undefined : tab.path}
         className="relative min-h-0 flex-1 overflow-y-auto outline-none [contain:strict]"
       >
         {body ?? (
@@ -70,6 +84,7 @@ export function FileList({ pane }: { pane: PaneId }) {
                   selected={selection.paths.has(entry.path)}
                   renaming={renaming === entry.path}
                   dropTarget={dropTarget === entry.path}
+                  detail={detail(entry)}
                   onMouseDown={view.onItemMouseDown}
                   onDoubleClick={view.onItemDoubleClick}
                   onContextMenu={view.onItemContextMenu}
@@ -95,11 +110,14 @@ const Row = memo(function Row({
   selected,
   renaming,
   dropTarget,
+  detail,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
 }: {
   id: string;
+  /** Replaces the kind column (search results). */
+  detail?: string;
   entry: FileEntry;
   index: number;
   top: number;
@@ -141,8 +159,8 @@ const Row = memo(function Row({
       <div role="gridcell" className="file-row-muted truncate px-2.5 text-right text-fg-muted tabular-nums">
         {entrySizeLabel(entry)}
       </div>
-      <div role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted">
-        {kindLabel(entry)}
+      <div role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted" title={detail}>
+        {detail ?? kindLabel(entry)}
       </div>
     </div>
   );

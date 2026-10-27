@@ -251,6 +251,13 @@ mod tests {
     }
 }
 
+/// Finder's sidebar tags, for the sidebar's Tags section.
+#[tauri::command]
+#[specta::specta]
+pub fn favorite_tags() -> Vec<crate::model::FinderTag> {
+    crate::mac::tags::favorite_tags()
+}
+
 /// Paths handed to the app from outside, waiting for the frontend to open them.
 #[derive(Default)]
 pub struct OpenRequests(std::sync::Mutex<Vec<String>>);

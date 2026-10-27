@@ -1,6 +1,7 @@
+import { listen } from "@tauri-apps/api/event";
 import { info, error as logError } from "@tauri-apps/plugin-log";
 import { useEffect, useState } from "react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { commands, events } from "@/bindings";
 import { registerAppCommands } from "@/commands/app-commands";
 import { registerFileCommands } from "@/commands/file-commands";
@@ -8,16 +9,19 @@ import { installGlobalKeys } from "@/commands/keymap";
 import { openExternalPaths } from "@/commands/navigation";
 import { listenToMenu } from "@/commands/registry";
 import { registerTabCommands } from "@/commands/tab-commands";
+import { openTerminal, registerTerminalCommands } from "@/commands/terminal-commands";
 import { AppShell } from "@/features/layout/app-shell";
 import { installQuickLook } from "@/features/preview/quick-look";
 import { unwrap } from "@/lib/ipc";
-import { loadPreferences, useApp } from "@/stores/app-store";
+import { loadPreferences, useApp, watchPreferences } from "@/stores/app-store";
+import { clearRecents, loadRecents } from "@/stores/recents-store";
 import { autosaveSession, fromSession, loadSession } from "@/stores/session";
 import { useWorkspace } from "@/stores/workspace-store";
 
 registerAppCommands();
 registerFileCommands();
 registerTabCommands();
+registerTerminalCommands();
 
 let booted: Promise<void> | null = null;
 /** Idempotent: StrictMode runs effects twice in dev. */
@@ -35,12 +39,15 @@ async function loadInitialState(): Promise<void> {
     commands.checkFullDiskAccess(),
     loadPreferences(),
     loadSession(),
+    loadRecents(),
   ]);
   useApp.getState().set({ ...prefs, home, locations, volumes, fullDiskAccess: fda });
   // Tabs and layout come back as they were; a folder given at launch opens in a new tab.
-  useWorkspace.setState(fromSession(session, home));
+  useWorkspace.setState(fromSession(prefs.restoreSession === false ? undefined : session, home));
   if (launchDir) openOrActivate(launchDir);
   autosaveSession();
+  // Shells don't survive a restart; an open panel comes back with a fresh one.
+  if (prefs.terminalVisible) openTerminal();
   await openPendingRequests();
   void info(`bootstrap: home=${home} volumes=${volumes.length} fda=${fda} restored=${session !== undefined}`);
   if (import.meta.env.DEV) {
@@ -55,6 +62,17 @@ function openOrActivate(path: string): void {
   const existing = ws.panes.left.tabs.find((t) => t.path === path);
   if (existing) ws.activateTab("left", existing.id);
   else ws.openTab(path, { pane: "left" });
+}
+
+/** Requests from the Settings window, which has no access to this window's state. */
+function handleSettingsAction(action: string): void {
+  if (action === "resetLayout") {
+    useWorkspace.setState(fromSession(undefined, useApp.getState().home));
+    toast("Tabs and layout were reset.");
+  } else if (action === "clearRecents") {
+    clearRecents();
+    toast("Recent folders were cleared.");
+  }
 }
 
 /** Folders handed over by `open -a`, the Dock or a second launch. */
@@ -79,6 +97,10 @@ export function App() {
     const unlistenMenu = listenToMenu();
     const uninstallKeys = installGlobalKeys();
     const uninstallQuickLook = installQuickLook();
+    const unwatchPrefs = watchPreferences();
+    const unlistenSettings = listen<{ action: string }>("settings-action", ({ payload }) =>
+      handleSettingsAction(payload.action),
+    );
     const unlistenOpen = events.openRequested.listen(() => {
       // Requests that arrive before bootstrap finishes are picked up by it.
       if (booted) void booted.then(openPendingRequests);
@@ -92,6 +114,8 @@ export function App() {
       disposed = true;
       uninstallKeys();
       uninstallQuickLook();
+      void unwatchPrefs.then((fn) => fn());
+      void unlistenSettings.then((fn) => fn());
       void unlistenMenu.then((fn) => fn());
       void unlistenOpen.then((fn) => fn());
     };

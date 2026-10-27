@@ -3,12 +3,18 @@ import { debug } from "@tauri-apps/plugin-log";
 import { create } from "zustand";
 import type { FinderTag } from "@/bindings";
 import {
+  type ContentMatch,
   commands,
   type DirChanged_Serialize as DirChanged,
   type DirEvent_Serialize as DirEvent,
   type DirEvent_Deserialize,
+  type SearchEvent_Deserialize,
+  type SearchEvent_Serialize,
 } from "@/bindings";
 import { type AppError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
+import { parent } from "@/lib/path";
+import { isSearchPath, parseSearchPath } from "@/lib/search-path";
+import { EMPTY_SEARCH, useSearchInfo } from "@/stores/search-store";
 
 export type DirStatus = "loading" | "ready" | "error";
 
@@ -20,7 +26,12 @@ export interface DirState {
 
 interface DirCacheState {
   dirs: Record<string, DirState>;
+  /** Lists a folder, or runs the search a `search:` path describes. */
   load: (path: string) => Promise<void>;
+  /** Stops a running search (no-op for folders). */
+  stop: (path: string) => void;
+  /** File operations outside a search still show up in its results. */
+  applyToSearches: (created: readonly FileEntry[], removed: readonly string[]) => void;
   /** Applies a watcher delta; changes that land mid-listing are replayed after it. */
   applyChange: (change: DirChanged) => void;
 }
@@ -51,12 +62,69 @@ export function applyDelta(entries: readonly FileEntry[], change: DirChanged): F
  */
 const FLUSH_MS = 400;
 
+/** Ids of running searches by path, for cancelling. */
+const searchIds = new Map<string, string>();
+
 /** Monotonic per-path load ids; a newer load makes older channels' messages no-ops. */
 const loadIds = new Map<string, number>();
 /** Watcher deltas received while a path was still being listed. */
 const deferred = new Map<string, DirChanged[]>();
 
 export const useDirCache = create<DirCacheState>()((set, get) => {
+  /** Streams a search into `dirs[path]` like a folder listing. */
+  const runSearch = async (path: string): Promise<void> => {
+    get().stop(path);
+    const spec = parseSearchPath(path);
+    const info = useSearchInfo.getState();
+    if (!spec?.query.trim()) {
+      info.patch(path, { ...EMPTY_SEARCH });
+      patch(path, { status: "ready", entries: [], error: null });
+      return;
+    }
+    const id = crypto.randomUUID();
+    searchIds.set(path, id);
+    const current = () => searchIds.get(path) === id;
+    info.patch(path, { matches: new Map(), scanned: 0, running: true, outcome: null });
+    patch(path, { status: "loading", entries: [], error: null });
+
+    const buffer: FileEntry[] = [];
+    const matches = new Map<string, ContentMatch>();
+    let lastFlush = 0;
+    const flush = () => {
+      lastFlush = performance.now();
+      patch(path, { entries: buffer.slice() });
+      useSearchInfo.getState().patch(path, { matches: new Map(matches) });
+    };
+    const channel = new Channel<SearchEvent_Deserialize>();
+    channel.onmessage = (raw) => {
+      if (!current()) return;
+      const ev = raw as SearchEvent_Serialize;
+      if (ev.type === "batch") {
+        for (const e of ev.entries) buffer.push(e);
+        for (const m of ev.matches) matches.set(m.path, m);
+        if (lastFlush === 0 || performance.now() - lastFlush >= FLUSH_MS) flush();
+      } else if (ev.type === "progress") {
+        useSearchInfo.getState().patch(path, { scanned: ev.scanned });
+      } else {
+        searchIds.delete(path);
+        flush();
+        patch(path, { status: "ready" });
+        useSearchInfo.getState().patch(path, { running: false, outcome: ev });
+        void debug(
+          `search ${spec.mode} "${spec.query}": ${ev.total} results${ev.cancelled ? " (cancelled)" : ""}`,
+        );
+      }
+    };
+    try {
+      await unwrap(commands.searchStart(id, spec, channel));
+    } catch (err) {
+      if (!current()) return;
+      searchIds.delete(path);
+      useSearchInfo.getState().patch(path, { running: false });
+      patch(path, { status: "error", error: toAppError(err), entries: [] });
+    }
+  };
+
   const patch = (path: string, next: Partial<DirState>) =>
     set((s) => {
       const prev = s.dirs[path] ?? { status: "loading", entries: [], error: null };
@@ -67,6 +135,7 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
     dirs: {},
 
     load: async (path) => {
+      if (isSearchPath(path)) return runSearch(path);
       const id = (loadIds.get(path) ?? 0) + 1;
       loadIds.set(path, id);
       const current = () => loadIds.get(path) === id;
@@ -134,6 +203,46 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
         const error = toAppError(err);
         if (current()) patch(path, { status: "error", error, entries: [] });
         void debug(`list ${path} failed: ${error.kind}`);
+      }
+    },
+
+    stop: (path) => {
+      const id = searchIds.get(path);
+      if (!id) return;
+      searchIds.delete(path);
+      void commands.searchCancel(id);
+      // The UI stops at once; the engine may need a moment to wind down.
+      const info = useSearchInfo.getState().searches[path];
+      useSearchInfo.getState().patch(path, {
+        running: false,
+        outcome: info?.outcome ?? {
+          total: get().dirs[path]?.entries.length ?? 0,
+          cancelled: true,
+          truncated: false,
+        },
+      });
+      patch(path, { status: "ready" });
+    },
+
+    applyToSearches: (created, removed) => {
+      const gone = new Set(removed);
+      const changed = new Set(created.map((e) => e.path));
+      for (const [path, dir] of Object.entries(get().dirs)) {
+        if (!isSearchPath(path)) continue;
+        if (!dir.entries.some((e) => gone.has(e.path) || changed.has(e.path))) continue;
+        // Renamed or moved results stay in the list under their new path; results
+        // that changed in place (tags) are refreshed.
+        const folders = new Set(dir.entries.filter((e) => gone.has(e.path)).map((e) => parent(e.path)));
+        const shown = new Set(dir.entries.map((e) => e.path));
+        const replacements = created.filter((e) => folders.has(parent(e.path)) || shown.has(e.path));
+        patch(path, {
+          entries: applyDelta(dir.entries, {
+            dir: path,
+            upserted: replacements,
+            removed: [...removed],
+            rescan: false,
+          }),
+        });
       }
     },
 

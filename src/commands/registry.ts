@@ -31,7 +31,13 @@ export function listCommands(): Command[] {
   return [...registry.values()];
 }
 
-/** Routes native menu clicks/accelerators into the registry. */
+/**
+ * Routes native menu clicks/accelerators into the registry. The menu bar is
+ * shared by all windows, so commands only run when this window is in front
+ * (otherwise ⌘D in the Settings window would duplicate the selected files).
+ */
 export function listenToMenu(): Promise<() => void> {
-  return events.menuCommand.listen((e) => runCommand(e.payload.id));
+  return events.menuCommand.listen((e) => {
+    if (document.hasFocus()) runCommand(e.payload.id);
+  });
 }

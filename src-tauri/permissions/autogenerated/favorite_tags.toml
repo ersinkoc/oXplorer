@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-favorite-tags"
+description = "Enables the favorite_tags command without any pre-configured scope."
+commands.allow = ["favorite_tags"]
+
+[[permission]]
+identifier = "deny-favorite-tags"
+description = "Denies the favorite_tags command without any pre-configured scope."
+commands.deny = ["favorite_tags"]

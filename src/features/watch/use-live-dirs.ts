@@ -2,6 +2,7 @@ import { debug } from "@tauri-apps/plugin-log";
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { commands, events } from "@/bindings";
+import { isSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { activeTabOf, useWorkspace } from "@/stores/workspace-store";
@@ -27,7 +28,8 @@ export function useLiveDirs(): void {
   const visible = useWorkspace(
     useShallow((s) => {
       const panes = s.dualPane ? [s.panes.left, s.panes.right] : [s.panes.left];
-      return [...new Set([...panes.map((p) => activeTabOf(p).path), VOLUMES_DIR])].sort();
+      const paths = panes.map((p) => activeTabOf(p).path).filter((p) => !isSearchPath(p));
+      return [...new Set([...paths, VOLUMES_DIR])].sort();
     }),
   );
 

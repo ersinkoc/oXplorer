@@ -7,7 +7,7 @@ import { DEFAULT_SORT, type SortConfig } from "@/lib/sort";
 enableMapSet();
 
 export type PaneId = "left" | "right";
-export type ViewMode = "list" | "icons";
+export type ViewMode = "list" | "icons" | "columns";
 
 export const PANES: readonly PaneId[] = ["left", "right"];
 export const otherPane = (pane: PaneId): PaneId => (pane === "left" ? "right" : "left");

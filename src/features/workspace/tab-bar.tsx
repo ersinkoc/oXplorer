@@ -1,9 +1,10 @@
 import { Menu } from "@tauri-apps/api/menu";
-import { Pin, Plus, X } from "lucide-react";
+import { Pin, Plus, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { closeTab } from "@/commands/tab-commands";
 import { pathIconUrl } from "@/lib/icons";
 import { basename } from "@/lib/path";
+import { parseSearchPath, searchTitle } from "@/lib/search-path";
 import { otherPane, type PaneId, type TabState, useWorkspace } from "@/stores/workspace-store";
 
 const DRAG_THRESHOLD = 4;
@@ -159,15 +160,16 @@ function TabButton({
   onContextMenu: (e: React.MouseEvent) => void;
   onClose: () => void;
 }) {
-  const name = tab.path === "/" ? "Macintosh HD" : basename(tab.path);
+  const search = parseSearchPath(tab.path);
+  const name = search ? searchTitle(search) : tab.path === "/" ? "Macintosh HD" : basename(tab.path);
   return (
     <div
       data-tab-id={tab.id}
-      data-drop-dir={tab.path}
+      data-drop-dir={search ? undefined : tab.path}
       role="tab"
       tabIndex={-1}
       aria-selected={active}
-      title={tab.path}
+      title={search ? name : tab.path}
       onMouseDown={onMouseDown}
       onContextMenu={onContextMenu}
       className={`group relative flex min-w-0 items-center gap-1.5 border-r border-border px-2 text-[12px] ${
@@ -178,7 +180,17 @@ function TabButton({
           : ""
       }`}
     >
-      <img src={pathIconUrl(tab.path, 32)} alt="" aria-hidden draggable={false} className="size-4 shrink-0" />
+      {search ? (
+        <Search aria-hidden className="size-3.5 shrink-0" />
+      ) : (
+        <img
+          src={pathIconUrl(tab.path, 32)}
+          alt=""
+          aria-hidden
+          draggable={false}
+          className="size-4 shrink-0"
+        />
+      )}
       {tab.pinned ? (
         <Pin aria-label="Pinned" className="absolute right-0.5 bottom-0.5 size-2 text-fg-muted" />
       ) : (

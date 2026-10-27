@@ -1,7 +1,8 @@
-import { ChevronRight, HardDrive } from "lucide-react";
+import { ChevronRight, HardDrive, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
 import { segments, tildify } from "@/lib/path";
+import { parseSearchPath, searchTitle } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 
 /** Breadcrumb that turns into a text field on double-click or ⇧⌘G. */
@@ -10,7 +11,15 @@ export function PathBar({ path }: { path: string }) {
   const home = useApp((s) => s.home);
   const rootName = useApp((s) => s.volumes.find((v) => v.isRoot)?.name ?? "Macintosh HD");
 
-  if (editing) return <PathInput initial={tildify(path, home)} />;
+  const search = parseSearchPath(path);
+  if (editing) return <PathInput initial={tildify(search?.scope ?? path, home)} />;
+  if (search)
+    return (
+      <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-[13px]">
+        <Search className="size-3.5 shrink-0 text-fg-muted" />
+        <span className="truncate font-semibold">{searchTitle(search)}</span>
+      </div>
+    );
 
   const parts = segments(path);
   return (

@@ -13,6 +13,87 @@ pub fn read_tags(path: &Path) -> Vec<FinderTag> {
     }
 }
 
+/// Replaces the tags of `path`. Finder reads only this attribute on current
+/// macOS; an empty list removes it.
+pub fn write_tags(path: &Path, tags: &[FinderTag]) -> std::io::Result<()> {
+    if tags.is_empty() {
+        return match xattr::remove(path, USER_TAGS) {
+            Err(e) if e.raw_os_error() == Some(libc::ENOATTR) => Ok(()),
+            other => other,
+        };
+    }
+    let value = plist::Value::Array(
+        tags.iter()
+            .map(|t| {
+                plist::Value::String(if t.color == 0 {
+                    t.name.clone()
+                } else {
+                    format!("{}\n{}", t.name, t.color)
+                })
+            })
+            .collect(),
+    );
+    let mut buf = Vec::new();
+    value.to_writer_binary(&mut buf).map_err(std::io::Error::other)?;
+    xattr::set(path, USER_TAGS, &buf)
+}
+
+/// Adds and removes tags (by name) on one item, keeping its other tags in order.
+pub fn edit_tags(path: &Path, add: &[FinderTag], remove: &[String]) -> std::io::Result<()> {
+    let mut tags: Vec<FinderTag> =
+        read_tags(path).into_iter().filter(|t| !remove.contains(&t.name)).collect();
+    for t in add {
+        if !tags.iter().any(|x| x.name == t.name) {
+            tags.push(t.clone());
+        }
+    }
+    write_tags(path, &tags)
+}
+
+/// Colors of Finder's built-in tags, by the names Finder gives them.
+const BUILTIN_COLORS: &[(&str, u8)] = &[
+    ("Gray", 1),
+    ("Grey", 1),
+    ("Green", 2),
+    ("Purple", 3),
+    ("Blue", 4),
+    ("Yellow", 5),
+    ("Red", 6),
+    ("Orange", 7),
+    ("Gri", 1),
+    ("Yeşil", 2),
+    ("Mor", 3),
+    ("Mavi", 4),
+    ("Sarı", 5),
+    ("Kırmızı", 6),
+    ("Turuncu", 7),
+];
+
+/// The tags Finder lists in its sidebar (`FavoriteTagNames` in Finder's
+/// preferences), falling back to the seven color tags.
+pub fn favorite_tags() -> Vec<FinderTag> {
+    let names: Vec<String> = dirs::home_dir()
+        .map(|h| h.join("Library/Preferences/com.apple.finder.plist"))
+        .and_then(|p| plist::Value::from_file(p).ok())
+        .and_then(|v| v.into_dictionary())
+        .and_then(|mut d| d.remove("FavoriteTagNames"))
+        .and_then(|v| v.into_array())
+        .map(|a| a.into_iter().filter_map(|v| v.into_string()).filter(|s| !s.is_empty()).collect())
+        .unwrap_or_default();
+    let names = if names.is_empty() {
+        ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"].map(str::to_owned).to_vec()
+    } else {
+        names
+    };
+    names
+        .into_iter()
+        .map(|name| {
+            let color = BUILTIN_COLORS.iter().find(|(n, _)| *n == name).map_or(0, |(_, c)| *c);
+            FinderTag { name, color }
+        })
+        .collect()
+}
+
 /// The attribute is a binary plist array of strings like `"Red\n6"`; the color
 /// suffix is absent for tags without a color.
 fn parse_tags(raw: &[u8]) -> Vec<FinderTag> {
@@ -41,6 +122,22 @@ mod tests {
         let mut buf = Vec::new();
         value.to_writer_binary(&mut buf).unwrap();
         buf
+    }
+
+    #[test]
+    fn edits_round_trip_through_the_attribute() {
+        let tmp = tempfile::tempdir().unwrap();
+        let f = tmp.path().join("f");
+        std::fs::write(&f, "").unwrap();
+        let red = FinderTag { name: "Red".into(), color: 6 };
+        let work = FinderTag { name: "Work".into(), color: 0 };
+        edit_tags(&f, &[red.clone(), work.clone()], &[]).unwrap();
+        assert_eq!(read_tags(&f), vec![red.clone(), work.clone()]);
+        edit_tags(&f, std::slice::from_ref(&red), &["Work".into()]).unwrap();
+        assert_eq!(read_tags(&f), vec![red]);
+        edit_tags(&f, &[], &["Red".into()]).unwrap();
+        assert!(read_tags(&f).is_empty());
+        assert!(xattr::get(&f, USER_TAGS).unwrap().is_none());
     }
 
     #[test]

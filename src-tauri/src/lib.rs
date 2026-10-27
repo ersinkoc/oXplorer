@@ -6,6 +6,8 @@ mod mac;
 mod menu;
 mod model;
 mod preview;
+mod pty;
+mod search;
 mod security;
 mod system;
 mod uri_scheme;
@@ -26,16 +28,28 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::measure,
             jobs::rename_path,
             jobs::create_item,
+            jobs::batch_rename,
             integration::pasteboard_write_files,
             integration::pasteboard_read_files,
             integration::apps_for_path,
             integration::open_with,
             integration::drag_preview,
+            integration::edit_tags,
             integration::quick_look,
             integration::quick_look_close,
             integration::quick_look_visible,
             preview::preview_text,
             preview::allow_preview,
+            pty::pty_open,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_close,
+            search::search_start,
+            search::search_cancel,
+            system::favorite_tags,
+            menu::menu_items,
+            menu::set_shortcuts,
+            menu::open_settings,
             system::home_dir,
             system::launch_dir,
             system::self_test_dir,
@@ -101,6 +115,7 @@ pub fn run() {
         .on_menu_event(|app, event| menu::forward_event(app, event.id().as_ref()))
         .register_asynchronous_uri_scheme_protocol(uri_scheme::SCHEME, uri_scheme::handle)
         .manage(system::OpenRequests::default())
+        .manage(menu::Shortcuts::default())
         .setup(move |app| {
             builder.mount_events(app);
             if let Some(window) = app.get_webview_window("main") {
@@ -108,6 +123,8 @@ pub fn run() {
             }
             app.manage(dir::DirWatcher::new(app.handle().clone())?);
             app.manage(std::sync::Arc::new(jobs::JobManager::default()));
+            app.manage(std::sync::Arc::new(pty::PtyManager::default()));
+            app.manage(std::sync::Arc::new(search::SearchManager::default()));
             Ok(())
         })
         .build(tauri::generate_context!())

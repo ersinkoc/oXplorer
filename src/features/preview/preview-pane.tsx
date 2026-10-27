@@ -1,13 +1,14 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Eye } from "lucide-react";
 import { useEffect, useState } from "react";
-import { commands, type TextPreview } from "@/bindings";
+import { commands } from "@/bindings";
 import { openEntries } from "@/commands/navigation";
 import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { toggleQuickLook } from "@/features/preview/quick-look";
+import { TextPreview } from "@/features/preview/text-preview";
 import { entrySizeLabel, formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
 import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
-import { type FileEntry, unwrap } from "@/lib/ipc";
+import type { FileEntry } from "@/lib/ipc";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { useWorkspace } from "@/stores/workspace-store";
 
@@ -57,7 +58,7 @@ export function PreviewPane({ width }: { width: number }) {
   );
 }
 
-function EntryPreview({ entry }: { entry: FileEntry }) {
+export function EntryPreview({ entry }: { entry: FileEntry }) {
   const kind = previewKind(entry);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -93,7 +94,8 @@ function Content({ entry, kind }: { entry: FileEntry; kind: Kind }) {
   const src = useAllowedSrc(entry, media);
   const [failed, setFailed] = useState(false);
 
-  if (kind === "text") return <TextContent entry={entry} />;
+  if (kind === "text")
+    return <TextPreview entry={entry} onBinary={() => <BigIcon entry={entry} thumbnail />} />;
   if (media && src && !failed) {
     if (kind === "image")
       return (
@@ -141,39 +143,6 @@ function BigIcon({ entry, thumbnail = false }: { entry: FileEntry; thumbnail?: b
       onError={() => setFallback(true)}
       className="max-h-full w-full max-w-[256px] object-contain"
     />
-  );
-}
-
-function TextContent({ entry }: { entry: FileEntry }) {
-  const [preview, setPreview] = useState<TextPreview | null>(null);
-  const [error, setError] = useState(false);
-  useEffect(() => {
-    let stale = false;
-    const timer = setTimeout(() => {
-      unwrap(commands.previewText(entry.path))
-        .then((p) => !stale && setPreview(p))
-        .catch(() => !stale && setError(true));
-    }, SETTLE_MS);
-    return () => {
-      stale = true;
-      clearTimeout(timer);
-    };
-  }, [entry.path]);
-
-  if (error || preview?.binary) return <BigIcon entry={entry} thumbnail />;
-  if (!preview) return null;
-  if (preview.text.length === 0) return <p className="text-[12px] text-fg-faint">Empty file</p>;
-  return (
-    <div className="flex size-full min-h-0 flex-col overflow-hidden rounded-md border border-border bg-bg">
-      <pre className="min-h-0 flex-1 overflow-auto p-2.5 font-mono text-[11px] leading-[1.45] [tab-size:4] select-text">
-        {preview.text}
-      </pre>
-      {preview.truncated && (
-        <p className="shrink-0 border-t border-border px-2.5 py-1 text-[11px] text-fg-faint">
-          Showing the first {formatSize(preview.text.length)} of {formatSize(entry.size)}
-        </p>
-      )}
-    </div>
   );
 }
 

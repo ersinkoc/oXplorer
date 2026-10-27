@@ -698,37 +698,37 @@ A single-pane, real-time, native-looking, secure file manager. Distributed as a 
 ### Phase 5 — Preview and QuickLook (1.5 weeks)
 
 - [x] Native `QLPreviewPanel` via Space/⌘Y (updates as the selection changes, navigable with arrow keys) — controller methods are added to the window class at runtime
-- [ ] Preview panel: code (shiki worker), markdown, image, audio/video, info card — ✅ image/video/audio (`asset:` dynamic scope), plain text (first 256 KB), QL thumbnail, info card, multi-selection summary (⇧⌘P); ⏳ shiki + markdown rendering
-- [ ] Column view (the last column shows a preview)
-- **DoD:** A 50 MB log file does not freeze the UI in the preview (only the first 256 KB is read).
+- [x] Preview panel: code (shiki worker), markdown, image, audio/video, info card — image/video/audio (`asset:` dynamic scope), text (first 256 KB; shiki 4 in a module worker with the JS regex engine, languages loaded lazily, up to 128 KB highlighted, 3 s watchdog), Markdown (react-markdown + GFM, no raw HTML, links open in the browser, Preview/Source toggle), QL thumbnail, info card, multi-selection summary (⇧⌘P)
+- [x] Column view (the last column shows a preview) — ⌘3; columns start at the home folder / volume / disk root, → enters a folder, ← goes back
+- **DoD:** A 50 MB log file does not freeze the UI in the preview (only the first 256 KB is read). ✅ (`reads_only_the_head_of_large_files` test; highlighting is skipped above 128 KB)
 
 ### Phase 6 — Integrated terminal (1.5 weeks)
 
-- [ ] PTY module (`portable-pty`), `Channel<Vec<u8>>` stream, resize
-- [ ] xterm 6 + WebGL + fit, terminal tabs
-- [ ] cwd tracking via OSC 7, "sync with pane" mode
-- [ ] Drag a file to the terminal → the escaped path is pasted
-- **DoD:** TUI apps such as `vim`, `htop` and `claude` work properly, and resizing is smooth.
+- [x] PTY module (`portable-pty`), `Channel<Vec<u8>>` stream, resize — output is sent as UTF-8 text (sequences split across reads are joined in Rust) since specta can't type raw byte channels; login shell, `TERM=xterm-256color`, `LANG` defaulted for Finder launches
+- [x] xterm 6 + WebGL + fit, terminal tabs — bottom panel (⌃` show/hide, ⌃⇧` new), resizable, shells keep running while hidden; ⌘C/⌘V/⌘A/⌘⌫ go to the focused terminal; ⌘-click opens links
+- [x] cwd tracking via OSC 7, "sync with pane" mode — macOS zsh only emits OSC 7 inside Apple Terminal, so zsh starts with a `ZDOTDIR` shim that sources the user's dotfiles and adds a `precmd` hook; reports from other hosts (ssh) are ignored; "Go to Folder in Terminal" types `cd -- <path>`
+- [x] Drag a file to the terminal → the escaped path is pasted (from the panes and from Finder)
+- **DoD:** TUI apps such as `vim`, `htop` and `claude` work properly, and resizing is smooth. ✅ at the PTY level: `vim` (alternate screen, sees 120x40 after resize, clean exit) and `htop` from the login shell are tested; `claude` and the on-screen rendering are not verified by the agent
 
 ### Phase 7 — Search (1.5 weeks)
 
-- [ ] ⌘F: Instant filter in the current directory
-- [ ] Sidebar "Tags" section (`mdfind kMDItemUserTags`)
-- [ ] ⇧⌘F: Advanced search panel
-  - Name: `jwalk` + `globset`, recursive, stream
+- [x] ⌘F: Instant filter in the current directory (in search results ⌘F edits the search)
+- [x] Sidebar "Tags" section (`mdfind kMDItemUserTags`) — names from Finder's `FavoriteTagNames` preference (the `SyncedPreferences` plist in §6.4 doesn't exist on current macOS)
+- [x] ⇧⌘F: Advanced search panel — Name / Contents / Spotlight, match case, regex, hidden files, scope (folder / Home / This Mac), live count, Stop (Esc)
+  - Name: `jwalk` + `globset`, recursive, stream — implemented with `ignore`'s parallel walker instead of jwalk (one walker for both modes); NFC-normalized, packages are single items
   - Content: `ignore` + `grep-searcher` (ripgrep engine), `.gitignore`-aware, with line previews
   - Spotlight: `mdfind -0 -onlyin` stream, plus tag and kind filters
-- [ ] Results open in a regular "virtual directory" tab (all file operations work on the results too)
-- [ ] ⌘K Command palette (commands + recently visited directories + favorites, sorted by frecency)
-- **DoD:** A content search in the home directory can be cancelled, and results stream in.
+- [x] Results open in a regular "virtual directory" tab (all file operations work on the results too) — `search:?q=…&mode=…&in=…` paths, so history, new tabs and session restore work; the last column shows the location or the matching line; results follow renames/deletes; max 10,000 results
+- [x] ⌘K Command palette (commands + recently visited directories + favorites, sorted by frecency) — also accepts a typed `/` or `~` path
+- **DoD:** A content search in the home directory can be cancelled, and results stream in. ✅ First results after ~100 ms; the engine stops 0.3 ms after cancel in normal folders. In TCC-protected folders (~/Documents) a single open() can take 0.5–2.5 s under parallel load and can't be interrupted, so the UI marks the search stopped immediately and the engine winds down in the background (`bench_content_home`).
 
 ### Phase 8 — Archives and settings (1.5 weeks)
 
-- [ ] Compress (zip, tar.gz, tar.zst) and extract: via the job queue, with progress
-- [ ] Settings window (separate native window): general, appearance, shortcuts, terminal, advanced
-- [ ] Shortcut customization (with conflict detection)
-- [ ] Writing tags (add/remove)
-- [ ] Batch rename (prefix/suffix, find-replace, regex, numbering; with live preview)
+- [x] Compress (zip, tar.gz, tar.zst) and extract: via the job queue, with progress — cancellable, undoable, written under a temporary name and renamed into place; extraction follows Archive Utility (one top-level item lands as itself, otherwise a folder); zip-slip and symlink-traversal are refused; setuid bits dropped. Not kept in archives: extended attributes and resource forks
+- [x] Settings window (separate native window): general, appearance, shortcuts, terminal, advanced — second Vite page with its own capability (no file-system commands); preferences shared through the store, the main window applies changes live
+- [x] Shortcut customization (with conflict detection) — menu bar rebuilt at runtime; Rust validates accelerators (muda) and refuses duplicates; the UI offers to move a taken shortcut. ⌥⌘1…9 and ⌘↓ stay fixed
+- [x] Writing tags (add/remove) — context-menu Tags submenu with check marks for Finder's sidebar tags (no undo yet)
+- [x] Batch rename (prefix/suffix, find-replace, regex, numbering; with live preview) — Finder's three modes; all-or-nothing in Rust (temporary names, rollback), undoable
 
 ### Phase 9 — Polish and v1.0 (2 weeks)
 

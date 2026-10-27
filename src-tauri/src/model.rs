@@ -58,7 +58,7 @@ pub struct FileEntry {
     pub tags: Vec<FinderTag>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, specta::Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FinderTag {
     pub name: String,

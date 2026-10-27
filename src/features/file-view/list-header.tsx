@@ -21,7 +21,16 @@ export function gridTemplate(w: ColumnWidths): string {
   return `minmax(180px, 1fr) ${w.modified}px ${w.size}px ${w.kind}px`;
 }
 
-export function ListHeader({ sort, onSort }: { sort: SortConfig; onSort: (s: SortConfig) => void }) {
+export function ListHeader({
+  sort,
+  onSort,
+  kindLabel,
+}: {
+  sort: SortConfig;
+  onSort: (s: SortConfig) => void;
+  /** Replaces "Kind" when the last column shows something else (search results). */
+  kindLabel?: string;
+}) {
   const widths = useApp((s) => s.columnWidths);
 
   const startResize = (key: keyof ColumnWidths, e: React.PointerEvent) => {
@@ -76,7 +85,7 @@ export function ListHeader({ sort, onSort }: { sort: SortConfig; onSort: (s: Sor
                 col.align === "right" ? "justify-end" : ""
               } ${active ? "font-semibold text-fg" : ""}`}
             >
-              <span className="truncate">{col.label}</span>
+              <span className="truncate">{col.field === "kind" && kindLabel ? kindLabel : col.label}</span>
               {active && <Arrow className="size-3 shrink-0" />}
             </button>
           </div>

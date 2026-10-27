@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+pub use super::archive::ArchiveFormat;
 use crate::error::AppError;
 use crate::model::FileEntry;
 
@@ -25,6 +26,15 @@ pub enum JobSpec {
     /// Permanent; cannot be undone.
     Delete {
         paths: Vec<String>,
+    },
+    /// Creates one archive of `sources` (siblings) next to them.
+    Compress {
+        sources: Vec<String>,
+        format: ArchiveFormat,
+    },
+    /// Extracts each archive next to itself.
+    Extract {
+        archives: Vec<String>,
     },
     /// Replays an `UndoAction` from an earlier job (undo and redo alike).
     Undo {

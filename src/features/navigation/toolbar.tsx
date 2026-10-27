@@ -3,6 +3,7 @@ import {
   ChevronRight,
   ChevronUp,
   Columns2,
+  Columns3,
   LayoutGrid,
   List,
   PanelRight,
@@ -46,6 +47,7 @@ export function Toolbar({ inset }: { inset: boolean }) {
           [
             ["list", "as List", List, "view.asList"],
             ["icons", "as Icons", LayoutGrid, "view.asIcons"],
+            ["columns", "as Columns", Columns3, "view.asColumns"],
           ] as const
         ).map(([mode, label, Icon, command]) => (
           <button
@@ -76,6 +78,7 @@ export function Toolbar({ inset }: { inset: boolean }) {
         <input
           type="search"
           placeholder="Filter"
+          data-filter-input
           value={tab.view.filter}
           onChange={(e) => useWorkspace.getState().updateView({ filter: e.target.value })}
           onKeyDown={(e) => {

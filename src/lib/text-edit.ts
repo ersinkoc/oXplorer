@@ -10,6 +10,8 @@ export type TextField = HTMLInputElement | HTMLTextAreaElement;
 
 export function focusedTextField(): TextField | null {
   const el = document.activeElement;
+  // xterm's hidden input textarea is not a text field; terminals handle edits themselves.
+  if (el?.closest(".xterm")) return null;
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el : null;
 }
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-edit-tags"
+description = "Enables the edit_tags command without any pre-configured scope."
+commands.allow = ["edit_tags"]
+
+[[permission]]
+identifier = "deny-edit-tags"
+description = "Denies the edit_tags command without any pre-configured scope."
+commands.deny = ["edit_tags"]

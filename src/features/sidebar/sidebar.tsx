@@ -11,11 +11,14 @@ import {
   Monitor,
   Server,
 } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { commands, type VolumeInfo } from "@/bindings";
+import { commands, type FinderTag, type VolumeInfo } from "@/bindings";
 import { navigateTo } from "@/commands/navigation";
 import { useDrag } from "@/features/dnd/drag-store";
+import { TAG_COLORS } from "@/lib/icons";
 import { describeError } from "@/lib/ipc";
+import { searchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, useActiveTab } from "@/stores/workspace-store";
 
@@ -32,6 +35,10 @@ export function Sidebar() {
   const locations = useApp((s) => s.locations);
   const volumes = useApp((s) => s.volumes);
   const current = useActiveTab().path;
+  const [tags, setTags] = useState<FinderTag[]>([]);
+  useEffect(() => {
+    void commands.favoriteTags().then(setTags);
+  }, []);
 
   return (
     <nav aria-label="Sidebar" className="flex w-[200px] shrink-0 flex-col">
@@ -65,8 +72,47 @@ export function Sidebar() {
             />
           ))}
         </Section>
+        {tags.length > 0 && (
+          <Section title="Tags">
+            {tags.map((t) => {
+              const path = tagSearchPath(t.name);
+              return (
+                <Item
+                  key={t.name}
+                  leading={<TagDot color={t.color} />}
+                  label={t.name}
+                  active={current === path}
+                  onClick={() => navigateTo(path)}
+                />
+              );
+            })}
+          </Section>
+        )}
       </div>
     </nav>
+  );
+}
+
+/** Everything on this Mac carrying a tag, found through Spotlight (like Finder). */
+function tagSearchPath(name: string): string {
+  return searchPath({
+    scope: "/",
+    query: name,
+    mode: "tag",
+    caseSensitive: false,
+    regex: false,
+    includeHidden: false,
+  });
+}
+
+function TagDot({ color }: { color: number }) {
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center">
+      <span
+        className="size-2.5 rounded-full ring-1 ring-fg-faint/40"
+        style={{ background: TAG_COLORS[color] ?? "transparent" }}
+      />
+    </span>
   );
 }
 
@@ -89,13 +135,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Item({
   icon: Icon,
+  leading,
   label,
   active,
   dropDir,
   onClick,
   action,
 }: {
-  icon: LucideIcon;
+  icon?: LucideIcon;
+  /** Replaces the icon (tag color dots). */
+  leading?: ReactNode;
   label: string;
   active: boolean;
   dropDir?: string;
@@ -114,7 +163,7 @@ function Item({
           active ? "bg-sidebar-active" : "hover:bg-hover"
         } ${isDropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
       >
-        <Icon className="size-4 shrink-0 text-accent" strokeWidth={1.75} />
+        {leading ?? (Icon && <Icon className="size-4 shrink-0 text-accent" strokeWidth={1.75} />)}
         <span className="truncate">{label}</span>
       </button>
       {action && (

@@ -115,3 +115,26 @@ pub async fn quick_look_visible(app: AppHandle) -> bool {
     }
     tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(false)).await.unwrap_or(false)
 }
+
+/// Adds and removes Finder tags on each item; returns the updated entries.
+#[tauri::command]
+#[specta::specta]
+pub async fn edit_tags(
+    paths: Vec<String>,
+    add: Vec<crate::model::FinderTag>,
+    remove: Vec<String>,
+) -> AppResult<Vec<crate::model::FileEntry>> {
+    let paths = validate_all(&paths)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|p| {
+                crate::mac::tags::edit_tags(p, &add, &remove).map_err(|e| AppError::from_io(&e, p))?;
+                crate::dir::build_entry_for(p)
+                    .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}

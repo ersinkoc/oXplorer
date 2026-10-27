@@ -1,8 +1,10 @@
 //! Long-running file operations: one thread per job, progress over a Channel,
 //! cooperative cancellation, and conflict prompts answered by the frontend.
 
+mod archive;
 mod fsops;
 mod names;
+mod rename;
 mod run;
 mod types;
 
@@ -203,6 +205,15 @@ pub async fn rename_path(path: String, new_name: String) -> AppResult<FileEntry>
     })
     .await
     .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
+}
+
+/// Renames several items at once; all or nothing.
+#[tauri::command]
+#[specta::specta]
+pub async fn batch_rename(items: Vec<rename::RenameItem>) -> AppResult<rename::BatchRenameOutcome> {
+    tauri::async_runtime::spawn_blocking(move || rename::batch_rename(&items))
+        .await
+        .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
 }
 
 /// Creates `name` (or `name 2`, … if taken) inside `parent`.

@@ -24,6 +24,8 @@ const LABELS: Record<JobSpec["kind"], string> = {
   duplicate: "Duplicating",
   trash: "Moving to Trash",
   delete: "Deleting",
+  compress: "Compressing",
+  extract: "Extracting",
   undo: "Undoing",
 };
 
@@ -114,6 +116,7 @@ function groupByParent<T>(items: readonly T[], pathOf: (t: T) => string): Map<st
 /** Applies created/removed items to cached listings without waiting for the watcher. */
 export function applyFsChanges(created: readonly FileEntry[], removed: readonly string[]): void {
   const cache = useDirCache.getState();
+  cache.applyToSearches(created, removed);
   const dirs = new Set([
     ...groupByParent(created, (e) => e.path).keys(),
     ...groupByParent(removed, (p) => p).keys(),

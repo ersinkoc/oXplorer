@@ -8,6 +8,13 @@ export function dropDirAt(x: number, y: number): string | null {
   return el?.dataset.dropDir ?? null;
 }
 
+/** Session id of the terminal under a viewport point, if any. */
+export function terminalAt(x: number, y: number): string | null {
+  return (
+    document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-terminal-id]")?.dataset.terminalId ?? null
+  );
+}
+
 /** Mount point that contains `path` (the boot volume unless under a mounted volume). */
 export function volumeOf(path: string): string {
   let best = "/";

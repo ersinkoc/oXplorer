@@ -2,7 +2,9 @@ import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { commands } from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { useDrag } from "@/features/dnd/drag-store";
-import { dropDirAt, dropMode, isValidDrop } from "@/features/dnd/drop-target";
+import { dropDirAt, dropMode, isValidDrop, terminalAt } from "@/features/dnd/drop-target";
+import { pasteInto } from "@/features/terminal/terminal-registry";
+import { shellArgs } from "@/lib/shell";
 
 const THRESHOLD = 5;
 
@@ -68,6 +70,12 @@ export function beginPotentialDrag(
     cleanup();
     if (!dragging) {
       onClick?.();
+      return;
+    }
+    // Dropped on a terminal: type the quoted paths, like Terminal.app.
+    const terminal = terminalAt(ev.clientX, ev.clientY);
+    if (terminal) {
+      pasteInto(terminal, shellArgs(paths));
       return;
     }
     if (target) {

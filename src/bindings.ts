@@ -31,6 +31,8 @@ export const commands = {
 	renamePath: (path: string, newName: string) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("rename_path", { path, newName })),
 	/**  Creates `name` (or `name 2`, … if taken) inside `parent`. */
 	createItem: (parent: string, name: string, folder: boolean) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("create_item", { parent, name, folder })),
+	/**  Renames several items at once; all or nothing. */
+	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */
 	pasteboardWriteFiles: (paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pasteboard_write_files", { paths })),
 	/**  Files on the general pasteboard that still exist. */
@@ -39,6 +41,8 @@ export const commands = {
 	openWith: (app: string, paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_with", { app, paths })),
 	/**  Writes the icon of `path` to a cache file for the native drag image and returns its path. */
 	dragPreview: (path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("drag_preview", { path })),
+	/**  Adds and removes Finder tags on each item; returns the updated entries. */
+	editTags: (paths: string[], add: FinderTag[], remove: string[]) => typedError<FileEntry_Serialize[], AppError_Serialize>(__TAURI_INVOKE("edit_tags", { paths, add, remove })),
 	/**
 	 *  Opens the Quick Look panel on `paths` at `index`. With `open: false` it only
 	 *  follows the selection while the panel is already showing.
@@ -49,6 +53,23 @@ export const commands = {
 	previewText: (path: string) => typedError<TextPreview, AppError_Serialize>(__TAURI_INVOKE("preview_text", { path })),
 	/**  Lets the webview load `path` through `asset://` (images, audio, video). */
 	allowPreview: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("allow_preview", { path })),
+	/**  Starts a shell in `cwd` (home if it isn't a folder) and streams its output. */
+	ptyOpen: (id: string, cwd: string, cols: number, rows: number, onEvent: Channel<PtyEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pty_open", { id, cwd, cols, rows, onEvent })),
+	/**  Keyboard input (and pasted text) for the shell. */
+	ptyWrite: (id: string, data: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pty_write", { id, data })),
+	ptyResize: (id: string, cols: number, rows: number) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pty_resize", { id, cols, rows })),
+	/**  Ends the shell (SIGHUP via the closed terminal, then kill). */
+	ptyClose: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pty_close", { id })),
+	/**  Starts a search; results stream through `on_event` and end with `Done`. */
+	searchStart: (id: string, spec: SearchSpec, onEvent: Channel<SearchEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("search_start", { id, spec, onEvent })),
+	searchCancel: (id: string) => __TAURI_INVOKE<void>("search_cancel", { id }),
+	/**  Finder's sidebar tags, for the sidebar's Tags section. */
+	favoriteTags: () => __TAURI_INVOKE<FinderTag[]>("favorite_tags"),
+	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
+	/**  Rebuilds the menu bar with the user's shortcuts. */
+	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),
+	/**  Shows the settings window, creating it the first time. */
+	openSettings: () => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_settings")),
 	homeDir: () => typedError<string, AppError_Serialize>(__TAURI_INVOKE("home_dir")),
 	/**  Folder passed on the command line (`oxplorer ~/Projects`), if it exists. */
 	launchDir: () => __TAURI_INVOKE<string | null>("launch_dir"),
@@ -92,17 +113,37 @@ export type AppError = AppError_Serialize | AppError_Deserialize;
 /**  Every command returns `Result<T, AppError>`; the frontend switches on `kind`. */
 export type AppError_Deserialize = { kind: "notFound"; path: string } | { kind: "permissionDenied"; path: string; 
 /**  macOS TCC refusals surface as EPERM; EACCES is a plain unix permission problem. */
-needsFullDiskAccess: boolean } | { kind: "alreadyExists"; path: string } | { kind: "notADirectory"; path: string } | { kind: "invalidPath"; path: string; reason: string } | { kind: "cancelled" } | { kind: "io"; path?: string | null; message: string };
+needsFullDiskAccess: boolean } | { kind: "alreadyExists"; path: string } | { kind: "notADirectory"; path: string } | { kind: "invalidPath"; path: string; reason: string } | { kind: "cancelled" } | 
+/**  A search pattern that doesn't compile (bad regex or glob). */
+{ kind: "invalidQuery"; message: string } | { kind: "io"; path?: string | null; message: string };
 
 /**  Every command returns `Result<T, AppError>`; the frontend switches on `kind`. */
 export type AppError_Serialize = { kind: "notFound"; path: string } | { kind: "permissionDenied"; path: string; 
 /**  macOS TCC refusals surface as EPERM; EACCES is a plain unix permission problem. */
-needsFullDiskAccess: boolean } | { kind: "alreadyExists"; path: string } | { kind: "notADirectory"; path: string } | { kind: "invalidPath"; path: string; reason: string } | { kind: "cancelled" } | { kind: "io"; path: string | null; message: string };
+needsFullDiskAccess: boolean } | { kind: "alreadyExists"; path: string } | { kind: "notADirectory"; path: string } | { kind: "invalidPath"; path: string; reason: string } | { kind: "cancelled" } | 
+/**  A search pattern that doesn't compile (bad regex or glob). */
+{ kind: "invalidQuery"; message: string } | { kind: "io"; path: string | null; message: string };
 
 export type AppInfo = {
 	name: string,
 	path: string,
 	isDefault: boolean,
+};
+
+export type ArchiveFormat = "zip" | "tarGz" | "tarZst";
+
+export type BatchRenameOutcome = BatchRenameOutcome_Serialize | BatchRenameOutcome_Deserialize;
+
+export type BatchRenameOutcome_Deserialize = {
+	/**  The renamed items, in request order. */
+	entries: FileEntry_Deserialize[],
+	undo?: UndoAction | null,
+};
+
+export type BatchRenameOutcome_Serialize = {
+	/**  The renamed items, in request order. */
+	entries: FileEntry_Serialize[],
+	undo: UndoAction | null,
 };
 
 export type ConflictChoice = "replace" | "skip" | "keepBoth" | "stop";
@@ -111,6 +152,13 @@ export type ConflictResolution = {
 	choice: ConflictChoice,
 	/**  Use the same choice for every later conflict in this job. */
 	applyToAll: boolean,
+};
+
+export type ContentMatch = {
+	path: string,
+	line: number,
+	/**  The matching line, trimmed and shortened. */
+	text: string,
 };
 
 /**  Pushed by the watcher for each watched directory whose children changed. */
@@ -272,6 +320,10 @@ export type JobSpec = { kind: "copy"; sources: string[]; destDir: string } | { k
 { kind: "duplicate"; sources: string[] } | { kind: "trash"; paths: string[] } | 
 /**  Permanent; cannot be undone. */
 { kind: "delete"; paths: string[] } | 
+/**  Creates one archive of `sources` (siblings) next to them. */
+{ kind: "compress"; sources: string[]; format: ArchiveFormat } | 
+/**  Extracts each archive next to itself. */
+{ kind: "extract"; archives: string[] } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
@@ -282,6 +334,25 @@ export type MenuCommand = {
 	id: string,
 };
 
+/**  A customizable menu item, for the Shortcuts settings. */
+export type MenuEntry = MenuEntry_Serialize | MenuEntry_Deserialize;
+
+/**  A customizable menu item, for the Shortcuts settings. */
+export type MenuEntry_Deserialize = {
+	id: string,
+	title: string,
+	menu: string,
+	defaultAccelerator?: string | null,
+};
+
+/**  A customizable menu item, for the Shortcuts settings. */
+export type MenuEntry_Serialize = {
+	id: string,
+	title: string,
+	menu: string,
+	defaultAccelerator: string | null,
+};
+
 /**
  *  Paths were handed to the app (second launch, `open -a`, Dock drop); fetch
  *  them with `take_open_requests`.
@@ -289,6 +360,20 @@ export type MenuCommand = {
 export type OpenRequested = {
 	count: number,
 };
+
+export type PtyEvent = PtyEvent_Serialize | PtyEvent_Deserialize;
+
+export type PtyEvent_Deserialize = 
+/**  Terminal output, decoded as UTF-8 (sequences split across reads are joined). */
+{ type: "output"; data: string } | 
+/**  The shell exited; nothing follows. */
+{ type: "exit"; code?: number | null };
+
+export type PtyEvent_Serialize = 
+/**  Terminal output, decoded as UTF-8 (sequences split across reads are joined). */
+{ type: "output"; data: string } | 
+/**  The shell exited; nothing follows. */
+{ type: "exit"; code: number | null };
 
 /**  An arrow key pressed while the Quick Look panel has focus. */
 export type QuickLookKey = {
@@ -299,6 +384,41 @@ export type QuickLookKey = {
 /**  The Quick Look panel opened or closed (by the app or by the user). */
 export type QuickLookState = {
 	visible: boolean,
+};
+
+export type RenameItem = {
+	path: string,
+	newName: string,
+};
+
+export type SearchEvent = SearchEvent_Serialize | SearchEvent_Deserialize;
+
+export type SearchEvent_Deserialize = { type: "batch"; entries: FileEntry_Deserialize[]; matches: ContentMatch[] } | 
+/**  Items looked at so far (files read in content mode). */
+{ type: "progress"; scanned: number } | { type: "done"; total: number; cancelled: boolean; truncated: boolean };
+
+export type SearchEvent_Serialize = { type: "batch"; entries: FileEntry_Serialize[]; matches: ContentMatch[] } | 
+/**  Items looked at so far (files read in content mode). */
+{ type: "progress"; scanned: number } | { type: "done"; total: number; cancelled: boolean; truncated: boolean };
+
+export type SearchMode = 
+/**  File and folder names: substring, or a glob when the query has `*?[{`. */
+"name" | 
+/**  File contents, `.gitignore`-aware, binary files skipped. */
+"content" | 
+/**  A Spotlight query (plain words or `kMDItem…` syntax). */
+"spotlight" | 
+/**  Items carrying the Finder tag named by the query. */
+"tag";
+
+export type SearchSpec = {
+	scope: string,
+	query: string,
+	mode: SearchMode,
+	caseSensitive: boolean,
+	/**  Content mode: the query is a regular expression, not literal text. */
+	regex: boolean,
+	includeHidden: boolean,
 };
 
 export type SizeInfo = {

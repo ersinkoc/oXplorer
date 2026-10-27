@@ -43,6 +43,8 @@ export function describeError(error: AppError): string {
       return `Invalid path “${error.path}”: ${error.reason}.`;
     case "cancelled":
       return "The operation was cancelled.";
+    case "invalidQuery":
+      return `The search pattern isn’t valid: ${error.message}`;
     case "io":
       return error.message;
   }

@@ -1,6 +1,7 @@
 mod lister;
 mod watcher;
 
+pub use lister::is_package_path;
 pub use watcher::DirWatcher;
 
 use std::fs;

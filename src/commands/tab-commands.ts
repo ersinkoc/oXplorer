@@ -1,9 +1,10 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
 import { runJob } from "@/commands/jobs";
-import { navigateTo, selectedEntries } from "@/commands/navigation";
+import { navigateTo, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { toggleQuickLook } from "@/features/preview/quick-look";
+import { useApp } from "@/stores/app-store";
 import { getActiveTab, otherPane, type PaneId, useWorkspace } from "@/stores/workspace-store";
 
 function closeWindow(): void {
@@ -32,7 +33,8 @@ async function transferToOtherPane(kind: "copy" | "move"): Promise<void> {
   }
   const sources = selectedEntries().map((e) => e.path);
   if (sources.length === 0) return;
-  await runJob({ kind, sources, destDir: getActiveTab(otherPane(activePane)).path });
+  const destDir = writableFolder(otherPane(activePane));
+  if (destDir) await runJob({ kind, sources, destDir });
 }
 
 export function registerTabCommands(): void {
@@ -41,7 +43,8 @@ export function registerTabCommands(): void {
       id: "tab.new",
       title: "New Tab",
       run: () => {
-        useWorkspace.getState().openTab(getActiveTab().path);
+        const { newTabLocation, home } = useApp.getState();
+        useWorkspace.getState().openTab(newTabLocation === "home" ? home : getActiveTab().path);
       },
     },
     {

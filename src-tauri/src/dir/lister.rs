@@ -19,6 +19,13 @@ const UF_HIDDEN: u32 = 0x8000;
 /// Paths checked per `Tags` event round.
 const TAG_CHUNK: usize = 2000;
 
+/// Whether a directory at `path` is shown as a single document (by extension).
+pub fn is_package_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| PACKAGE_EXTENSIONS.iter().any(|p| p.eq_ignore_ascii_case(ext)))
+}
+
 const PACKAGE_EXTENSIONS: &[&str] = &[
     "app",
     "appex",
@@ -125,9 +132,7 @@ pub fn build_entry(name: String, path: &Path, meta: &Metadata, with_tags: bool) 
     let (kind, symlink) = if ft.is_symlink() {
         (EntryKind::Symlink, Some(resolve_symlink(path)))
     } else if ft.is_dir() {
-        let is_pkg = extension
-            .as_deref()
-            .is_some_and(|ext| PACKAGE_EXTENSIONS.iter().any(|p| p.eq_ignore_ascii_case(ext)));
+        let is_pkg = is_package_path(path);
         (if is_pkg { EntryKind::Package } else { EntryKind::Dir }, None)
     } else if ft.is_file() {
         (EntryKind::File, None)

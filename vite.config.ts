@@ -25,7 +25,16 @@ export default defineConfig({
     // WKWebView on macOS 14+ ships Safari 17.
     target: "safari17",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // The Settings window is a second page with its own entry.
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        settings: fileURLToPath(new URL("./settings.html", import.meta.url)),
+      },
+    },
   },
+  // Module workers keep shiki's languages and themes as lazily loaded chunks.
+  worker: { format: "es" },
   test: {
     environment: "happy-dom",
     include: ["src/**/*.test.{ts,tsx}"],

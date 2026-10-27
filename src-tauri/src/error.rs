@@ -24,6 +24,9 @@ pub enum AppError {
     InvalidPath { path: String, reason: String },
     #[error("cancelled")]
     Cancelled,
+    /// A search pattern that doesn't compile (bad regex or glob).
+    #[error("invalid query: {message}")]
+    InvalidQuery { message: String },
     #[error("{message}")]
     Io { path: Option<String>, message: String },
 }

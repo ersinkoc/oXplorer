@@ -1,6 +1,7 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { create } from "zustand";
 import type { FullDiskAccess, StandardLocation, VolumeInfo } from "@/bindings";
+import type { FileEntry } from "@/lib/ipc";
 
 export interface ColumnWidths {
   modified: number;
@@ -8,11 +9,26 @@ export interface ColumnWidths {
   kind: number;
 }
 
-/** User preferences that survive restarts. */
-interface Preferences {
+export type Theme = "system" | "light" | "dark";
+
+/** User preferences that survive restarts (edited in the Settings window). */
+export interface Preferences {
   sidebarVisible: boolean;
   showHidden: boolean;
   columnWidths: ColumnWidths;
+  terminalVisible: boolean;
+  /** Height of the terminal panel in px. */
+  terminalHeight: number;
+  theme: Theme;
+  /** Where ⌘T opens: the current folder or Home. */
+  newTabLocation: "current" | "home";
+  /** Bring back tabs and layout at launch. */
+  restoreSession: boolean;
+  terminalFontSize: number;
+  /** Where new terminals start. */
+  terminalStartIn: "pane" | "home";
+  /** Menu shortcut overrides by command id; null removes the shortcut. */
+  shortcuts: Record<string, string | null>;
 }
 
 interface AppState extends Preferences {
@@ -29,6 +45,9 @@ interface AppState extends Preferences {
   renaming: string | null;
   /** Items shown in the Get Info panel. */
   infoPaths: string[] | null;
+  paletteOpen: boolean;
+  /** Items in the "Rename N Items" dialog. */
+  batchRename: FileEntry[] | null;
 
   set: (patch: Partial<AppState>) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -38,6 +57,14 @@ export const DEFAULT_PREFERENCES: Preferences = {
   sidebarVisible: true,
   showHidden: false,
   columnWidths: { modified: 190, size: 90, kind: 150 },
+  terminalVisible: false,
+  terminalHeight: 260,
+  theme: "system",
+  newTabLocation: "current",
+  restoreSession: true,
+  terminalFontSize: 12,
+  terminalStartIn: "pane",
+  shortcuts: {},
 };
 
 const store = new LazyStore("settings.json");
@@ -53,6 +80,8 @@ export const useApp = create<AppState>()((set) => ({
   clipboard: null,
   renaming: null,
   infoPaths: null,
+  paletteOpen: false,
+  batchRename: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {
@@ -60,6 +89,23 @@ export const useApp = create<AppState>()((set) => ({
     void store.set(key, value).catch((err: unknown) => console.warn("failed to persist", key, err));
   },
 }));
+
+/**
+ * Keeps this window's preferences in sync with changes made elsewhere (the
+ * Settings window writes the same store).
+ */
+export async function watchPreferences(): Promise<() => void> {
+  const unlisten = await Promise.all(
+    (Object.keys(DEFAULT_PREFERENCES) as (keyof Preferences)[]).map((key) =>
+      store.onKeyChange(key, (value) => {
+        useApp.getState().set({ [key]: value ?? DEFAULT_PREFERENCES[key] } as Partial<AppState>);
+      }),
+    ),
+  );
+  return () => {
+    for (const fn of unlisten) fn();
+  };
+}
 
 export async function loadPreferences(): Promise<Partial<Preferences>> {
   const out: Partial<Preferences> = {};

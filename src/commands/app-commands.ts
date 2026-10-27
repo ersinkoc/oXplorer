@@ -2,6 +2,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import {
+  currentFolder,
   goBack,
   goForward,
   goUp,
@@ -10,9 +11,11 @@ import {
   reload,
   selectedEntries,
 } from "@/commands/navigation";
-import { defineCommands } from "@/commands/registry";
+import { defineCommands, runCommand } from "@/commands/registry";
 import { paneLayout } from "@/features/file-view/visible-order";
-import { CommandError, unwrap } from "@/lib/ipc";
+import { focusedTerminal } from "@/features/terminal/terminal-registry";
+import { CommandError, describeError, unwrap } from "@/lib/ipc";
+import { isSearchPath, searchPath } from "@/lib/search-path";
 import { selectAll } from "@/lib/selection";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
@@ -38,7 +41,7 @@ export function registerAppCommands(): void {
       id: "file.revealInFinder",
       title: "Show in Finder",
       run: async () => {
-        const target = selectedEntries()[0]?.path ?? getActiveTab().path;
+        const target = selectedEntries()[0]?.path ?? currentFolder();
         try {
           await unwrap(commands.revealInFinder(target));
         } catch (err) {
@@ -51,7 +54,7 @@ export function registerAppCommands(): void {
       title: "Copy Path",
       run: async () => {
         const sel = selectedEntries().map((e) => e.path);
-        const paths = sel.length > 0 ? sel : [getActiveTab().path];
+        const paths = sel.length > 0 ? sel : [currentFolder()];
         await writeText(paths.join("\n"));
         toast.success(paths.length === 1 ? "Path copied" : `${paths.length} paths copied`);
       },
@@ -63,7 +66,9 @@ export function registerAppCommands(): void {
       run: () => {
         // The menu owns ⌘A, so text fields need it forwarded explicitly.
         const el = document.activeElement;
-        if (isTextInput(el)) el.select();
+        const terminal = focusedTerminal();
+        if (terminal) terminal.term.selectAll();
+        else if (isTextInput(el)) el.select();
         else
           useWorkspace
             .getState()
@@ -76,6 +81,11 @@ export function registerAppCommands(): void {
       id: "view.asIcons",
       title: "as Icons",
       run: () => useWorkspace.getState().updateView({ mode: "icons" }),
+    },
+    {
+      id: "view.asColumns",
+      title: "as Columns",
+      run: () => useWorkspace.getState().updateView({ mode: "columns" }),
     },
     {
       id: "view.toggleHidden",
@@ -94,5 +104,49 @@ export function registerAppCommands(): void {
       },
     },
     { id: "view.reload", title: "Reload", run: reload },
+    {
+      id: "app.settings",
+      title: "Settings…",
+      run: async () => {
+        const r = await commands.openSettings();
+        if (r.status === "error") toast.error(describeError(r.error));
+      },
+    },
+    {
+      id: "palette.open",
+      title: "Command Palette…",
+      run: () => useApp.getState().set({ paletteOpen: true }),
+    },
+    {
+      id: "view.find",
+      title: "Find",
+      run: () => {
+        // In search results ⌘F edits the search; elsewhere it filters the folder.
+        const pane = useWorkspace.getState().activePane;
+        const field =
+          document.querySelector<HTMLInputElement>(`section[data-pane="${pane}"] [data-search-query]`) ??
+          document.querySelector<HTMLInputElement>("[data-filter-input]");
+        field?.focus();
+        field?.select();
+      },
+    },
+    {
+      id: "search.open",
+      title: "Search…",
+      run: () => {
+        const { path } = getActiveTab();
+        if (isSearchPath(path)) return runCommand("view.find");
+        navigateTo(
+          searchPath({
+            scope: path,
+            query: "",
+            mode: "name",
+            caseSensitive: false,
+            regex: false,
+            includeHidden: false,
+          }),
+        );
+      },
+    },
   ]);
 }

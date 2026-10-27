@@ -1,12 +1,16 @@
+import { readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { commands } from "@/bindings";
+import { type ArchiveFormat, commands, type FinderTag } from "@/bindings";
 import { applyFsChanges, recordUndo, runJob } from "@/commands/jobs";
-import { selectedEntries } from "@/commands/navigation";
+import { currentFolder, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
+import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
 import { basename, parent } from "@/lib/path";
+import { isSearchPath } from "@/lib/search-path";
 import { selectOne } from "@/lib/selection";
+import { shellArgs } from "@/lib/shell";
 import { copyText, cutText, deleteToLineStart, focusedTextField, pasteText, undoText } from "@/lib/text-edit";
 import { useApp } from "@/stores/app-store";
 import { useHistory } from "@/stores/history-store";
@@ -43,7 +47,8 @@ export async function pasteFiles(forceMove: boolean): Promise<void> {
   if (sources.length === 0) return;
   const { clipboard } = useApp.getState();
   const wasCut = !!clipboard?.cut && sameSet(clipboard.paths, sources);
-  const destDir = getActiveTab().path;
+  const destDir = writableFolder();
+  if (!destDir) return;
   if (forceMove || wasCut) {
     await runJob({ kind: "move", sources, destDir });
     if (wasCut) useApp.getState().set({ clipboard: null });
@@ -54,7 +59,8 @@ export async function pasteFiles(forceMove: boolean): Promise<void> {
 
 /** Creates an item and immediately starts renaming it, like Finder. */
 export async function createItem(folder: boolean): Promise<void> {
-  const dir = getActiveTab().path;
+  const dir = writableFolder();
+  if (!dir) return;
   try {
     const entry = await unwrap(commands.createItem(dir, folder ? "untitled folder" : "untitled.txt", folder));
     applyFsChanges([entry], []);
@@ -74,7 +80,8 @@ export async function commitRename(entry: FileEntry, newName: string): Promise<b
     const renamed = await unwrap(commands.renamePath(entry.path, name));
     applyFsChanges([renamed], [entry.path]);
     recordUndo({ label: "Rename", steps: [{ kind: "move", from: renamed.path, to: entry.path }] });
-    if (parent(renamed.path) === getActiveTab().path)
+    const here = getActiveTab().path;
+    if (isSearchPath(here) || parent(renamed.path) === here)
       useWorkspace.getState().setSelection(selectOne(renamed.path));
     return true;
   } catch (err) {
@@ -93,12 +100,83 @@ async function undoRedo(redo: boolean): Promise<void> {
   if (outcome && outcome.failures.length === 0) toast(`${redo ? "Redo" : "Undo"} ${action.label}`);
 }
 
+/**
+ * Edit-menu actions while a terminal has focus: copy the selection, paste text
+ * (or the paths of copied files), select all; ⌘⌫ clears the line (⌃U).
+ */
+async function terminalEdit(action: "copy" | "paste" | "selectAll" | "clearLine"): Promise<boolean> {
+  const focused = focusedTerminal();
+  if (!focused) return false;
+  const { id, term } = focused;
+  switch (action) {
+    case "copy": {
+      const text = term.getSelection();
+      if (text) await writeText(text);
+      break;
+    }
+    case "paste": {
+      const text = await readText().catch(() => "");
+      if (text) pasteInto(id, text);
+      else {
+        const files = await commands.pasteboardReadFiles();
+        if (files.length > 0) pasteInto(id, shellArgs(files));
+      }
+      break;
+    }
+    case "selectAll":
+      term.selectAll();
+      break;
+    case "clearLine":
+      void commands.ptyWrite(id, "\x15");
+      break;
+  }
+  return true;
+}
+
+export const ARCHIVE_FORMATS: readonly [ArchiveFormat, string][] = [
+  ["zip", "zip"],
+  ["tarGz", "tar.gz"],
+  ["tarZst", "tar.zst"],
+];
+
+const ARCHIVE_SUFFIXES = [".zip", ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tzst"];
+
+/** Archives OXplorer can extract (the same list as `jobs/archive.rs`). */
+export function isArchive(entry: FileEntry): boolean {
+  const name = entry.name.toLowerCase();
+  return entry.kind === "file" && ARCHIVE_SUFFIXES.some((s) => name.endsWith(s) && name.length > s.length);
+}
+
+/** Compresses the selection next to itself (Finder: one item → "name.zip", several → "Archive.zip"). */
+async function compress(format: ArchiveFormat): Promise<void> {
+  const sel = paths(selectedEntries());
+  if (sel.length === 0) return;
+  const folders = new Set(sel.map((p) => parent(p)));
+  if (folders.size > 1) {
+    toast("Items from different folders can’t go into one archive.");
+    return;
+  }
+  await runJob({ kind: "compress", sources: sel, format });
+}
+
+/** Adds a tag to every item, or removes it when they all have it already. */
+export async function toggleTag(entries: readonly FileEntry[], tag: FinderTag): Promise<void> {
+  const all = entries.every((e) => e.tags.some((t) => t.name === tag.name));
+  try {
+    const updated = await unwrap(commands.editTags(paths(entries), all ? [] : [tag], all ? [tag.name] : []));
+    applyFsChanges(updated, []);
+  } catch (err) {
+    report(err, "Couldn’t change the tags.");
+  }
+}
+
 export function registerFileCommands(): void {
   defineCommands([
     {
       id: "edit.copy",
       title: "Copy",
-      run: () => {
+      run: async () => {
+        if (await terminalEdit("copy")) return;
         const field = focusedTextField();
         return field ? copyText(field) : toPasteboard(false);
       },
@@ -106,7 +184,9 @@ export function registerFileCommands(): void {
     {
       id: "edit.cut",
       title: "Cut",
-      run: () => {
+      run: async () => {
+        // Terminal output can't be cut; it's copied like in Terminal.app.
+        if (await terminalEdit("copy")) return;
         const field = focusedTextField();
         return field ? cutText(field) : toPasteboard(true);
       },
@@ -114,7 +194,8 @@ export function registerFileCommands(): void {
     {
       id: "edit.paste",
       title: "Paste",
-      run: () => {
+      run: async () => {
+        if (await terminalEdit("paste")) return;
         const field = focusedTextField();
         return field ? pasteText(field) : pasteFiles(false);
       },
@@ -123,12 +204,18 @@ export function registerFileCommands(): void {
     {
       id: "edit.undo",
       title: "Undo",
-      run: () => (focusedTextField() ? undoText(false) : undoRedo(false)),
+      run: () => {
+        if (focusedTerminal()) return;
+        return focusedTextField() ? undoText(false) : undoRedo(false);
+      },
     },
     {
       id: "edit.redo",
       title: "Redo",
-      run: () => (focusedTextField() ? undoText(true) : undoRedo(true)),
+      run: () => {
+        if (focusedTerminal()) return;
+        return focusedTextField() ? undoText(true) : undoRedo(true);
+      },
     },
 
     { id: "file.newFolder", title: "New Folder", run: () => createItem(true) },
@@ -137,8 +224,10 @@ export function registerFileCommands(): void {
       id: "file.rename",
       title: "Rename",
       run: () => {
-        const [only, ...rest] = selectedEntries();
-        if (only && rest.length === 0) useApp.getState().set({ renaming: only.path });
+        const sel = selectedEntries();
+        const [only] = sel;
+        if (sel.length === 1 && only) useApp.getState().set({ renaming: only.path });
+        else if (sel.length > 1) useApp.getState().set({ batchRename: sel });
       },
     },
     {
@@ -153,6 +242,7 @@ export function registerFileCommands(): void {
       id: "file.trash",
       title: "Move to Trash",
       run: async () => {
+        if (await terminalEdit("clearLine")) return;
         const field = focusedTextField();
         if (field) return deleteToLineStart(field);
         const sel = paths(selectedEntries());
@@ -175,12 +265,27 @@ export function registerFileCommands(): void {
         if (ok) await runJob({ kind: "delete", paths: sel }, { select: false });
       },
     },
+    ...ARCHIVE_FORMATS.map(([format, label]) => ({
+      id: `file.compress.${format}`,
+      title: `Compress (${label})`,
+      run: () => compress(format),
+    })),
+    {
+      id: "file.extract",
+      title: "Extract Here",
+      run: async () => {
+        const archives = selectedEntries()
+          .filter(isArchive)
+          .map((e) => e.path);
+        if (archives.length > 0) await runJob({ kind: "extract", archives });
+      },
+    },
     {
       id: "file.getInfo",
       title: "Get Info",
       run: () => {
         const sel = paths(selectedEntries());
-        useApp.getState().set({ infoPaths: sel.length > 0 ? sel : [getActiveTab().path] });
+        useApp.getState().set({ infoPaths: sel.length > 0 ? sel : [currentFolder()] });
       },
     },
   ]);

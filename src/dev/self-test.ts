@@ -1,9 +1,21 @@
 import { Channel, convertFileSrc } from "@tauri-apps/api/core";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { info, error as logError } from "@tauri-apps/plugin-log";
 import { commands, type MeasureEvent } from "@/bindings";
 import { runJob } from "@/commands/jobs";
+import { navigateTo } from "@/commands/navigation";
+import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
+import { terminalById } from "@/features/terminal/terminal-registry";
+import { highlight } from "@/lib/highlight";
 import { unwrap } from "@/lib/ipc";
 import { join } from "@/lib/path";
+import { searchPath } from "@/lib/search-path";
+import { shellQuote } from "@/lib/shell";
+import { useApp } from "@/stores/app-store";
+import { useDirCache } from "@/stores/dir-cache-store";
+import { useSearchInfo } from "@/stores/search-store";
+import { useTerminals } from "@/stores/terminal-store";
+import { getActiveTab } from "@/stores/workspace-store";
 
 /**
  * Dev-only end-to-end check of the file-operation IPC path (start with
@@ -66,6 +78,112 @@ export async function runSelfTest(): Promise<void> {
       step("preview image copy", false);
     }
 
+    // Syntax highlighting runs in a module worker under the app's CSP.
+    const started = performance.now();
+    const html = await highlight("x.ts", "const answer: number = 42;");
+    step(
+      "highlight worker",
+      !!html?.includes("--shiki-dark") && html.includes("answer"),
+      `${Math.round(performance.now() - started)}ms`,
+    );
+    const md = await import("@/features/preview/markdown-view").then(() => true).catch(() => false);
+    step("markdown view chunk", md);
+
+    // Terminal: a real login shell in the panel; its `cd` (OSC 7) drives a linked pane.
+    const sub = await unwrap(commands.createItem(dir, "term dir", true));
+    openTerminal(dir);
+    const { activeId } = useTerminals.getState();
+    // The view mounts on the next render and the shell needs a moment to print its prompt.
+    const prompted = await waitFor(() => {
+      const buf = terminalById(activeId ?? "")?.buffer.active;
+      return !!buf && (buf.cursorX > 0 || buf.cursorY > 0);
+    }, 15000);
+    step("terminal opens with a prompt", prompted);
+    if (activeId && prompted) {
+      useTerminals.getState().update(activeId, { linked: true });
+      // Typed before the prompt is up: the shell reads it once it's ready.
+      await unwrap(commands.ptyWrite(activeId, `cd ${shellQuote(sub.path)}\r`));
+      const cwd = () => useTerminals.getState().sessions.find((s) => s.id === activeId)?.cwd;
+      step("shell reports cwd (OSC 7)", await waitFor(() => cwd() === sub.path, 15000), cwd());
+      const followed = await waitFor(() => getActiveTab().path === sub.path, 3000);
+      step("linked pane follows cd", followed, getActiveTab().path);
+      navigateTo(dir);
+      closeTerminal(activeId);
+    }
+
+    // Search: results stream into a tab like a folder and follow file operations.
+    const target = await unwrap(commands.createItem(dir, "findme-ox.txt", false));
+    const found = searchPath({
+      scope: dir,
+      query: "FINDME",
+      mode: "name",
+      caseSensitive: false,
+      regex: false,
+      includeHidden: false,
+    });
+    navigateTo(found);
+    const results = () => useDirCache.getState().dirs[found]?.entries.map((e) => e.name) ?? [];
+    const searched = await waitFor(() => useSearchInfo.getState().searches[found]?.outcome != null, 10000);
+    step("name search", searched && results().join() === "findme-ox.txt", results().join());
+    await runJob({ kind: "delete", paths: [target.path] }, { history: "none" });
+    step("search results follow deletes", results().length === 0, results().join());
+    navigateTo(dir);
+
+    // Archives: compress a folder to zip, extract it next to the original ("arc 2").
+    const arc = await unwrap(commands.createItem(dir, "arc", true));
+    await unwrap(commands.createItem(arc.path, "inside.txt", false));
+    const zipped = await runJob(
+      { kind: "compress", sources: [arc.path], format: "zip" },
+      { history: "none" },
+    );
+    const zipPath = zipped?.created[0]?.path ?? "";
+    step("compress", zipPath.endsWith("/arc.zip") && zipped?.undo?.steps.length === 1, zipPath);
+    const unzipped = await runJob({ kind: "extract", archives: [zipPath] }, { history: "none" });
+    const outDir = unzipped?.created[0]?.path ?? "";
+    const inside = await commands.statPath(join(outDir, "inside.txt"));
+    step("extract", outDir.endsWith("/arc 2") && inside.status === "ok", outDir);
+
+    // Tags: add and remove through the xattr.
+    const tagged = await unwrap(
+      commands.editTags([join(arc.path, "inside.txt")], [{ name: "Red", color: 6 }], []),
+    );
+    const untagged = await unwrap(commands.editTags([join(arc.path, "inside.txt")], [], ["Red"]));
+    step(
+      "tags",
+      tagged[0]?.tags.some((t) => t.name === "Red" && t.color === 6) === true &&
+        untagged[0]?.tags.length === 0,
+    );
+
+    // Batch rename with undo.
+    const renamedBatch = await unwrap(
+      commands.batchRename([
+        { path: arc.path, newName: "arc-renamed" },
+        { path: zipPath, newName: "arc-renamed.zip" },
+      ]),
+    );
+    const undone = renamedBatch.undo
+      ? await runJob({ kind: "undo", action: renamedBatch.undo }, { history: "none" })
+      : null;
+    const back2 = await commands.statPath(arc.path);
+    step(
+      "batch rename + undo",
+      renamedBatch.entries.map((e) => e.name).join() === "arc-renamed,arc-renamed.zip" &&
+        undone?.failures.length === 0 &&
+        back2.status === "ok",
+    );
+
+    // Shortcuts: the menu bar is rebuilt at runtime; conflicts are refused.
+    const custom = await commands.setShortcuts({ "file.rename": "Shift+CmdOrCtrl+E" });
+    const clash = await commands.setShortcuts({ "file.rename": "CmdOrCtrl+D" });
+    const restored = await commands.setShortcuts(useApp.getState().shortcuts);
+    step("shortcuts", custom.status === "ok" && clash.status === "error" && restored.status === "ok");
+
+    // The Settings window opens as its own window.
+    await unwrap(commands.openSettings());
+    const settings = await waitForAsync(() => WebviewWindow.getByLabel("settings"), 5000);
+    step("settings window", !!settings);
+    await settings?.close();
+
     // Native Quick Look panel opens and closes through the controller hooks.
     await unwrap(commands.quickLook([renamed.path], 0, true));
     await sleep(800);
@@ -77,11 +195,20 @@ export async function runSelfTest(): Promise<void> {
     const gone = await runJob(
       {
         kind: "delete",
-        paths: [folder.path, renamed.path, join(dir, "note copy.txt"), ...(png ? [png] : [])],
+        paths: [
+          folder.path,
+          renamed.path,
+          join(dir, "note copy.txt"),
+          sub.path,
+          arc.path,
+          zipPath,
+          outDir,
+          ...(png ? [png] : []),
+        ],
       },
       { history: "none" },
     );
-    step("delete", gone?.removed.length === (png ? 4 : 3) && gone.failures.length === 0);
+    step("delete", gone?.removed.length === (png ? 8 : 7) && gone.failures.length === 0);
   } catch (err) {
     step("exception", false, String(err));
   }
@@ -96,4 +223,23 @@ function loadsImage(src: string): Promise<boolean> {
     img.onerror = () => resolve(false);
     img.src = src;
   });
+}
+
+async function waitFor(check: () => boolean, timeoutMs: number): Promise<boolean> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    if (check()) return true;
+    await sleep(100);
+  }
+  return check();
+}
+
+async function waitForAsync<T>(get: () => Promise<T | null>, timeoutMs: number): Promise<T | null> {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until) {
+    const v = await get();
+    if (v) return v;
+    await sleep(100);
+  }
+  return null;
 }
