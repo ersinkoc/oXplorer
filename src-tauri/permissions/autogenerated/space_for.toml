@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-space-for"
+description = "Enables the space_for command without any pre-configured scope."
+commands.allow = ["space_for"]
+
+[[permission]]
+identifier = "deny-space-for"
+description = "Denies the space_for command without any pre-configured scope."
+commands.deny = ["space_for"]

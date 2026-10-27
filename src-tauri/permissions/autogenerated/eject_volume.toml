@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-eject-volume"
+description = "Enables the eject_volume command without any pre-configured scope."
+commands.allow = ["eject_volume"]
+
+[[permission]]
+identifier = "deny-eject-volume"
+description = "Denies the eject_volume command without any pre-configured scope."
+commands.deny = ["eject_volume"]

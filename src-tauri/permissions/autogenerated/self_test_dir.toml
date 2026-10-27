@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-self-test-dir"
+description = "Enables the self_test_dir command without any pre-configured scope."
+commands.allow = ["self_test_dir"]
+
+[[permission]]
+identifier = "deny-self-test-dir"
+description = "Denies the self_test_dir command without any pre-configured scope."
+commands.deny = ["self_test_dir"]

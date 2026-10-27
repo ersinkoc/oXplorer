@@ -1,0 +1,43 @@
+const COMMANDS: &[&str] = &[
+    "open_dir",
+    "stat_path",
+    "watch_dir",
+    "unwatch_dir",
+    "start_job",
+    "cancel_job",
+    "resolve_conflict",
+    "measure",
+    "rename_path",
+    "create_item",
+    "pasteboard_write_files",
+    "pasteboard_read_files",
+    "apps_for_path",
+    "open_with",
+    "drag_preview",
+    "home_dir",
+    "launch_dir",
+    "self_test_dir",
+    "standard_locations",
+    "list_volumes",
+    "eject_volume",
+    "space_for",
+    "check_full_disk_access",
+    "open_path",
+    "reveal_in_finder",
+    "open_full_disk_access_settings",
+    "take_open_requests",
+    "quick_look",
+    "quick_look_close",
+    "quick_look_visible",
+    "preview_text",
+    "allow_preview",
+];
+
+fn main() {
+    // Registering app commands in the manifest makes them subject to capability
+    // ACLs, so each window only gets the commands its capability file lists.
+    tauri_build::try_build(
+        tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(COMMANDS)),
+    )
+    .expect("failed to run tauri-build");
+}

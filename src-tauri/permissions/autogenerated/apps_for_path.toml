@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-apps-for-path"
+description = "Enables the apps_for_path command without any pre-configured scope."
+commands.allow = ["apps_for_path"]
+
+[[permission]]
+identifier = "deny-apps-for-path"
+description = "Denies the apps_for_path command without any pre-configured scope."
+commands.deny = ["apps_for_path"]

@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* macOS-like palette. The sidebar is transparent so the native `sidebar`
+   window effect (vibrancy) shows through; everything else is opaque. */
+:root {
+  color-scheme: light dark;
+  --accent: #0a63d6;
+  --bg: #ffffff;
+  --bg-alt: #f5f5f7;
+  --toolbar: #f6f6f6;
+  --fg: #1d1d1f;
+  --fg-muted: #6e6e73;
+  --fg-faint: #a1a1a6;
+  --border: rgb(0 0 0 / 0.1);
+  --hover: rgb(0 0 0 / 0.05);
+  --sidebar-active: rgb(0 0 0 / 0.09);
+  --row-selected: var(--accent);
+  --row-selected-fg: #ffffff;
+  --row-selected-inactive: #dcdcdc;
+  --row-selected-inactive-fg: var(--fg);
+  --folder: #3d9bf2;
+}
+
+@supports (color: AccentColor) {
+  :root {
+    --accent: AccentColor;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e1e;
+    --bg-alt: #232323;
+    --toolbar: #2a2a2a;
+    --fg: #e8e8ea;
+    --fg-muted: #98989d;
+    --fg-faint: #636366;
+    --border: rgb(255 255 255 / 0.1);
+    --hover: rgb(255 255 255 / 0.06);
+    --sidebar-active: rgb(255 255 255 / 0.1);
+    --row-selected-inactive: #464646;
+    --folder: #4aa3f5;
+  }
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-bg: var(--bg);
+  --color-bg-alt: var(--bg-alt);
+  --color-toolbar: var(--toolbar);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-border: var(--border);
+  --color-hover: var(--hover);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-folder: var(--folder);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Native apps don't show focus rings on every click; keep them for keyboard focus. */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.file-row[data-selected="true"] {
+  background: var(--row-selected-inactive);
+  color: var(--row-selected-inactive-fg);
+}
+.file-list:focus-within .file-row[data-selected="true"] {
+  background: var(--row-selected);
+  color: var(--row-selected-fg);
+}
+.file-list:focus-within .file-row[data-selected="true"] .file-row-muted {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* Icon view: Finder highlights the icon and the name separately. */
+.grid-cell[data-selected="true"] .grid-cell-icon {
+  background: var(--hover);
+  outline: 1px solid var(--border);
+}
+.grid-cell[data-selected="true"] .grid-cell-name {
+  background: var(--row-selected-inactive);
+}
+.file-list:focus-within .grid-cell[data-selected="true"] .grid-cell-name {
+  background: var(--row-selected);
+  color: var(--row-selected-fg);
+}

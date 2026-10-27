@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-launch-dir"
+description = "Enables the launch_dir command without any pre-configured scope."
+commands.allow = ["launch_dir"]
+
+[[permission]]
+identifier = "deny-launch-dir"
+description = "Denies the launch_dir command without any pre-configured scope."
+commands.deny = ["launch_dir"]

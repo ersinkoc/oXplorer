@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-quick-look-visible"
+description = "Enables the quick_look_visible command without any pre-configured scope."
+commands.allow = ["quick_look_visible"]
+
+[[permission]]
+identifier = "deny-quick-look-visible"
+description = "Denies the quick_look_visible command without any pre-configured scope."
+commands.deny = ["quick_look_visible"]

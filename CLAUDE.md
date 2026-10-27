@@ -1,0 +1,32 @@
+# OXplorer — Claude Code rules
+
+Modern dual-pane file manager for macOS. Plan and rationale: `oxplorer-project-plan-v2.md` (architecture decisions in §0.2, §3, §6, §7 are binding).
+
+## Stack
+Tauri 2.12 · React 19 (React Compiler on) · TypeScript 7 · Vite 8 · Tailwind 4 · Zustand 5 + Immer · Biome 2 · Rust 2024 edition
+
+## Commands
+- Dev: `pnpm tauri dev` — open a specific folder: `pnpm tauri dev -- -- /path/to/dir`
+- After every change: `pnpm check` (biome + tsc + vitest) and `pnpm check:rust` (fmt + clippy -D warnings + tests)
+- Regenerate IPC types: `pnpm bindings` → `src/bindings.ts`
+- Benchmark fixture: `scripts/gen-fixture.sh /tmp/ox-100k 100000`
+- Webview errors, CSP violations and listing timings are forwarded to the Rust log (stdout in dev).
+- In-app IPC self-test of file operations: `OX_SELFTEST_DIR=/empty/dir pnpm tauri dev -- -- /empty/dir` (results in the log as `selftest ok|FAIL`).
+- Release benchmarks (ignored tests): `bench_list` (OX_BENCH_DIR), `bench_copy` (OX_BENCH_SRC, OX_BENCH_DEST, OX_BENCH_CANCEL_AFTER).
+- Native menu owns ⌘C/⌘X/⌘V/⌘Z/⌘⌫; `src/lib/text-edit.ts` forwards them to focused text fields.
+- Tabs/layout persist in `session.json` (`src/stores/session.ts`); panes list their folder when it becomes visible (`ensureListed`), `navigateTo` only changes state.
+- Preview media goes through `asset:`; call `allow_preview` first (scope starts empty). Quick Look: `src-tauri/src/mac/quicklook.rs`.
+
+## Rules
+- `src/bindings.ts` is GENERATED. Change the Rust type/command, then `pnpm bindings`.
+- The frontend never touches the disk directly. Do NOT add `@tauri-apps/plugin-fs` or `plugin-shell` permissions.
+- New Rust command: `#[tauri::command] #[specta::specta]`, return `AppResult<T>`, add to `collect_commands!` in `lib.rs`, to `COMMANDS` in `build.rs`, and `allow-<name>` in `capabilities/main.json`.
+- Every incoming path goes through `security::validate_path`. Blocking FS work runs in `spawn_blocking`.
+- Lists/progress stream through `tauri::ipc::Channel<T>`; never return large `Vec`s. Channel messages may arrive after the command resolves — completion is an in-band event (`DirEvent::Done`).
+- 64-bit integers cross IPC as `number`: annotate with `#[specta(type = u32)]` (see `model.rs`).
+- Timestamps are epoch ms; formatting happens in the frontend.
+- User actions are commands in `src/commands/` (registry). Native menu accelerators live in `src-tauri/src/menu.rs` and must not be bound again in `keymap.ts`.
+- State is pane → tab scoped (`workspace-store`). No global "current directory".
+- TS: strict + `noUncheckedIndexedAccess`, no `any`, kebab-case files, `@/` → `src/`.
+- Rust: no `unwrap()` outside tests; user-facing errors go through `AppError`.
+- Shortcuts follow Finder (plan §8): Cmd, not Ctrl.

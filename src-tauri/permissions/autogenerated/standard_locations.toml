@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-standard-locations"
+description = "Enables the standard_locations command without any pre-configured scope."
+commands.allow = ["standard_locations"]
+
+[[permission]]
+identifier = "deny-standard-locations"
+description = "Denies the standard_locations command without any pre-configured scope."
+commands.deny = ["standard_locations"]
