@@ -36,6 +36,7 @@
     "allow-make-symlink",
     "allow-checksum",
     "allow-set-permissions",
+    "allow-pause-job",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-apps-for-path",

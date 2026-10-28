@@ -42,6 +42,8 @@ export const commands = {
 	checksum: (id: string, path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("checksum", { id, path })),
 	/**  Get Info → Permissions: sets the rwx bits (the 9 low bits; special bits are kept). */
 	setPermissions: (path: string, mode: number) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("set_permissions", { path, mode })),
+	/**  Pauses or resumes a copy / move (it stops between chunks; cancel still works). */
+	pauseJob: (id: string, paused: boolean) => __TAURI_INVOKE<void>("pause_job", { id, paused }),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */

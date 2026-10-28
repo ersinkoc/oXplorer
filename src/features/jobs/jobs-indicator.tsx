@@ -1,6 +1,6 @@
-import { X } from "lucide-react";
+import { Pause, Play, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cancelJob } from "@/commands/jobs";
+import { cancelJob, pauseJob } from "@/commands/jobs";
 import { useT } from "@/i18n";
 import { formatSize } from "@/lib/format";
 import { basename } from "@/lib/path";
@@ -74,8 +74,19 @@ function JobRow({ job }: { job: JobView }) {
             style={{ width: `${p * 100}%` }}
           />
         </div>
-        <div className="text-fg-muted">{job.conflict ? t("Waiting for your decision…") : detail}</div>
+        <div className="text-fg-muted">
+          {job.conflict ? t("Waiting for your decision…") : job.paused ? t("Paused") : detail}
+        </div>
       </div>
+      <button
+        type="button"
+        title={job.paused ? t("Resume") : t("Pause")}
+        aria-label={job.paused ? t("Resume") : t("Pause")}
+        onClick={() => pauseJob(job.id, !job.paused)}
+        className="rounded-full p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
+      >
+        {job.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+      </button>
       <button
         type="button"
         title={t("Stop")}

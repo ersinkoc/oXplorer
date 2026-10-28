@@ -13,6 +13,7 @@ const COMMANDS: &[&str] = &[
     "make_symlink",
     "checksum",
     "set_permissions",
+    "pause_job",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",

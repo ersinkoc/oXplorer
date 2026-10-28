@@ -34,6 +34,7 @@ type ConflictSlot = Arc<Mutex<Option<SyncSender<ConflictResolution>>>>;
 struct Handle {
     cancel: Arc<AtomicBool>,
     conflict: ConflictSlot,
+    paused: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -47,7 +48,8 @@ pub struct JobManager {
 const EARLY_CANCELS: usize = 256;
 
 impl JobManager {
-    fn register(&self, id: &str) -> AppResult<(Arc<AtomicBool>, ConflictSlot)> {
+    /// Cancel flag, conflict answer slot and pause flag of a new job.
+    fn register(&self, id: &str) -> AppResult<(Arc<AtomicBool>, ConflictSlot, Arc<AtomicBool>)> {
         let mut jobs = self.jobs.lock().unwrap_or_else(PoisonError::into_inner);
         if jobs.contains_key(id) {
             return Err(AppError::AlreadyExists { path: format!("job {id}") });
@@ -55,8 +57,16 @@ impl JobManager {
         let early = self.early_cancels.lock().unwrap_or_else(PoisonError::into_inner).remove(id);
         let cancel = Arc::new(AtomicBool::new(early));
         let conflict = Arc::new(Mutex::new(None));
-        jobs.insert(id.to_owned(), Handle { cancel: Arc::clone(&cancel), conflict: Arc::clone(&conflict) });
-        Ok((cancel, conflict))
+        let paused = Arc::new(AtomicBool::new(false));
+        jobs.insert(
+            id.to_owned(),
+            Handle {
+                cancel: Arc::clone(&cancel),
+                conflict: Arc::clone(&conflict),
+                paused: Arc::clone(&paused),
+            },
+        );
+        Ok((cancel, conflict, paused))
     }
 
     fn cancel(&self, id: String) {
@@ -82,6 +92,7 @@ struct ChannelReporter {
     channel: Channel<JobEvent>,
     cancel: Arc<AtomicBool>,
     conflict: ConflictSlot,
+    paused: Arc<AtomicBool>,
     last_progress: Option<Instant>,
 }
 
@@ -91,6 +102,10 @@ impl run::Reporter for ChannelReporter {
     }
 
     fn progress(&mut self, done_bytes: u64, done_items: u32, current: &Path) {
+        // Paused: hold the job here (between chunks), still honoring cancel.
+        while self.paused.load(Ordering::Relaxed) && !self.cancelled() {
+            std::thread::sleep(Duration::from_millis(100));
+        }
         if self.last_progress.is_some_and(|t| t.elapsed() < PROGRESS_INTERVAL) {
             return;
         }
@@ -138,13 +153,13 @@ pub fn start_job(
     spec: JobSpec,
     on_event: Channel<JobEvent>,
 ) -> AppResult<()> {
-    let (cancel, conflict) = jobs.register(&id)?;
+    let (cancel, conflict, paused) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     std::thread::Builder::new()
         .name(format!("job-{id}"))
         .spawn(move || {
             let mut reporter =
-                ChannelReporter { channel: on_event.clone(), cancel, conflict, last_progress: None };
+                ChannelReporter { channel: on_event.clone(), cancel, conflict, paused, last_progress: None };
             let outcome = run::run(spec, &mut reporter).unwrap_or_else(|error| JobOutcome {
                 failures: vec![JobFailure { path: String::new(), error }],
                 ..JobOutcome::default()
@@ -160,6 +175,15 @@ pub fn start_job(
 #[specta::specta]
 pub fn cancel_job(jobs: State<'_, Arc<JobManager>>, id: String) {
     jobs.cancel(id);
+}
+
+/// Pauses or resumes a copy / move (it stops between chunks; cancel still works).
+#[tauri::command]
+#[specta::specta]
+pub fn pause_job(jobs: State<'_, Arc<JobManager>>, id: String, paused: bool) {
+    if let Some(h) = jobs.jobs.lock().unwrap_or_else(PoisonError::into_inner).get(&id) {
+        h.paused.store(paused, Ordering::Relaxed);
+    }
 }
 
 #[tauri::command]
@@ -182,7 +206,7 @@ pub async fn measure(
     on_event: Channel<MeasureEvent>,
 ) -> AppResult<()> {
     let paths = paths.iter().map(|p| validate_path(p)).collect::<AppResult<Vec<_>>>()?;
-    let (cancel, _) = jobs.register(&id)?;
+    let (cancel, _, _) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     tauri::async_runtime::spawn_blocking(move || {
         let size = fsops::measure(&paths, &mut |size| {
@@ -227,7 +251,7 @@ pub async fn set_permissions(path: String, mode: u32) -> AppResult<FileEntry> {
 #[specta::specta]
 pub async fn checksum(jobs: State<'_, Arc<JobManager>>, id: String, path: String) -> AppResult<String> {
     let p = validate_path(&path)?;
-    let (cancel, _) = jobs.register(&id)?;
+    let (cancel, _, _) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     let result = tauri::async_runtime::spawn_blocking(move || sha256_hex(&p, &cancel))
         .await
@@ -372,9 +396,9 @@ mod tests {
     fn a_cancel_before_register_still_cancels() {
         let jobs = JobManager::default();
         jobs.cancel("early".into());
-        let (cancel, _) = jobs.register("early").unwrap();
+        let (cancel, _, _) = jobs.register("early").unwrap();
         assert!(cancel.load(Ordering::Relaxed));
-        let (other, _) = jobs.register("other").unwrap();
+        let (other, _, _) = jobs.register("other").unwrap();
         assert!(!other.load(Ordering::Relaxed));
     }
 

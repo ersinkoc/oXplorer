@@ -59,6 +59,7 @@ export async function runJob(
         doneItems: 0,
         current: "",
         conflict: null,
+        paused: false,
       },
     },
   }));
@@ -153,6 +154,11 @@ export function resolveConflict(id: string, resolution: ConflictResolution): voi
 
 export function cancelJob(id: string): void {
   void commands.cancelJob(id);
+}
+
+export function pauseJob(id: string, paused: boolean): void {
+  useJobs.getState().update(id, { paused });
+  void commands.pauseJob(id, paused);
 }
 
 function groupByParent<T>(items: readonly T[], pathOf: (t: T) => string): Map<string, T[]> {

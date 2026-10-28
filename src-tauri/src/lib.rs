@@ -37,6 +37,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::make_symlink,
             jobs::checksum,
             jobs::set_permissions,
+            jobs::pause_job,
             jobs::batch_rename,
             integration::pasteboard_write_files,
             integration::pasteboard_read_files,

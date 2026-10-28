@@ -16,6 +16,7 @@ export interface JobView {
   doneItems: number;
   current: string;
   conflict: JobConflict | null;
+  paused: boolean;
 }
 
 interface JobsState {
