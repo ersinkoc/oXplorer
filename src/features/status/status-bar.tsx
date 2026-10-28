@@ -1,14 +1,19 @@
+import { GitBranch } from "lucide-react";
 import { useEffect, useState } from "react";
 import { commands } from "@/bindings";
 import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { useT } from "@/i18n";
 import { formatSize, isFolderLike } from "@/lib/format";
+import { useApp } from "@/stores/app-store";
+import { useGit } from "@/stores/git-store";
 import type { PaneId } from "@/stores/workspace-store";
 
 export function StatusBar({ pane }: { pane: PaneId }) {
   const { t, tn } = useT();
   const { tab, entries, dir } = useVisibleEntries(pane);
   const [available, setAvailable] = useState<number | null>(null);
+  const showGit = useApp((s) => s.showGitStatus);
+  const branch = useGit((s) => (showGit ? s.statuses[tab.path]?.branch : null));
 
   useEffect(() => {
     let stale = false;
@@ -43,8 +48,14 @@ export function StatusBar({ pane }: { pane: PaneId }) {
   if (available !== null) parts.push(t("{size} available", { size: formatSize(available) }));
 
   return (
-    <footer className="flex h-[24px] shrink-0 items-center justify-center border-t border-border bg-toolbar px-3 text-[11px] text-fg-muted">
+    <footer className="relative flex h-[24px] shrink-0 items-center justify-center border-t border-border bg-toolbar px-3 text-[11px] text-fg-muted">
       {parts.join(", ")}
+      {branch && (
+        <span title={t("Git branch")} className="absolute left-3 flex max-w-[30%] items-center gap-1">
+          <GitBranch aria-hidden className="size-3 shrink-0" />
+          <span className="truncate">{branch}</span>
+        </span>
+      )}
     </footer>
   );
 }

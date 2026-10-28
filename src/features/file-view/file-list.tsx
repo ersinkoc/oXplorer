@@ -1,8 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo } from "react";
+import type { GitState } from "@/bindings";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirFor } from "@/features/dnd/drop-target";
 import { FileIcon } from "@/features/file-view/file-icon";
+import { GitBadge } from "@/features/file-view/git-badge";
 import { gridTemplate, ListHeader } from "@/features/file-view/list-header";
 import { RenameInput } from "@/features/file-view/rename-input";
 import { TagDots } from "@/features/file-view/tag-dots";
@@ -14,6 +16,7 @@ import type { FileEntry } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
 import { parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
+import { useGitStates } from "@/stores/git-store";
 import { useSearchInfo } from "@/stores/search-store";
 import { type PaneId, useWorkspace } from "@/stores/workspace-store";
 
@@ -39,6 +42,7 @@ export function FileList({ pane }: { pane: PaneId }) {
   const search = parseSearchPath(tab.path);
   const home = useApp((s) => s.home);
   const matches = useSearchInfo((s) => s.searches[tab.path]?.matches);
+  const git = useGitStates(tab.path);
   const detail = (entry: FileEntry): string | undefined => {
     if (!search) return undefined;
     const m = matches?.get(entry.path);
@@ -87,6 +91,7 @@ export function FileList({ pane }: { pane: PaneId }) {
                   renaming={renaming === entry.path}
                   dropTarget={dropTarget === entry.path}
                   detail={detail(entry)}
+                  git={git?.get(entry.name)}
                   onMouseDown={view.onItemMouseDown}
                   onDoubleClick={view.onItemDoubleClick}
                   onContextMenu={view.onItemContextMenu}
@@ -113,6 +118,7 @@ const Row = memo(function Row({
   renaming,
   dropTarget,
   detail,
+  git,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
@@ -120,6 +126,7 @@ const Row = memo(function Row({
   id: string;
   /** Replaces the kind column (search results). */
   detail?: string;
+  git?: GitState;
   entry: FileEntry;
   index: number;
   top: number;
@@ -145,7 +152,7 @@ const Row = memo(function Row({
       onContextMenu={(e) => onContextMenu(e, entry)}
       className={`file-row absolute left-0 grid w-full items-center rounded-[5px] text-[13px] ${
         index % 2 === 1 ? "bg-bg-alt" : ""
-      } ${entry.isHidden ? "opacity-60" : ""} ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
+      } ${entry.isHidden || git === "ignored" ? "opacity-60" : ""} ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
       style={{ top, height: ROW_HEIGHT, gridTemplateColumns: "var(--grid)" }}
     >
       <div role="gridcell" className="flex min-w-0 items-center gap-1.5 px-2.5">
@@ -156,6 +163,7 @@ const Row = memo(function Row({
           <span className="truncate">{entry.name}</span>
         )}
         <TagDots tags={entry.tags} />
+        <GitBadge state={git} />
       </div>
       <div role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted">
         {formatDate(entry.modifiedMs)}

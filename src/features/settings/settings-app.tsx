@@ -179,6 +179,7 @@ function GeneralSection() {
   const [newTab, setNewTab] = usePref("newTabLocation");
   const [restore, setRestore] = usePref("restoreSession");
   const [hidden, setHidden] = usePref("showHidden");
+  const [gitStatus, setGitStatus] = usePref("showGitStatus");
   const { t } = useT();
   return (
     <section>
@@ -199,6 +200,12 @@ function GeneralSection() {
       </Row>
       <Row label={t("Show hidden files")} hint={t("Also ⇧⌘. in any folder.")}>
         <Toggle label={t("Show hidden files")} value={hidden} onChange={setHidden} />
+      </Row>
+      <Row
+        label={t("Show Git status")}
+        hint={t("Badges for changed files and the branch in folders under Git.")}
+      >
+        <Toggle label={t("Show Git status")} value={gitStatus} onChange={setGitStatus} />
       </Row>
     </section>
   );

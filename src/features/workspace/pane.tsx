@@ -7,6 +7,7 @@ import { TabBar } from "@/features/workspace/tab-bar";
 import { useT } from "@/i18n";
 import { isSearchPath } from "@/lib/search-path";
 import { useDirCache } from "@/stores/dir-cache-store";
+import { refreshGit } from "@/stores/git-store";
 import { recordVisit } from "@/stores/recents-store";
 import { type PaneId, useActiveTab, useWorkspace } from "@/stores/workspace-store";
 
@@ -22,6 +23,7 @@ export function Pane({ pane, style }: { pane: PaneId; style?: React.CSSPropertie
   useEffect(() => {
     if (!isSearchPath(path)) {
       recordVisit(path);
+      refreshGit(path, true);
       return ensureListed(path);
     }
     // Searches run once; switching back to the tab shows the same results.

@@ -1,8 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useState } from "react";
+import type { GitState } from "@/bindings";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirFor } from "@/features/dnd/drop-target";
 import { FileIcon } from "@/features/file-view/file-icon";
+import { GitBadge } from "@/features/file-view/git-badge";
 import { RenameInput } from "@/features/file-view/rename-input";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
@@ -10,6 +12,7 @@ import { statusBody } from "@/features/file-view/view-states";
 import { useT } from "@/i18n";
 import type { FileEntry } from "@/lib/ipc";
 import { isSearchPath } from "@/lib/search-path";
+import { useGitStates } from "@/stores/git-store";
 import type { PaneId } from "@/stores/workspace-store";
 
 const CELL_WIDTH = 104;
@@ -26,6 +29,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
     virtualizer.scrollToIndex(Math.floor(i / columns), { align: "auto" }),
   );
   const { tab, dir, entries, selection, scrollRef, focusIndex, renaming } = view;
+  const git = useGitStates(tab.path);
   const dropTarget = useDrag((s) => s.target);
   const rows = Math.ceil(entries.length / columns);
 
@@ -83,6 +87,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
                       selected={selection.paths.has(entry.path)}
                       renaming={renaming === entry.path}
                       dropTarget={dropTarget === entry.path}
+                      git={git?.get(entry.name)}
                       onMouseDown={view.onItemMouseDown}
                       onDoubleClick={view.onItemDoubleClick}
                       onContextMenu={view.onItemContextMenu}
@@ -108,6 +113,7 @@ const Cell = memo(function Cell({
   selected,
   renaming,
   dropTarget,
+  git,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
@@ -117,6 +123,7 @@ const Cell = memo(function Cell({
   selected: boolean;
   renaming: boolean;
   dropTarget: boolean;
+  git?: GitState;
   onMouseDown: (e: React.MouseEvent, entry: FileEntry) => void;
   onDoubleClick: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
@@ -132,7 +139,7 @@ const Cell = memo(function Cell({
       onDoubleClick={() => onDoubleClick(entry)}
       onContextMenu={(e) => onContextMenu(e, entry)}
       className={`grid-cell flex flex-col items-center gap-1 rounded-md px-1 pt-2 ${
-        entry.isHidden ? "opacity-60" : ""
+        entry.isHidden || git === "ignored" ? "opacity-60" : ""
       } ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
       style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
     >
@@ -148,6 +155,7 @@ const Cell = memo(function Cell({
           </span>
         )}
         <TagDots tags={entry.tags} />
+        <GitBadge state={git} />
       </div>
     </div>
   );

@@ -26,6 +26,8 @@ export interface Preferences {
   newTabLocation: "current" | "home";
   /** Bring back tabs and layout at launch. */
   restoreSession: boolean;
+  /** Git state badges in folders that belong to a repository. */
+  showGitStatus: boolean;
   terminalFontSize: number;
   /** Where new terminals start. */
   terminalStartIn: "pane" | "home";
@@ -68,6 +70,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   languagePref: "system",
   newTabLocation: "current",
   restoreSession: true,
+  showGitStatus: true,
   terminalFontSize: 12,
   terminalStartIn: "pane",
   shortcuts: {},

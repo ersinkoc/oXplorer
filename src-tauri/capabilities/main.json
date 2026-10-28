@@ -69,6 +69,7 @@
     "allow-open-settings",
     "allow-log-file",
     "allow-updates-enabled",
+    "allow-git-status",
     "updater:default",
     "process:allow-restart"
   ]

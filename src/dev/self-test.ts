@@ -199,6 +199,10 @@ export async function runSelfTest(): Promise<void> {
     await commands.setMenuTitles(menuTitles(before, [...MENU_LABELS, ...items.map((i) => i.title)]));
     step("turkish ui + menu", turkishUi && menu.status === "ok");
 
+    // Git: a folder outside any repository has no status (and doesn't fail).
+    const git = await commands.gitStatus(dir);
+    step("git status outside a repo", git.status === "ok" && git.data === null);
+
     // Native Quick Look panel opens and closes through the controller hooks.
     await unwrap(commands.quickLook([renamed.path], 0, true));
     await sleep(800);

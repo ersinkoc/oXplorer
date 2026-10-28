@@ -59,6 +59,7 @@ muda = { version = "0.20", default-features = false }
 tauri-plugin-notification = "2"
 tauri-plugin-updater = "~2.13"
 tauri-plugin-process = "2"
+gix = { version = "=0.89.0", default-features = false, features = ["status", "max-performance-safe", "sha1"] }
 
 [dev-dependencies]
 tempfile = "3.27"

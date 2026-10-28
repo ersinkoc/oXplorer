@@ -1,12 +1,14 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight } from "lucide-react";
 import { memo, useEffect, useMemo, useRef } from "react";
+import type { GitState } from "@/bindings";
 import { ensureListed, goUp, navigateTo, openEntries } from "@/commands/navigation";
 import { beginPotentialDrag } from "@/features/dnd/drag-controller";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirFor } from "@/features/dnd/drop-target";
 import { showItemMenu } from "@/features/file-view/context-menu";
 import { FileIcon } from "@/features/file-view/file-icon";
+import { GitBadge } from "@/features/file-view/git-badge";
 import { RenameInput } from "@/features/file-view/rename-input";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
@@ -18,6 +20,7 @@ import { parent } from "@/lib/path";
 import { filterEntries, type SortConfig, sortEntries } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
+import { refreshGit, useGit, useGitStates } from "@/stores/git-store";
 import { type PaneId, useActiveTab } from "@/stores/workspace-store";
 
 const COLUMN_WIDTH = 230;
@@ -101,6 +104,7 @@ function ActiveColumn({ pane, root }: { pane: PaneId; root: string }) {
     overscan: 12,
   });
   const body = statusBody(dir, entries, !!tab.view.filter);
+  const git = useGitStates(tab.path);
   const selected = selection.paths.size === 1 ? entries.find((e) => selection.paths.has(e.path)) : undefined;
 
   /** → enters the selected folder and selects its first item, like Finder. */
@@ -159,6 +163,7 @@ function ActiveColumn({ pane, root }: { pane: PaneId; root: string }) {
                   selected={selection.paths.has(entry.path)}
                   renaming={renaming === entry.path}
                   dropTarget={dropTarget === entry.path}
+                  git={git?.get(entry.name)}
                   onMouseDown={view.onItemMouseDown}
                   onDoubleClick={view.onItemDoubleClick}
                   onContextMenu={view.onItemContextMenu}
@@ -206,6 +211,7 @@ function StaticColumn({
   const sort = useActiveTab(pane).view.sort;
   const dir = useDirCache((s) => s.dirs[path]);
   const entries = useSortedEntries(path, sort);
+  const git = useGitStates(path);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dropTarget = useDrag((s) => s.target);
   const virtualizer = useVirtualizer({
@@ -218,6 +224,7 @@ function StaticColumn({
   // Ancestors keep their cached listing; they were current a moment ago.
   useEffect(() => {
     if (!listed && !useDirCache.getState().dirs[path]) ensureListed(path);
+    if (!useGit.getState().statuses[path]) refreshGit(path);
   }, [path, listed]);
 
   const highlightIndex = highlight ? entries.findIndex((e) => e.path === highlight) : -1;
@@ -253,6 +260,7 @@ function StaticColumn({
                 selected={entry.path === highlight}
                 renaming={false}
                 dropTarget={dropTarget === entry.path}
+                git={git?.get(entry.name)}
                 onMouseDown={(e) => {
                   if (e.button !== 0) return;
                   select(entry);
@@ -280,11 +288,13 @@ const ColumnRow = memo(function ColumnRow({
   selected,
   renaming,
   dropTarget,
+  git,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
 }: {
   id?: string;
+  git?: GitState;
   entry: FileEntry;
   top: number;
   selected: boolean;
@@ -305,7 +315,7 @@ const ColumnRow = memo(function ColumnRow({
       onDoubleClick={() => onDoubleClick(entry)}
       onContextMenu={(e) => onContextMenu(e, entry)}
       className={`file-row absolute left-1 flex w-[calc(100%-8px)] items-center gap-1.5 rounded-[5px] px-1.5 text-[13px] ${
-        entry.isHidden ? "opacity-60" : ""
+        entry.isHidden || git === "ignored" ? "opacity-60" : ""
       } ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
       style={{ top, height: ROW_HEIGHT }}
     >
@@ -317,6 +327,7 @@ const ColumnRow = memo(function ColumnRow({
           {entry.name}
         </span>
       )}
+      <GitBadge state={git} />
       {isFolderLike(entry) && <ChevronRight aria-hidden className="size-3.5 shrink-0 opacity-60" />}
     </div>
   );

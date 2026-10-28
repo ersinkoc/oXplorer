@@ -744,7 +744,7 @@ A single-pane, real-time, native-looking, secure file manager. Distributed as a 
 
 ### Phase 10+ (later)
 
-- Git status badges (`gix` 0.90): modified, added and ignored files are marked in the list
+- [x] Git status badges (`gix` 0.90): modified, added and ignored files are marked in the list — gix 0.89 (0.90 was 6 days old): M/A/U/R/D/! badges, ignored items dimmed, folders show the strongest state inside, branch in the status bar; refreshed on file changes, after each terminal command and on window focus; 5 s limit for huge repos (11 ms for this repo)
 - Remote file systems: SFTP, S3, WebDAV (`opendal` 0.59) as "connections" in the sidebar
 - Browsing archives like folders (entering a zip)
 - Directory comparison and synchronization (diff between the two panes)

@@ -46,6 +46,7 @@ const COMMANDS: &[&str] = &[
     "open_settings",
     "log_file",
     "updates_enabled",
+    "git_status",
 ];
 
 fn main() {

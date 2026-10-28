@@ -1,5 +1,6 @@
 mod dir;
 mod error;
+mod git;
 mod integration;
 mod jobs;
 mod mac;
@@ -49,6 +50,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             system::favorite_tags,
             system::log_file,
             system::updates_enabled,
+            git::git_status,
             menu::menu_items,
             menu::set_shortcuts,
             menu::set_menu_titles,

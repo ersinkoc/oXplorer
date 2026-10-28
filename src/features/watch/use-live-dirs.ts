@@ -5,6 +5,7 @@ import { commands, events } from "@/bindings";
 import { isSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
+import { refreshAllGit, refreshGit } from "@/stores/git-store";
 import { activeTabOf, useWorkspace } from "@/stores/workspace-store";
 
 /** Mount/unmount shows up as entries appearing in /Volumes. */
@@ -37,13 +38,18 @@ export function useLiveDirs(): void {
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const unlisten = events.dirChanged.listen(({ payload }) => {
       useDirCache.getState().applyChange(payload);
+      refreshGit(payload.dir);
       if (payload.dir === VOLUMES_DIR) {
         // A mount produces several events in a row; refresh once.
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => void refreshVolumes(), 300);
       }
     });
+    // Commits and checkouts happen elsewhere (Terminal, an editor): check on return.
+    const onFocus = () => refreshAllGit();
+    window.addEventListener("focus", onFocus);
     return () => {
+      window.removeEventListener("focus", onFocus);
       clearTimeout(refreshTimer);
       void unlisten.then((fn) => fn());
     };

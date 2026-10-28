@@ -379,6 +379,16 @@ export const tr: Readonly<Record<string, string>> = {
   "Close {name}": "{name} sekmesini kapat",
   "Custom shortcuts weren’t applied: {reason}": "Özel kestirmeler uygulanamadı: {reason}",
   Language: "Dil",
+  "Git: modified": "Git: değiştirildi",
+  "Git: added": "Git: eklendi",
+  "Git: untracked": "Git: izlenmiyor",
+  "Git: renamed": "Git: yeniden adlandırıldı",
+  "Git: deleted": "Git: silindi",
+  "Git: conflict": "Git: çakışma",
+  "Git branch": "Git dalı",
+  "Show Git status": "Git durumunu göster",
+  "Badges for changed files and the branch in folders under Git.":
+    "Git altındaki klasörlerde değişen dosyalar için rozetler ve dal adı.",
   "Check for Updates…": "Güncellemeleri Denetle…",
   "This build doesn’t update itself. Download new versions from GitHub.":
     "Bu yapı kendini güncellemiyor. Yeni sürümleri GitHub’dan indirin.",

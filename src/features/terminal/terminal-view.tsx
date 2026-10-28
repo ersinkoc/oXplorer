@@ -16,6 +16,7 @@ import { t } from "@/i18n";
 import { describeError, toAppError } from "@/lib/ipc";
 import { parseOsc7 } from "@/lib/shell";
 import { useApp } from "@/stores/app-store";
+import { refreshAllGit } from "@/stores/git-store";
 import { type TerminalSession, useTerminals } from "@/stores/terminal-store";
 import { getActiveTab } from "@/stores/workspace-store";
 
@@ -34,6 +35,8 @@ async function onCwd(id: string, data: string): Promise<void> {
   if (!dir) return;
   const { sessions, activeId, update } = useTerminals.getState();
   update(id, { cwd: dir });
+  // The prompt is back: a command finished, maybe a git one.
+  refreshAllGit();
   const session = sessions.find((s) => s.id === id);
   if (session?.linked && activeId === id && getActiveTab().path !== dir) navigateTo(dir);
 }

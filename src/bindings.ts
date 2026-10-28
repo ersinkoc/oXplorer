@@ -72,6 +72,8 @@ export const commands = {
 	 *  dev builds and builds without a signing key never do.
 	 */
 	updatesEnabled: () => __TAURI_INVOKE<boolean>("updates_enabled"),
+	/**  Git state of a folder's children, or `None` outside a repository. */
+	gitStatus: (path: string) => typedError<GitStatus_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("git_status", { path })),
 	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
 	/**  Rebuilds the menu bar with the user's shortcuts. */
 	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),
@@ -276,6 +278,40 @@ export type FinderTag = {
 };
 
 export type FullDiskAccess = "granted" | "denied" | "unknown";
+
+export type GitChild = {
+	name: string,
+	state: GitState,
+};
+
+/**  Ordered by how much it matters to see: a folder shows its highest state. */
+export type GitState = "ignored" | "untracked" | "added" | "renamed" | "modified" | "deleted" | "conflict";
+
+export type GitStatus = GitStatus_Serialize | GitStatus_Deserialize;
+
+export type GitStatus_Deserialize = {
+	/**  The repository's working tree. */
+	root: string,
+	/**  Branch name, or the short commit id when detached. */
+	branch?: string | null,
+	/**  Set when the whole folder is untracked or ignored. */
+	folder?: GitState | null,
+	children: GitChild[],
+	/**  The status walk hit the time limit; what's here may be incomplete. */
+	partial: boolean,
+};
+
+export type GitStatus_Serialize = {
+	/**  The repository's working tree. */
+	root: string,
+	/**  Branch name, or the short commit id when detached. */
+	branch: string | null,
+	/**  Set when the whole folder is untracked or ignored. */
+	folder: GitState | null,
+	children: GitChild[],
+	/**  The status walk hit the time limit; what's here may be incomplete. */
+	partial: boolean,
+};
 
 export type JobEvent = JobEvent_Serialize | JobEvent_Deserialize;
 
