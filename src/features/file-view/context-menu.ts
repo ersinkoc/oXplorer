@@ -77,6 +77,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
               { text: t("Open in Other Pane"), command: "pane.openInOther" },
             ]
           : []),
+        ...(one && entries[0]?.kind === "package"
+          ? [{ text: t("Show Package Contents"), command: "file.showPackageContents" }]
+          : []),
         { text: t("Quick Look"), command: "file.quickLook" },
       ]),
       ...(openWith ? [openWith] : []),

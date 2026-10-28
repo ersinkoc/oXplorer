@@ -41,6 +41,14 @@ export function registerAppCommands(): void {
       run: () => openEntries(selectedEntries()),
     },
     {
+      id: "file.showPackageContents",
+      title: "Show Package Contents",
+      run: () => {
+        const [first] = selectedEntries();
+        if (first?.kind === "package") navigateTo(first.path);
+      },
+    },
+    {
       id: "file.revealInFinder",
       title: "Show in Finder",
       run: async () => {
