@@ -14,6 +14,7 @@ import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
 import { isRemotePath } from "@/lib/remote-path";
 import { useDirCache } from "@/stores/dir-cache-store";
+import { useFolderSizes } from "@/stores/folder-size-store";
 import { useWorkspace } from "@/stores/workspace-store";
 
 const IMAGE = new Set("png jpg jpeg gif webp avif bmp ico svg heic heif tif tiff".split(" "));
@@ -176,9 +177,10 @@ function BigIcon({ entry, thumbnail = false }: { entry: FileEntry; thumbnail?: b
 
 function InfoCard({ entry }: { entry: FileEntry }) {
   const { t } = useT();
+  const measured = useFolderSizes((s) => s.sizes[entry.path]);
   const rows: [string, string][] = [
     [t("Kind"), kindLabel(entry)],
-    [t("Size"), isFolderLike(entry) ? "--" : entrySizeLabel(entry)],
+    [t("Size"), entrySizeLabel(entry, measured)],
     [t("Created"), entry.createdMs ? formatDate(entry.createdMs) : "--"],
     [t("Modified"), formatDate(entry.modifiedMs)],
   ];
