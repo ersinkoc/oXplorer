@@ -42,7 +42,7 @@ export const commands = {
 	/**  Writes the icon of `path` to a cache file for the native drag image and returns its path. */
 	dragPreview: (path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("drag_preview", { path })),
 	/**  Adds and removes Finder tags on each item; returns the updated entries. */
-	editTags: (paths: string[], add: FinderTag[], remove: string[]) => typedError<FileEntry_Serialize[], AppError_Serialize>(__TAURI_INVOKE("edit_tags", { paths, add, remove })),
+	editTags: (paths: string[], add: FinderTag[], remove: string[]) => typedError<TagEditOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("edit_tags", { paths, add, remove })),
 	/**
 	 *  Opens the Quick Look panel on `paths` at `index`. With `open: false` it only
 	 *  follows the selection while the panel is already showing.
@@ -546,6 +546,21 @@ export type SymlinkInfo = {
 	broken: boolean,
 };
 
+/**  The items after a tag edit, and how to put their tags back. */
+export type TagEditOutcome = TagEditOutcome_Serialize | TagEditOutcome_Deserialize;
+
+/**  The items after a tag edit, and how to put their tags back. */
+export type TagEditOutcome_Deserialize = {
+	entries: FileEntry_Deserialize[],
+	undo: UndoAction,
+};
+
+/**  The items after a tag edit, and how to put their tags back. */
+export type TagEditOutcome_Serialize = {
+	entries: FileEntry_Serialize[],
+	undo: UndoAction,
+};
+
 export type TaggedPath = {
 	path: string,
 	tags: FinderTag[],
@@ -571,7 +586,9 @@ export type UndoStep =
 /**  Move the item to the Trash (reverses a copy/creation). */
 { kind: "trash"; path: string } | 
 /**  Move an item back (reverses a move, rename, or trashing). */
-{ kind: "move"; from: string; to: string };
+{ kind: "move"; from: string; to: string } | 
+/**  Give an item exactly these Finder tags (reverses a tag edit). */
+{ kind: "tags"; path: string; tags: FinderTag[] };
 
 export type UsageEvent = UsageEvent_Serialize | UsageEvent_Deserialize;
 

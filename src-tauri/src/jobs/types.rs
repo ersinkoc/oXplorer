@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub use super::archive::ArchiveFormat;
 use crate::error::AppError;
-use crate::model::FileEntry;
+use crate::model::{FileEntry, FinderTag};
 
 /// What the frontend asks for. Paths are absolute; `dest_dir` is a folder.
 #[derive(Debug, Clone, Deserialize, specta::Type)]
@@ -73,6 +73,8 @@ pub enum UndoStep {
     Trash { path: String },
     /// Move an item back (reverses a move, rename, or trashing).
     Move { from: String, to: String },
+    /// Give an item exactly these Finder tags (reverses a tag edit).
+    Tags { path: String, tags: Vec<FinderTag> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, specta::Type)]

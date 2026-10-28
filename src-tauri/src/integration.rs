@@ -116,6 +116,14 @@ pub async fn quick_look_visible(app: AppHandle) -> bool {
     tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(false)).await.unwrap_or(false)
 }
 
+/// The items after a tag edit, and how to put their tags back.
+#[derive(Debug, Clone, serde::Serialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TagEditOutcome {
+    pub entries: Vec<crate::model::FileEntry>,
+    pub undo: crate::jobs::UndoAction,
+}
+
 /// Adds and removes Finder tags on each item; returns the updated entries.
 #[tauri::command]
 #[specta::specta]
@@ -123,17 +131,21 @@ pub async fn edit_tags(
     paths: Vec<String>,
     add: Vec<crate::model::FinderTag>,
     remove: Vec<String>,
-) -> AppResult<Vec<crate::model::FileEntry>> {
+) -> AppResult<TagEditOutcome> {
     let paths = validate_all(&paths)?;
     tauri::async_runtime::spawn_blocking(move || {
-        paths
-            .iter()
-            .map(|p| {
-                crate::mac::tags::edit_tags(p, &add, &remove).map_err(|e| AppError::from_io(&e, p))?;
+        let mut entries = Vec::new();
+        let mut steps = Vec::new();
+        for p in &paths {
+            let before = crate::mac::tags::read_tags(p);
+            crate::mac::tags::edit_tags(p, &add, &remove).map_err(|e| AppError::from_io(&e, p))?;
+            steps.push(crate::jobs::UndoStep::Tags { path: p.to_string_lossy().into_owned(), tags: before });
+            entries.push(
                 crate::dir::build_entry_for(p)
-                    .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })
-            })
-            .collect()
+                    .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })?,
+            );
+        }
+        Ok(TagEditOutcome { entries, undo: crate::jobs::UndoAction { label: "Tags".into(), steps } })
     })
     .await
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?

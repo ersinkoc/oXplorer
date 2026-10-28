@@ -727,7 +727,7 @@ A single-pane, real-time, native-looking, secure file manager. Distributed as a 
 - [x] Compress (zip, tar.gz, tar.zst) and extract: via the job queue, with progress — cancellable, undoable, written under a temporary name and renamed into place; extraction follows Archive Utility (one top-level item lands as itself, otherwise a folder); zip-slip and symlink-traversal are refused; setuid bits dropped. Not kept in archives: extended attributes and resource forks
 - [x] Settings window (separate native window): general, appearance, shortcuts, terminal, advanced — second Vite page with its own capability (no file-system commands); preferences shared through the store, the main window applies changes live
 - [x] Shortcut customization (with conflict detection) — menu bar rebuilt at runtime; Rust validates accelerators (muda) and refuses duplicates; the UI offers to move a taken shortcut. ⌥⌘1…9 and ⌘↓ stay fixed
-- [x] Writing tags (add/remove) — context-menu Tags submenu with check marks for Finder's sidebar tags (no undo yet)
+- [x] Writing tags (add/remove) — context-menu Tags submenu with check marks for Finder's sidebar tags; undoable (an `UndoStep::Tags` restores the previous tags, redo included)
 - [x] Batch rename (prefix/suffix, find-replace, regex, numbering; with live preview) — Finder's three modes; all-or-nothing in Rust (temporary names, rollback), undoable
 
 ### Phase 9 — Polish and v1.0 (2 weeks)

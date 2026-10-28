@@ -33,8 +33,19 @@ enum Mode {
 /// What actually happened, recorded as we go so a partial job is still undoable.
 enum Done {
     Created(PathBuf),
-    Moved { from: PathBuf, to: PathBuf },
-    Trashed { from: PathBuf, to: PathBuf },
+    Moved {
+        from: PathBuf,
+        to: PathBuf,
+    },
+    Trashed {
+        from: PathBuf,
+        to: PathBuf,
+    },
+    /// Tags were replaced; `before` restores them.
+    Tagged {
+        path: PathBuf,
+        before: Vec<crate::model::FinderTag>,
+    },
 }
 
 struct Runner<'a> {
@@ -380,6 +391,15 @@ impl Runner<'_> {
                     }
                     self.tick(0, 1, &p);
                 }
+                UndoStep::Tags { path, tags } => {
+                    let p = validate_path(&path)?;
+                    let before = crate::mac::tags::read_tags(&p);
+                    match crate::mac::tags::write_tags(&p, &tags) {
+                        Ok(()) => self.log.push(Done::Tagged { path: p.clone(), before }),
+                        Err(e) => self.failures.push(err(&p, &e)),
+                    }
+                    self.tick(0, 1, &p);
+                }
                 UndoStep::Move { from, to } => {
                     let (from, to) = (validate_path(&from)?, validate_path(&to)?);
                     if to.symlink_metadata().is_ok() {
@@ -570,13 +590,16 @@ impl Runner<'_> {
                 Done::Moved { from, to } | Done::Trashed { from, to } => {
                     UndoStep::Move { from: s(to), to: s(from) }
                 }
+                Done::Tagged { path, before } => UndoStep::Tags { path: s(path), tags: before.clone() },
             })
             .collect();
         let created = self
             .log
             .iter()
             .filter_map(|d| match d {
-                Done::Created(p) | Done::Moved { to: p, .. } => build_entry_for(p),
+                Done::Created(p) | Done::Moved { to: p, .. } | Done::Tagged { path: p, .. } => {
+                    build_entry_for(p)
+                }
                 Done::Trashed { .. } => None,
             })
             .collect();
@@ -766,6 +789,31 @@ mod tests {
         assert!(out.cancelled);
         assert!(!root.join("dest/big").exists(), "partial copy is removed");
         assert!(out.undo.is_none());
+    }
+
+    #[test]
+    fn tag_edits_undo_and_redo() {
+        use crate::mac::tags::{read_tags, write_tags};
+        use crate::model::FinderTag;
+        let tmp = tempfile::tempdir().unwrap();
+        let f = tmp.path().join("f.txt");
+        fs::write(&f, "").unwrap();
+        let red = FinderTag { name: "Red".into(), color: 6 };
+        let work = FinderTag { name: "Work".into(), color: 0 };
+        write_tags(&f, std::slice::from_ref(&work)).unwrap();
+        // The edit (done by the command) recorded the tags it replaced.
+        write_tags(&f, &[work.clone(), red.clone()]).unwrap();
+        let undo = UndoAction {
+            label: "Tags".into(),
+            steps: vec![UndoStep::Tags { path: s(&f), tags: vec![work.clone()] }],
+        };
+
+        let undone = run(JobSpec::Undo { action: undo }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
+        assert_eq!(read_tags(&f), vec![work.clone()]);
+        assert_eq!(undone.created.len(), 1, "the entry comes back with its tags for the UI");
+        let redo = undone.undo.unwrap();
+        run(JobSpec::Undo { action: redo }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
+        assert_eq!(read_tags(&f), vec![work, red]);
     }
 
     #[test]

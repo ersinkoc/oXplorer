@@ -249,8 +249,9 @@ export async function toggleTag(entries: readonly FileEntry[], tag: FinderTag): 
   if (refuseArchiveMembers(paths(entries)) || refuseRemote(paths(entries))) return;
   const all = entries.every((e) => e.tags.some((t) => t.name === tag.name));
   try {
-    const updated = await unwrap(commands.editTags(paths(entries), all ? [] : [tag], all ? [tag.name] : []));
-    applyFsChanges(updated, []);
+    const out = await unwrap(commands.editTags(paths(entries), all ? [] : [tag], all ? [tag.name] : []));
+    applyFsChanges(out.entries, []);
+    recordUndo(out.undo);
   } catch (err) {
     report(err, t("Couldn’t change the tags."));
   }

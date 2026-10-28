@@ -218,15 +218,17 @@ export async function runSelfTest(): Promise<void> {
       `${listed} | ${finalList.map((e) => e.name).join()}`,
     );
 
-    // Tags: add and remove through the xattr.
+    // Tags: add and remove through the xattr, and undo the removal.
     const tagged = await unwrap(
       commands.editTags([join(arc.path, "inside.txt")], [{ name: "Red", color: 6 }], []),
     );
     const untagged = await unwrap(commands.editTags([join(arc.path, "inside.txt")], [], ["Red"]));
+    const retagged = await runJob({ kind: "undo", action: untagged.undo }, { history: "none" });
     step(
-      "tags",
-      tagged[0]?.tags.some((t) => t.name === "Red" && t.color === 6) === true &&
-        untagged[0]?.tags.length === 0,
+      "tags + undo",
+      tagged.entries[0]?.tags.some((t) => t.name === "Red" && t.color === 6) === true &&
+        untagged.entries[0]?.tags.length === 0 &&
+        retagged?.created[0]?.tags.some((t) => t.name === "Red") === true,
     );
 
     // Batch rename with undo.
