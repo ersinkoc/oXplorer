@@ -7,7 +7,7 @@ import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { useApp } from "@/stores/app-store";
 import { useHistory } from "@/stores/history-store";
-import { useWorkspace } from "@/stores/workspace-store";
+import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
 type Item = { text: string; command: string; enabled?: boolean } | "-";
 
@@ -147,6 +147,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
 export async function showBackgroundMenu(): Promise<void> {
   const canPaste = (await commands.pasteboardReadFiles()).length > 0;
   const { showHidden } = useApp.getState();
+  const { foldersFirst } = getActiveTab().view.sort;
   const { undo } = useHistory.getState();
   const last = undo.at(-1);
   const menu = await Menu.new({
@@ -169,6 +170,10 @@ export async function showBackgroundMenu(): Promise<void> {
       { text: t("Sort by Kind"), command: "view.sortKind" },
       { text: t("Sort by Date Modified"), command: "view.sortModified" },
       { text: t("Sort by Size"), command: "view.sortSize" },
+      {
+        text: foldersFirst ? t("Mix Folders with Files") : t("Keep Folders on Top"),
+        command: "view.foldersFirst",
+      },
       "-",
       { text: showHidden ? t("Hide Hidden Files") : t("Show Hidden Files"), command: "view.toggleHidden" },
       { text: t("Show in Finder"), command: "file.revealInFinder" },

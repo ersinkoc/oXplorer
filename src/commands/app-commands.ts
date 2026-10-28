@@ -140,6 +140,14 @@ export function registerAppCommands(): void {
     { id: "view.sortModified", title: "Sort by Date Modified", run: () => sortBy("modified") },
     { id: "view.sortSize", title: "Sort by Size", run: () => sortBy("size") },
     {
+      id: "view.foldersFirst",
+      title: "Keep Folders on Top",
+      run: () => {
+        const { sort } = getActiveTab().view;
+        useWorkspace.getState().updateView({ sort: { ...sort, foldersFirst: !sort.foldersFirst } });
+      },
+    },
+    {
       id: "view.toggleHidden",
       title: "Show Hidden Files",
       run: () => {

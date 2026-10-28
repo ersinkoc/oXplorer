@@ -93,6 +93,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Sort by Kind": "Türe Göre Sırala",
   "Sort by Date Modified": "Değiştirilme Tarihine Göre Sırala",
   "Sort by Size": "Boyuta Göre Sırala",
+  "Keep Folders on Top": "Klasörleri Üstte Tut",
+  "Mix Folders with Files": "Klasörleri Dosyalarla Karıştır",
   "Make Alias": "Takma Ad Oluştur",
   "{name} alias": "{name} takma adı",
   "Couldn’t make the alias.": "Takma ad oluşturulamadı.",

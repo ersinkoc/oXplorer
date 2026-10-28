@@ -91,6 +91,7 @@ const VIEW: &[Item] = &[
     ("view.sortKind", "Sort by Kind", Some("Ctrl+Alt+CmdOrCtrl+2")),
     ("view.sortModified", "Sort by Date Modified", Some("Ctrl+Alt+CmdOrCtrl+5")),
     ("view.sortSize", "Sort by Size", Some("Ctrl+Alt+CmdOrCtrl+7")),
+    ("view.foldersFirst", "Keep Folders on Top", None),
     SEP,
     ("pane.toggleDual", "Dual Pane", Some("CmdOrCtrl+U")),
     ("view.togglePreview", "Show Preview", Some("Shift+CmdOrCtrl+P")),
