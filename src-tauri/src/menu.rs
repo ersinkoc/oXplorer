@@ -96,6 +96,7 @@ const GO: &[Item] = &[
 ];
 
 const SETTINGS: Item = ("app.settings", "Settings…", Some("CmdOrCtrl+Comma"));
+const CHECK_UPDATES: Item = ("app.checkUpdates", "Check for Updates…", None);
 
 const HELP: &[Item] = &[
     ("help.whatsNew", "What’s New in OXplorer", None),
@@ -106,7 +107,7 @@ const HELP: &[Item] = &[
 
 /// Customizable items by menu, in menu order.
 const MENUS: &[(&str, &[Item])] = &[
-    ("OXplorer", &[SETTINGS]),
+    ("OXplorer", &[SETTINGS, CHECK_UPDATES]),
     ("File", FILE),
     ("Edit", EDIT),
     ("View", VIEW),
@@ -163,6 +164,7 @@ fn build_with<R: Runtime>(
         true,
         &[
             &PredefinedMenuItem::about(app, Some(&l("About OXplorer")), None)?,
+            &item(&CHECK_UPDATES)?,
             &PredefinedMenuItem::separator(app)?,
             &item(&SETTINGS)?,
             &PredefinedMenuItem::separator(app)?,

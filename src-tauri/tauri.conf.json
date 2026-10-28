@@ -22,13 +22,24 @@
         "decorations": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 16, "y": 21 },
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 21
+        },
         "transparent": true,
-        "windowEffects": { "effects": ["sidebar"], "state": "followsWindowActiveState" }
+        "windowEffects": {
+          "effects": [
+            "sidebar"
+          ],
+          "state": "followsWindowActiveState"
+        }
       }
     ],
     "security": {
-      "assetProtocol": { "enable": true, "scope": [] },
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      },
       "csp": {
         "default-src": "'self'",
         "img-src": "'self' asset: http://asset.localhost oxthumb: http://oxthumb.localhost data:",
@@ -42,7 +53,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
     "category": "Utility",
     "copyright": "© 2026 ECOSTACK TECHNOLOGY OÜ",
     "shortDescription": "Modern dual-pane file manager for macOS",
@@ -57,6 +71,14 @@
       "minimumSystemVersion": "14.0",
       "entitlements": "Entitlements.plist",
       "signingIdentity": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/ersinkoc/oXplorer/releases/latest/download/latest.json"
+      ]
     }
   }
 }

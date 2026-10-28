@@ -261,6 +261,22 @@ pub fn log_file(app: AppHandle) -> AppResult<String> {
     Ok(if file.exists() { file } else { dir }.to_string_lossy().into_owned())
 }
 
+/// Release builds whose updater has a public key configured check for updates;
+/// dev builds and builds without a signing key never do.
+#[tauri::command]
+#[specta::specta]
+pub fn updates_enabled(app: AppHandle) -> bool {
+    !cfg!(debug_assertions)
+        && app
+            .config()
+            .plugins
+            .0
+            .get("updater")
+            .and_then(|u| u.get("pubkey"))
+            .and_then(|k| k.as_str())
+            .is_some_and(|k| !k.trim().is_empty())
+}
+
 /// Finder's sidebar tags, for the sidebar's Tags section.
 #[tauri::command]
 #[specta::specta]

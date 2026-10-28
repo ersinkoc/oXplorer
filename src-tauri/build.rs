@@ -45,6 +45,7 @@ const COMMANDS: &[&str] = &[
     "set_menu_titles",
     "open_settings",
     "log_file",
+    "updates_enabled",
 ];
 
 fn main() {

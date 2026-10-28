@@ -32,7 +32,8 @@ jobs:
       #   APPLE_CERTIFICATE_PASSWORD   password of that .p12
       #   APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: ECOSTACK TECHNOLOGY OU (TEAMID)"
       #   APPLE_API_ISSUER / APPLE_API_KEY / APPLE_API_KEY_P8   App Store Connect API key for notarization
-      #   TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)                  updater signing key (Phase 9)
+      #   TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)                  updater key from `tauri signer generate`;
+      #                                                         its public key goes into tauri.conf.json
       - name: Write App Store Connect key
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
@@ -52,7 +53,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          args: --target universal-apple-darwin
+          # With the updater key present, also build the signed update archive and
+          # latest.json that installed copies look for (tauri.conf.json, plugins.updater).
+          args: >-
+            --target universal-apple-darwin
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}
           tagName: ${{ github.ref_name }}
           releaseName: OXplorer ${{ github.ref_name }}
           releaseDraft: true

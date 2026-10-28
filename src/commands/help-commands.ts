@@ -4,6 +4,7 @@ import { version as osVersion } from "@tauri-apps/plugin-os";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import { defineCommands } from "@/commands/registry";
+import { checkForUpdates } from "@/features/help/updates";
 import { describeError } from "@/lib/ipc";
 import { useApp } from "@/stores/app-store";
 
@@ -11,6 +12,7 @@ const ISSUES = "https://github.com/ersinkoc/oXplorer/issues/new";
 
 export function registerHelpCommands(): void {
   defineCommands([
+    { id: "app.checkUpdates", title: "Check for Updates…", run: () => checkForUpdates(true) },
     {
       id: "help.whatsNew",
       title: "What’s New in OXplorer",

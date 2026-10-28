@@ -156,7 +156,7 @@ export function SearchHeader({ pane, path }: { pane: PaneId; path: string }) {
             ))}
           </>
         )}
-        <span className="ml-auto flex items-center gap-1.5 tabular-nums">
+        <span role="status" className="ml-auto flex items-center gap-1.5 tabular-nums">
           <Status info={info} count={count} hasQuery={!!spec.query.trim()} />
           {info.running && (
             <button

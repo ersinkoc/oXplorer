@@ -67,6 +67,11 @@ export const commands = {
 	favoriteTags: () => __TAURI_INVOKE<FinderTag[]>("favorite_tags"),
 	/**  The app's log file (for "Show Log File" / bug reports); the folder if there's no file yet. */
 	logFile: () => typedError<string, AppError_Serialize>(__TAURI_INVOKE("log_file")),
+	/**
+	 *  Release builds whose updater has a public key configured check for updates;
+	 *  dev builds and builds without a signing key never do.
+	 */
+	updatesEnabled: () => __TAURI_INVOKE<boolean>("updates_enabled"),
 	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
 	/**  Rebuilds the menu bar with the user's shortcuts. */
 	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),

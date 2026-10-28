@@ -48,6 +48,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             search::search_cancel,
             system::favorite_tags,
             system::log_file,
+            system::updates_enabled,
             menu::menu_items,
             menu::set_shortcuts,
             menu::set_menu_titles,
@@ -125,6 +126,8 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(builder.invoke_handler())
         .menu(menu::build)
         .on_menu_event(|app, event| menu::forward_event(app, event.id().as_ref()))

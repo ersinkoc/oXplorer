@@ -11,6 +11,7 @@ import { openExternalPaths } from "@/commands/navigation";
 import { listenToMenu } from "@/commands/registry";
 import { registerTabCommands } from "@/commands/tab-commands";
 import { openTerminal, registerTerminalCommands } from "@/commands/terminal-commands";
+import { checkForUpdatesDaily } from "@/features/help/updates";
 import { showWhatsNewAfterUpdate } from "@/features/help/whats-new";
 import { AppShell } from "@/features/layout/app-shell";
 import { installQuickLook } from "@/features/preview/quick-look";
@@ -57,6 +58,7 @@ async function loadInitialState(): Promise<void> {
   if (prefs.terminalVisible) openTerminal();
   await openPendingRequests();
   void showWhatsNewAfterUpdate();
+  void checkForUpdatesDaily();
   void info(`bootstrap: home=${home} volumes=${volumes.length} fda=${fda} restored=${session !== undefined}`);
   if (import.meta.env.DEV) {
     selfCheckIcons();

@@ -379,6 +379,15 @@ export const tr: Readonly<Record<string, string>> = {
   "Close {name}": "{name} sekmesini kapat",
   "Custom shortcuts weren’t applied: {reason}": "Özel kestirmeler uygulanamadı: {reason}",
   Language: "Dil",
+  "Check for Updates…": "Güncellemeleri Denetle…",
+  "This build doesn’t update itself. Download new versions from GitHub.":
+    "Bu yapı kendini güncellemiyor. Yeni sürümleri GitHub’dan indirin.",
+  "OXplorer is up to date.": "OXplorer güncel.",
+  "OXplorer {version} is available": "OXplorer {version} kullanılabilir",
+  "Install and Relaunch": "Yükle ve Yeniden Başlat",
+  "Downloading update…": "Güncelleme indiriliyor…",
+  "The update couldn’t be installed: {reason}": "Güncelleme yüklenemedi: {reason}",
+  "Couldn’t check for updates: {reason}": "Güncellemeler denetlenemedi: {reason}",
   "System uses Turkish when macOS is set to Turkish, otherwise English.":
     "Sistem: macOS Türkçe ise Türkçe, değilse İngilizce kullanılır.",
 };

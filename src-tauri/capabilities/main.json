@@ -67,6 +67,9 @@
     "allow-set-shortcuts",
     "allow-set-menu-titles",
     "allow-open-settings",
-    "allow-log-file"
+    "allow-log-file",
+    "allow-updates-enabled",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

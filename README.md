@@ -2,7 +2,7 @@
 
 A modern, open-source, dual-pane file manager for macOS — Finder's look and feel with Total Commander's efficiency. Built with Tauri 2, React 19 and Rust.
 
-> Status: early development. Phases 0–8 of the [plan](oxplorer-project-plan-v2.md) are done and Phase 9 (v1.0 polish) is under way: Turkish and English UI, What's New, problem reports and notifications are in; signed builds and auto-update are pending. Not yet signed or released; build it from source.
+> Status: early development. Phases 0–8 of the [plan](oxplorer-project-plan-v2.md) are done and Phase 9 (v1.0 polish) is under way: Turkish and English UI, What's New, problem reports, notifications and the updater are in; signed releases are pending (see [packaging/RELEASING.md](packaging/RELEASING.md)). Not yet signed or released; build it from source.
 
 ## Features (so far)
 
@@ -18,6 +18,10 @@ A modern, open-source, dual-pane file manager for macOS — Finder's look and fe
 - **Native feel:** native icons and thumbnails, macOS menu bar, sidebar vibrancy, dark mode, system accent color.
 - **Views:** list, icon and column views (⌘1 / ⌘2 / ⌘3), keyboard-first with Finder shortcuts, type-ahead and natural sorting.
 - **Sidebar and status bar:** favorites, mounted volumes with eject, free space, Full Disk Access detection.
+
+## Install
+
+There's no signed release yet. Build from source (below); once releases are published, they'll be on the [Releases page](https://github.com/ersinkoc/oXplorer/releases) and via Homebrew (`packaging/homebrew/oxplorer.rb`), and the app will update itself.
 
 ## Development
 

@@ -190,7 +190,7 @@ export async function runSelfTest(): Promise<void> {
     const before = useApp.getState().language;
     useApp.getState().set({ language: "tr" });
     await sleep(300);
-    const turkishUi = document.body.innerText.includes("öğe");
+    const turkishUi = (document.body.textContent ?? "").includes("öğe");
     const items = await commands.menuItems();
     const menu = await commands.setMenuTitles(
       menuTitles("tr", [...MENU_LABELS, ...items.map((i) => i.title)]),
