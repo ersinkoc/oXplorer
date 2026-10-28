@@ -5,6 +5,7 @@ import { runCommand } from "@/commands/registry";
 import { t } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
+import { isSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useHistory } from "@/stores/history-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
@@ -79,6 +80,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           : []),
         ...(one && entries[0]?.kind === "package"
           ? [{ text: t("Show Package Contents"), command: "file.showPackageContents" }]
+          : []),
+        ...(one && isSearchPath(getActiveTab().path)
+          ? [{ text: t("Show in Enclosing Folder"), command: "file.showEnclosing" }]
           : []),
         { text: t("Quick Look"), command: "file.quickLook" },
       ]),

@@ -23,6 +23,7 @@ export const tr: Readonly<Record<string, string>> = {
   "Go to Folder…": "Klasöre Git…",
   Open: "Aç",
   "Show in Finder": "Finder’da Göster",
+  "Show in Enclosing Folder": "Bulunduğu Klasörde Göster",
   "Copy Path": "Yolu Kopyala",
   "Select All": "Tümünü Seç",
   "Deselect All": "Seçimi Kaldır",

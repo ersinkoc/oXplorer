@@ -16,6 +16,7 @@ import { paneLayout } from "@/features/file-view/visible-order";
 import { focusedTerminal } from "@/features/terminal/terminal-registry";
 import { t, tn } from "@/i18n";
 import { CommandError, describeError, unwrap } from "@/lib/ipc";
+import { parent } from "@/lib/path";
 import { isSearchPath, isVirtualPath, searchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION, invert, selectAll } from "@/lib/selection";
 import { nextSort, type SortField } from "@/lib/sort";
@@ -57,6 +58,16 @@ export function registerAppCommands(): void {
       id: "file.open",
       title: "Open",
       run: () => openEntries(selectedEntries()),
+    },
+    {
+      id: "file.showEnclosing",
+      title: "Show in Enclosing Folder",
+      run: () => {
+        // Search results: the folder an item was found in, with the item selected.
+        const [first] = selectedEntries();
+        const folder = first && parent(first.path);
+        if (folder && isSearchPath(getActiveTab().path)) navigateTo(folder, { select: first.path });
+      },
     },
     {
       id: "file.showPackageContents",
