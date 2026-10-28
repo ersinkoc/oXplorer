@@ -1,0 +1,38 @@
+name: Report a problem
+description: Something in OXplorer doesn't work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a folder with …
+        2. Press …
+  - type: input
+    id: version
+    attributes:
+      label: OXplorer version
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        Help → Show Log File opens it in Finder. The log contains folder and file paths;
+        paste only the part around the problem, and remove anything you don't want to share.
+      render: text

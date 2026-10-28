@@ -1,12 +1,13 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { msg, useT } from "@/i18n";
 import type { SortConfig, SortField } from "@/lib/sort";
 import { type ColumnWidths, useApp } from "@/stores/app-store";
 
 const COLUMNS: { field: SortField; label: string; width?: keyof ColumnWidths; align?: "right" }[] = [
-  { field: "name", label: "Name" },
-  { field: "modified", label: "Date Modified", width: "modified" },
-  { field: "size", label: "Size", width: "size", align: "right" },
-  { field: "kind", label: "Kind", width: "kind" },
+  { field: "name", label: msg("Name") },
+  { field: "modified", label: msg("Date Modified"), width: "modified" },
+  { field: "size", label: msg("Size"), width: "size", align: "right" },
+  { field: "kind", label: msg("Kind"), width: "kind" },
 ];
 
 const MIN_WIDTH = 60;
@@ -31,6 +32,7 @@ export function ListHeader({
   /** Replaces "Kind" when the last column shows something else (search results). */
   kindLabel?: string;
 }) {
+  const { t } = useT();
   const widths = useApp((s) => s.columnWidths);
 
   const startResize = (key: keyof ColumnWidths, e: React.PointerEvent) => {
@@ -85,7 +87,7 @@ export function ListHeader({
                 col.align === "right" ? "justify-end" : ""
               } ${active ? "font-semibold text-fg" : ""}`}
             >
-              <span className="truncate">{col.field === "kind" && kindLabel ? kindLabel : col.label}</span>
+              <span className="truncate">{col.field === "kind" && kindLabel ? kindLabel : t(col.label)}</span>
               {active && <Arrow className="size-3 shrink-0" />}
             </button>
           </div>

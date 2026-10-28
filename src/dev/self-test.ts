@@ -6,6 +6,8 @@ import { runJob } from "@/commands/jobs";
 import { navigateTo } from "@/commands/navigation";
 import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
 import { terminalById } from "@/features/terminal/terminal-registry";
+import { menuTitles } from "@/i18n";
+import { MENU_LABELS } from "@/i18n/menu-labels";
 import { highlight } from "@/lib/highlight";
 import { unwrap } from "@/lib/ipc";
 import { join } from "@/lib/path";
@@ -183,6 +185,19 @@ export async function runSelfTest(): Promise<void> {
     const settings = await waitForAsync(() => WebviewWindow.getByLabel("settings"), 5000);
     step("settings window", !!settings);
     await settings?.close();
+
+    // Language: the UI and the native menu switch to Turkish and back.
+    const before = useApp.getState().language;
+    useApp.getState().set({ language: "tr" });
+    await sleep(300);
+    const turkishUi = document.body.innerText.includes("öğe");
+    const items = await commands.menuItems();
+    const menu = await commands.setMenuTitles(
+      menuTitles("tr", [...MENU_LABELS, ...items.map((i) => i.title)]),
+    );
+    useApp.getState().set({ language: before });
+    await commands.setMenuTitles(menuTitles(before, [...MENU_LABELS, ...items.map((i) => i.title)]));
+    step("turkish ui + menu", turkishUi && menu.status === "ok");
 
     // Native Quick Look panel opens and closes through the controller hooks.
     await unwrap(commands.quickLook([renamed.path], 0, true));

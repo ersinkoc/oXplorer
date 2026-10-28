@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { commands, type TextPreview as TextData } from "@/bindings";
+import { msg, useT } from "@/i18n";
 import { formatSize } from "@/lib/format";
 import { highlight } from "@/lib/highlight";
 import { type FileEntry, unwrap } from "@/lib/ipc";
@@ -16,6 +17,7 @@ const SETTLE_MS = 120;
  * toggle) or plain text. `onBinary` lets the caller show an icon instead.
  */
 export function TextPreview({ entry, onBinary }: { entry: FileEntry; onBinary: () => React.ReactNode }) {
+  const { t } = useT();
   const [data, setData] = useState<TextData | null>(null);
   const [error, setError] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
@@ -41,17 +43,20 @@ export function TextPreview({ entry, onBinary }: { entry: FileEntry; onBinary: (
 
   if (error || data?.binary) return onBinary();
   if (!data) return null;
-  if (data.text.length === 0) return <p className="text-[12px] text-fg-faint">Empty file</p>;
+  if (data.text.length === 0) return <p className="text-[12px] text-fg-faint">{t("Empty file")}</p>;
 
   const rendered = markdown && !source;
   return (
     <div className="flex size-full min-h-0 flex-col overflow-hidden rounded-md border border-border bg-bg">
       {markdown && (
-        <fieldset aria-label="Markdown view" className="m-0 flex shrink-0 gap-0.5 border-b border-border p-1">
+        <fieldset
+          aria-label={t("Markdown view")}
+          className="m-0 flex shrink-0 gap-0.5 border-b border-border p-1"
+        >
           {(
             [
-              [false, "Preview"],
-              [true, "Source"],
+              [false, msg("Preview")],
+              [true, msg("Source")],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -61,7 +66,7 @@ export function TextPreview({ entry, onBinary }: { entry: FileEntry; onBinary: (
               onClick={() => setSource(value)}
               className={`h-5 rounded px-2 text-[11px] ${source === value ? "bg-sidebar-active text-fg" : "text-fg-muted hover:text-fg"}`}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </fieldset>
@@ -83,8 +88,10 @@ export function TextPreview({ entry, onBinary }: { entry: FileEntry; onBinary: (
       </div>
       {data.truncated && (
         <p className="shrink-0 border-t border-border px-2.5 py-1 text-[11px] text-fg-faint">
-          Showing the first {formatSize(new TextEncoder().encode(data.text).length)} of{" "}
-          {formatSize(entry.size)}
+          {t("Showing the first {shown} of {total}", {
+            shown: formatSize(new TextEncoder().encode(data.text).length),
+            total: formatSize(entry.size),
+          })}
         </p>
       )}
     </div>

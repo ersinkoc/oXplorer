@@ -1,4 +1,5 @@
 import { Channel } from "@tauri-apps/api/core";
+import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { toast } from "sonner";
 import {
   type ConflictResolution,
@@ -9,6 +10,7 @@ import {
   type JobSpec,
   type UndoAction,
 } from "@/bindings";
+import { msg, t, tn } from "@/i18n";
 import { describeError, type FileEntry, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
 import { useDirCache } from "@/stores/dir-cache-store";
@@ -18,15 +20,16 @@ import { getActiveTab, useWorkspace, visiblePanes } from "@/stores/workspace-sto
 
 export type HistoryMode = "record" | "undo" | "redo" | "none";
 
+/** Progress labels, translated where they're shown. */
 const LABELS: Record<JobSpec["kind"], string> = {
-  copy: "Copying",
-  move: "Moving",
-  duplicate: "Duplicating",
-  trash: "Moving to Trash",
-  delete: "Deleting",
-  compress: "Compressing",
-  extract: "Extracting",
-  undo: "Undoing",
+  copy: msg("Copying"),
+  move: msg("Moving"),
+  duplicate: msg("Duplicating"),
+  trash: msg("Moving to Trash"),
+  delete: msg("Deleting"),
+  compress: msg("Compressing"),
+  extract: msg("Extracting"),
+  undo: msg("Undoing"),
 };
 
 /**
@@ -90,9 +93,49 @@ export async function runJob(
     return null;
   }
   const outcome = await finished;
+  const elapsed = performance.now() - (useJobs.getState().jobs[id]?.startedAt ?? performance.now());
   useJobs.getState().remove(id);
   applyOutcome(outcome, opts);
+  if (elapsed >= NOTIFY_AFTER_MS && !document.hasFocus())
+    void notifyFinished(spec.kind === "undo" ? spec.action.label : NOUNS[spec.kind], outcome);
   return outcome;
+}
+
+/** Notification titles: "Copy finished". */
+const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
+  copy: msg("Copy"),
+  move: msg("Move"),
+  duplicate: msg("Duplicate"),
+  trash: msg("Move to Trash"),
+  delete: msg("Delete"),
+  compress: msg("Compress"),
+  extract: msg("Extract"),
+};
+
+/** Jobs that ran this long get a system notification when OXplorer isn't in front. */
+const NOTIFY_AFTER_MS = 10_000;
+
+async function notifyFinished(label: string, outcome: JobOutcome): Promise<void> {
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) granted = (await requestPermission()) === "granted";
+    if (!granted) return;
+    const failed = outcome.failures.length;
+    const action = t(label);
+    sendNotification({
+      title: outcome.cancelled
+        ? t("{action} stopped", { action })
+        : failed > 0
+          ? t("{action} finished with problems", { action })
+          : t("{action} finished", { action }),
+      body:
+        failed > 0
+          ? tn(failed, "{count} item couldn’t be processed.", "{count} items couldn’t be processed.")
+          : tn(outcome.created.length + outcome.removed.length, "{count} item", "{count} items"),
+    });
+  } catch (err) {
+    console.warn("notification failed", err);
+  }
 }
 
 export function resolveConflict(id: string, resolution: ConflictResolution): void {
@@ -160,7 +203,13 @@ function applyOutcome(outcome: JobOutcome, opts: { history?: HistoryMode; select
     const more = outcome.failures.length - 1;
     toast.error(describeError(first.error), {
       description:
-        more > 0 ? `…and ${more} more item${more === 1 ? "" : "s"} couldn’t be processed.` : undefined,
+        more > 0
+          ? tn(
+              more,
+              "…and {count} more item couldn’t be processed.",
+              "…and {count} more items couldn’t be processed.",
+            )
+          : undefined,
     });
   }
 }

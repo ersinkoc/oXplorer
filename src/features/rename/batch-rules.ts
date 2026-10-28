@@ -1,3 +1,5 @@
+import { msg } from "@/i18n";
+
 /** Finder's "Rename N Items" options. */
 export type RenameRule =
   | { kind: "replace"; find: string; replace: string; regex: boolean; caseSensitive: boolean }
@@ -8,7 +10,7 @@ export interface RenamePreview {
   path: string;
   name: string;
   newName: string;
-  /** Why this name can't be used, if it can't. */
+  /** Why this name can't be used, if it can't (English; translated where shown). */
   problem: string | null;
 }
 
@@ -28,7 +30,7 @@ export function findPattern(rule: Extract<RenameRule, { kind: "replace" }>): Reg
   try {
     return new RegExp(rule.regex ? rule.find : escapeRegex(rule.find), rule.caseSensitive ? "gu" : "giu");
   } catch (e) {
-    return e instanceof Error ? e.message : "invalid pattern";
+    return e instanceof Error ? e.message : msg("invalid pattern");
   }
 }
 
@@ -53,11 +55,11 @@ function newName(
 }
 
 function problemWith(name: string): string | null {
-  if (!name.trim()) return "Empty name";
-  if (name === "." || name === "..") return "Reserved name";
-  if (name.includes("/")) return "Contains “/”";
-  if (name.includes(":")) return "Contains “:”";
-  if (new TextEncoder().encode(name).length > 255) return "Too long";
+  if (!name.trim()) return msg("Empty name");
+  if (name === "." || name === "..") return msg("Reserved name");
+  if (name.includes("/")) return msg("Contains “/”");
+  if (name.includes(":")) return msg("Contains “:”");
+  if (new TextEncoder().encode(name).length > 255) return msg("Too long");
   return null;
 }
 
@@ -84,9 +86,9 @@ export function previewRenames(
   for (const p of out) {
     if (p.problem || p.newName === p.name) continue;
     const key = p.newName.toLowerCase();
-    if ((counts.get(key) ?? 0) > 1) p.problem = "Same name as another item";
+    if ((counts.get(key) ?? 0) > 1) p.problem = msg("Same name as another item");
     else if (siblings.has(key) && !renamedAway.has(key) && key !== p.name.toLowerCase())
-      p.problem = "An item with this name already exists";
+      p.problem = msg("An item with this name already exists");
   }
   return out;
 }

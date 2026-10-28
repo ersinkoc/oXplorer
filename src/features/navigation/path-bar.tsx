@@ -1,12 +1,14 @@
 import { ChevronRight, HardDrive, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
+import { useT } from "@/i18n";
 import { segments, tildify } from "@/lib/path";
 import { parseSearchPath, searchTitle } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 
 /** Breadcrumb that turns into a text field on double-click or ⇧⌘G. */
 export function PathBar({ path }: { path: string }) {
+  useT();
   const editing = useApp((s) => s.editingPath);
   const home = useApp((s) => s.home);
   const rootName = useApp((s) => s.volumes.find((v) => v.isRoot)?.name ?? "Macintosh HD");
@@ -52,6 +54,7 @@ export function PathBar({ path }: { path: string }) {
 }
 
 function PathInput({ initial }: { initial: string }) {
+  const { t } = useT();
   const [value, setValue] = useState(initial);
   const ref = useRef<HTMLInputElement>(null);
   const close = () => useApp.getState().set({ editingPath: false });
@@ -63,7 +66,7 @@ function PathInput({ initial }: { initial: string }) {
   return (
     <input
       ref={ref}
-      aria-label="Go to folder"
+      aria-label={t("Go to folder")}
       value={value}
       onChange={(e) => setValue(e.target.value)}
       onBlur={close}

@@ -4,6 +4,7 @@ import { runCommand } from "@/commands/registry";
 import { closeTerminal } from "@/commands/terminal-commands";
 import { TerminalView } from "@/features/terminal/terminal-view";
 import { Splitter } from "@/features/workspace/splitter";
+import { useT } from "@/i18n";
 import { basename } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
 import { useTerminals } from "@/stores/terminal-store";
@@ -12,6 +13,7 @@ export const TERMINAL_LIMITS = { min: 120, default: 260 } as const;
 
 /** Bottom panel: terminal tabs over the active session. Shells keep running while it's hidden. */
 export function TerminalPanel() {
+  const { t } = useT();
   const visible = useApp((s) => s.terminalVisible);
   const height = useApp((s) => s.terminalHeight);
   const sessions = useTerminals((s) => s.sessions);
@@ -31,14 +33,14 @@ export function TerminalPanel() {
   return (
     <div ref={rootRef} hidden={!visible} className="terminal-panel flex shrink-0 flex-col" style={{ height }}>
       <Splitter
-        label="Resize terminal"
+        label={t("Resize terminal")}
         orientation="horizontal"
         value={(height / window.innerHeight) * 100}
         onDrag={onDrag}
         onReset={() => useApp.getState().setPreference("terminalHeight", TERMINAL_LIMITS.default)}
       />
       <div className="flex h-[26px] shrink-0 items-stretch border-b border-border bg-toolbar text-[12px]">
-        <div role="tablist" aria-label="Terminals" className="flex min-w-0 flex-1 items-stretch">
+        <div role="tablist" aria-label={t("Terminals")} className="flex min-w-0 flex-1 items-stretch">
           {sessions.map((s) => (
             <div
               key={s.id}
@@ -56,10 +58,10 @@ export function TerminalPanel() {
             >
               <SquareTerminal className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{s.cwd === "/" ? "/" : basename(s.cwd)}</span>
-              {s.linked && <Link2 aria-label="Linked to pane" className="size-3 shrink-0 text-accent" />}
+              {s.linked && <Link2 aria-label={t("Linked to pane")} className="size-3 shrink-0 text-accent" />}
               <button
                 type="button"
-                aria-label="Close terminal"
+                aria-label={t("Close terminal")}
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => closeTerminal(s.id)}
                 className="flex size-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-hover"
@@ -68,12 +70,12 @@ export function TerminalPanel() {
               </button>
             </div>
           ))}
-          <PanelButton label="New Terminal (⌃⇧`)" onClick={() => runCommand("terminal.new")}>
+          <PanelButton label={t("New Terminal (⌃⇧`)")} onClick={() => runCommand("terminal.new")}>
             <Plus className="size-3.5" />
           </PanelButton>
         </div>
         <PanelButton
-          label="Link: the active pane follows the shell’s directory"
+          label={t("Link: the active pane follows the shell’s directory")}
           pressed={!!active?.linked}
           disabled={!active}
           onClick={() => active && useTerminals.getState().update(active.id, { linked: !active.linked })}
@@ -81,13 +83,13 @@ export function TerminalPanel() {
           <Link2 className="size-3.5" />
         </PanelButton>
         <PanelButton
-          label="Go to the pane’s folder"
+          label={t("Go to the pane’s folder")}
           disabled={!active}
           onClick={() => runCommand("terminal.cdToPane")}
         >
           <FolderInput className="size-3.5" />
         </PanelButton>
-        <PanelButton label="Hide Terminal (⌃`)" onClick={() => runCommand("terminal.toggle")}>
+        <PanelButton label={t("Hide Terminal (⌃`)")} onClick={() => runCommand("terminal.toggle")}>
           <ChevronDown className="size-3.5" />
         </PanelButton>
       </div>

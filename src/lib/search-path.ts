@@ -1,4 +1,5 @@
 import type { SearchMode, SearchSpec } from "@/bindings";
+import { t } from "@/i18n";
 import { basename } from "@/lib/path";
 
 /**
@@ -45,6 +46,8 @@ export function realFolder(path: string): string {
 /** Short title for tabs and the path bar. */
 export function searchTitle(spec: SearchSpec): string {
   if (spec.mode === "tag") return spec.query;
-  const where = spec.scope === "/" ? "Mac" : basename(spec.scope);
-  return spec.query ? `“${spec.query}” in ${where}` : `Search in ${where}`;
+  const where = spec.scope === "/" ? t("Mac") : basename(spec.scope);
+  return spec.query
+    ? t("“{query}” in {where}", { query: spec.query, where })
+    : t("Search in {where}", { where });
 }

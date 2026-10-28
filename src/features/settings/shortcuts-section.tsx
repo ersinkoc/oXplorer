@@ -1,6 +1,7 @@
 import { RotateCcw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { commands, type MenuEntry } from "@/bindings";
+import { useT } from "@/i18n";
 import { acceleratorFromEvent, formatAccelerator, normalizeAccelerator } from "@/lib/accelerator";
 import { describeError } from "@/lib/ipc";
 import type { Preferences } from "@/stores/app-store";
@@ -28,6 +29,7 @@ function compact(items: readonly MenuEntry[], overrides: Overrides): Overrides {
  * only taken over after confirming; the menu bar is rebuilt immediately.
  */
 export function ShortcutsSection({ usePref }: { usePref: UsePref }) {
+  const { t } = useT();
   const [items, setItems] = useState<MenuEntry[]>([]);
   const [overrides, setOverrides] = usePref("shortcuts");
   const [recording, setRecording] = useState<string | null>(null);
@@ -79,9 +81,9 @@ export function ShortcutsSection({ usePref }: { usePref: UsePref }) {
   const menus = [...new Set(items.map((i) => i.menu))];
   return (
     <section>
-      <h1 className="m-0 mb-1 text-[17px] font-semibold">Shortcuts</h1>
+      <h1 className="m-0 mb-1 text-[17px] font-semibold">{t("Shortcuts")}</h1>
       <p className="m-0 mb-3 text-[12px] text-fg-muted">
-        Click a shortcut and press the new keys (⌘, ⌃ or ⌥ plus a key, or a function key). Esc cancels.
+        {t("Click a shortcut and press the new keys (⌘, ⌃ or ⌥ plus a key, or a function key). Esc cancels.")}
       </p>
       {error && (
         <p role="alert" className="mb-2 rounded-md bg-red-500/10 px-2 py-1.5 text-[12px] text-red-600">
@@ -94,7 +96,10 @@ export function ShortcutsSection({ usePref }: { usePref: UsePref }) {
           className="mb-2 flex items-center gap-2 rounded-md bg-accent/10 px-2 py-1.5 text-[12px]"
         >
           <span className="flex-1">
-            {formatAccelerator(conflict.accel)} is used by “{conflict.other.title}”. Move it here?
+            {t("{shortcut} is used by “{command}”. Move it here?", {
+              shortcut: formatAccelerator(conflict.accel),
+              command: t(conflict.other.title),
+            })}
           </span>
           <button
             type="button"
@@ -104,20 +109,20 @@ export function ShortcutsSection({ usePref }: { usePref: UsePref }) {
               setConflict(null);
             }}
           >
-            Move
+            {t("Move")}
           </button>
           <button
             type="button"
             className="h-6 rounded-md border border-border px-2"
             onClick={() => setConflict(null)}
           >
-            Cancel
+            {t("Cancel")}
           </button>
         </div>
       )}
       {menus.map((menu) => (
         <div key={menu} className="mb-3">
-          <h2 className="m-0 mb-1 text-[11px] font-semibold text-fg-faint uppercase">{menu}</h2>
+          <h2 className="m-0 mb-1 text-[11px] font-semibold text-fg-faint uppercase">{t(menu)}</h2>
           <div className="rounded-md border border-border">
             {items
               .filter((i) => i.menu === menu)
@@ -130,21 +135,21 @@ export function ShortcutsSection({ usePref }: { usePref: UsePref }) {
                     key={item.id}
                     className="flex h-8 items-center gap-2 border-b border-border px-2 last:border-0"
                   >
-                    <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                    <span className="min-w-0 flex-1 truncate">{t(item.title)}</span>
                     <button
                       type="button"
-                      aria-label={`Shortcut for ${item.title}`}
+                      aria-label={t("Shortcut for {command}", { command: t(item.title) })}
                       onClick={() => setRecording(isRecording ? null : item.id)}
                       className={`h-6 min-w-[88px] rounded-md border px-2 text-center font-mono text-[12px] ${
                         isRecording ? "border-accent text-accent" : "border-border hover:bg-hover"
                       } ${custom ? "font-semibold" : ""}`}
                     >
-                      {isRecording ? "Type keys…" : accel ? formatAccelerator(accel) : "—"}
+                      {isRecording ? t("Type keys…") : accel ? formatAccelerator(accel) : "—"}
                     </button>
                     <button
                       type="button"
-                      title="Remove shortcut"
-                      aria-label={`Remove shortcut for ${item.title}`}
+                      title={t("Remove shortcut")}
+                      aria-label={t("Remove shortcut for {command}", { command: t(item.title) })}
                       disabled={!accel}
                       onClick={() => void save({ ...overrides, [item.id]: null })}
                       className="flex size-6 items-center justify-center rounded text-fg-muted enabled:hover:bg-hover disabled:opacity-30"
@@ -153,8 +158,8 @@ export function ShortcutsSection({ usePref }: { usePref: UsePref }) {
                     </button>
                     <button
                       type="button"
-                      title="Restore default"
-                      aria-label={`Restore default shortcut for ${item.title}`}
+                      title={t("Restore default")}
+                      aria-label={t("Restore default shortcut for {command}", { command: t(item.title) })}
                       disabled={!custom}
                       onClick={() => {
                         const { [item.id]: _, ...rest } = overrides;

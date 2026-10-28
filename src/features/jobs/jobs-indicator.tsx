@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cancelJob } from "@/commands/jobs";
+import { useT } from "@/i18n";
 import { formatSize } from "@/lib/format";
 import { basename } from "@/lib/path";
 import { type JobView, jobProgress, useJobs } from "@/stores/jobs-store";
@@ -10,6 +11,7 @@ const SHOW_AFTER_MS = 400;
 
 /** Toolbar progress ring with a popover listing running jobs. */
 export function JobsIndicator() {
+  const { t, tn } = useT();
   const jobs = useJobs((s) => s.jobs);
   const [now, setNow] = useState(() => performance.now());
   const [open, setOpen] = useState(false);
@@ -17,8 +19,8 @@ export function JobsIndicator() {
 
   useEffect(() => {
     if (list.length === 0) return;
-    const t = setInterval(() => setNow(performance.now()), 200);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(performance.now()), 200);
+    return () => clearInterval(timer);
   }, [list.length]);
 
   const visible = list.filter((j) => now - j.startedAt >= SHOW_AFTER_MS);
@@ -29,8 +31,8 @@ export function JobsIndicator() {
     <div className="relative">
       <button
         type="button"
-        title="Show progress"
-        aria-label={`${visible.length} operation${visible.length === 1 ? "" : "s"} in progress`}
+        title={t("Show progress")}
+        aria-label={tn(visible.length, "{count} operation in progress", "{count} operations in progress")}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className="flex size-7 items-center justify-center rounded-md hover:bg-hover"
@@ -49,17 +51,22 @@ export function JobsIndicator() {
 }
 
 function JobRow({ job }: { job: JobView }) {
+  const { t } = useT();
   const p = jobProgress(job);
   const detail =
     job.totalBytes > 0
-      ? `${formatSize(job.doneBytes)} of ${formatSize(job.totalBytes)}`
-      : `${job.doneItems} of ${job.totalItems} items`;
+      ? t("{done} of {total}", { done: formatSize(job.doneBytes), total: formatSize(job.totalBytes) })
+      : t("{done} of {total} items", {
+          done: job.doneItems.toLocaleString(),
+          total: job.totalItems.toLocaleString(),
+        });
   return (
     <div className="flex items-start gap-2 text-[12px]">
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">
-          {job.label}
-          {job.current ? ` “${basename(job.current)}”` : ""}
+          {job.current
+            ? t("{action} “{name}”", { action: t(job.label), name: basename(job.current) })
+            : t(job.label)}
         </div>
         <div className="my-1 h-1.5 overflow-hidden rounded-full bg-hover">
           <div
@@ -67,12 +74,12 @@ function JobRow({ job }: { job: JobView }) {
             style={{ width: `${p * 100}%` }}
           />
         </div>
-        <div className="text-fg-muted">{job.conflict ? "Waiting for your decision…" : detail}</div>
+        <div className="text-fg-muted">{job.conflict ? t("Waiting for your decision…") : detail}</div>
       </div>
       <button
         type="button"
-        title="Stop"
-        aria-label={`Stop ${job.label}`}
+        title={t("Stop")}
+        aria-label={t("Stop {action}", { action: t(job.label) })}
         onClick={() => cancelJob(job.id)}
         className="rounded-full p-0.5 text-fg-muted hover:bg-hover hover:text-fg"
       >

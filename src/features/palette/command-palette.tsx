@@ -2,7 +2,9 @@ import { Folder, HardDrive, Search, SquareChevronRight, Star } from "lucide-reac
 import { useEffect, useRef, useState } from "react";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
 import { listCommands, runCommand } from "@/commands/registry";
+import { LOCATION_NAMES } from "@/features/sidebar/sidebar";
 import { Dialog } from "@/features/ui/dialog";
+import { t, useT } from "@/i18n";
 import { fuzzyScore } from "@/lib/fuzzy";
 import { basename, tildify } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -40,15 +42,17 @@ function allItems(): PaletteItem[] {
     });
   };
   for (const v of rankedVisits()) folder(v.path, "folder");
-  for (const l of locations) folder(l.path, "favorite", l.name);
+  for (const l of locations) folder(l.path, "favorite", t(LOCATION_NAMES[l.id] ?? l.name));
   for (const v of volumes) folder(v.mountPoint, "volume", v.name);
   for (const c of listCommands()) {
     if (HIDDEN_COMMANDS.test(c.id)) continue;
+    const title = t(c.title);
     items.push({
       key: `cmd:${c.id}`,
       kind: "command",
-      title: c.title,
-      match: c.title,
+      title,
+      // English titles stay findable when the UI is in another language.
+      match: title === c.title ? title : `${title} ${c.title}`,
       run: () => runCommand(c.id),
     });
   }
@@ -63,7 +67,7 @@ function search(query: string, items: readonly PaletteItem[]): PaletteItem[] {
     out.push({
       key: "path",
       kind: "path",
-      title: `Go to “${q}”`,
+      title: t("Go to “{path}”", { path: q }),
       match: q,
       run: () => void goToTypedPath(q),
     });
@@ -93,13 +97,14 @@ const ICONS = {
 
 /** ⌘K: one list for commands, frequently used folders and favorites. */
 export function CommandPalette() {
+  const { t } = useT();
   const open = useApp((s) => s.paletteOpen);
   const close = () => useApp.getState().set({ paletteOpen: false });
   return (
     <Dialog
       open={open}
       onClose={close}
-      label="Command palette"
+      label={t("Command palette")}
       className="mt-[12vh] mb-auto w-[560px] max-w-[90vw]"
     >
       <PaletteBody onClose={close} />
@@ -108,6 +113,7 @@ export function CommandPalette() {
 }
 
 function PaletteBody({ onClose }: { onClose: () => void }) {
+  const { t } = useT();
   const [items] = useState(allItems);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
@@ -133,10 +139,10 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         <input
           // biome-ignore lint/a11y/noAutofocus: the palette exists to be typed into
           autoFocus
-          aria-label="Command or folder"
+          aria-label={t("Command or folder")}
           aria-controls="palette-results"
           aria-activedescendant={selected ? `palette-${selected.key}` : undefined}
-          placeholder="Type a command or folder name…"
+          placeholder={t("Type a command or folder name…")}
           value={query}
           spellCheck={false}
           onChange={(e) => {
@@ -160,11 +166,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         id="palette-results"
         ref={listRef}
         role="listbox"
-        aria-label="Results"
+        aria-label={t("Results")}
         className="min-h-0 flex-1 overflow-y-auto p-1.5"
       >
         {results.length === 0 && (
-          <p className="m-0 px-3 py-6 text-center text-[13px] text-fg-muted">No matches</p>
+          <p className="m-0 px-3 py-6 text-center text-[13px] text-fg-muted">{t("No matches")}</p>
         )}
         {results.map((item) => {
           const Icon = ICONS[item.kind];

@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { commands, type FinderTag, type VolumeInfo } from "@/bindings";
 import { navigateTo } from "@/commands/navigation";
 import { useDrag } from "@/features/dnd/drag-store";
+import { msg, t, useT } from "@/i18n";
 import { TAG_COLORS } from "@/lib/icons";
 import { describeError } from "@/lib/ipc";
 import { searchPath } from "@/lib/search-path";
@@ -31,7 +32,18 @@ const LOCATION_ICONS: Record<string, LucideIcon> = {
   pictures: Image,
 };
 
+/** Names of the standard locations (sent in English by Rust), translated where they're shown. */
+export const LOCATION_NAMES: Record<string, string> = {
+  home: msg("Home"),
+  desktop: msg("Desktop"),
+  documents: msg("Documents"),
+  downloads: msg("Downloads"),
+  applications: msg("Applications"),
+  pictures: msg("Pictures"),
+};
+
 export function Sidebar() {
+  const { t } = useT();
   const locations = useApp((s) => s.locations);
   const volumes = useApp((s) => s.volumes);
   const current = useActiveTab().path;
@@ -41,23 +53,23 @@ export function Sidebar() {
   }, []);
 
   return (
-    <nav aria-label="Sidebar" className="flex w-[200px] shrink-0 flex-col">
+    <nav aria-label={t("Sidebar")} className="flex w-[200px] shrink-0 flex-col">
       {/* Traffic lights sit over this strip; it doubles as a window drag handle. */}
       <div data-tauri-drag-region className="h-[52px] shrink-0" />
       <div className="flex-1 overflow-y-auto px-2.5 pb-3">
-        <Section title="Favorites">
+        <Section title={t("Favorites")}>
           {locations.map((l) => (
             <Item
               key={l.id}
               icon={LOCATION_ICONS[l.id] ?? Folder}
-              label={l.name}
+              label={t(LOCATION_NAMES[l.id] ?? l.name)}
               active={current === l.path}
               dropDir={l.path}
               onClick={() => navigateTo(l.path)}
             />
           ))}
         </Section>
-        <Section title="Locations">
+        <Section title={t("Locations")}>
           {volumes.map((v) => (
             <Item
               key={v.mountPoint}
@@ -67,20 +79,22 @@ export function Sidebar() {
               dropDir={v.isReadOnly ? undefined : v.mountPoint}
               onClick={() => navigateTo(v.mountPoint)}
               action={
-                v.isRoot ? undefined : { label: `Eject ${v.name}`, icon: Eject, run: () => void eject(v) }
+                v.isRoot
+                  ? undefined
+                  : { label: t("Eject {name}", { name: v.name }), icon: Eject, run: () => void eject(v) }
               }
             />
           ))}
         </Section>
         {tags.length > 0 && (
-          <Section title="Tags">
-            {tags.map((t) => {
-              const path = tagSearchPath(t.name);
+          <Section title={t("Tags")}>
+            {tags.map((tag) => {
+              const path = tagSearchPath(tag.name);
               return (
                 <Item
-                  key={t.name}
-                  leading={<TagDot color={t.color} />}
-                  label={t.name}
+                  key={tag.name}
+                  leading={<TagDot color={tag.color} />}
+                  label={tag.name}
                   active={current === path}
                   onClick={() => navigateTo(path)}
                 />
@@ -121,7 +135,10 @@ async function eject(volume: VolumeInfo): Promise<void> {
   // Don't leave the pane pointing into a volume that's about to disappear.
   if (getActiveTab().path.startsWith(volume.mountPoint)) navigateTo(home);
   const res = await commands.ejectVolume(volume.mountPoint);
-  if (res.status === "error") toast.error(`Couldn’t eject “${volume.name}”: ${describeError(res.error)}`);
+  if (res.status === "error")
+    toast.error(
+      t("Couldn’t eject “{name}”: {reason}", { name: volume.name, reason: describeError(res.error) }),
+    );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

@@ -2,7 +2,7 @@
 
 A modern, open-source, dual-pane file manager for macOS — Finder's look and feel with Total Commander's efficiency. Built with Tauri 2, React 19 and Rust.
 
-> Status: early development. Phases 0–8 of the [plan](oxplorer-project-plan-v2.md) are done; polish for v1.0 (Phase 9) is next. Not yet signed or released; build it from source.
+> Status: early development. Phases 0–8 of the [plan](oxplorer-project-plan-v2.md) are done and Phase 9 (v1.0 polish) is under way: Turkish and English UI, What's New, problem reports and notifications are in; signed builds and auto-update are pending. Not yet signed or released; build it from source.
 
 ## Features (so far)
 

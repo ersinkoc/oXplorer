@@ -1,6 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { t } from "@/i18n";
 
 const EXTERNAL = /^(https?:|mailto:)/i;
 
@@ -22,7 +23,7 @@ const components: Components = {
       {children}
     </a>
   ),
-  img: ({ alt }) => <span className="md-image">{alt ? `[${alt}]` : "[image]"}</span>,
+  img: ({ alt }) => <span className="md-image">{alt ? `[${alt}]` : t("[image]")}</span>,
 };
 
 export default function MarkdownView({ text }: { text: string }) {

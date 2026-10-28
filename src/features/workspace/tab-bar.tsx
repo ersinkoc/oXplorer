@@ -2,6 +2,7 @@ import { Menu } from "@tauri-apps/api/menu";
 import { Pin, Plus, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { closeTab } from "@/commands/tab-commands";
+import { useT } from "@/i18n";
 import { pathIconUrl } from "@/lib/icons";
 import { basename } from "@/lib/path";
 import { parseSearchPath, searchTitle } from "@/lib/search-path";
@@ -28,6 +29,7 @@ function slotAt(x: number, y: number): DropSlot | null {
 }
 
 export function TabBar({ pane }: { pane: PaneId }) {
+  const { t } = useT();
   const tabs = useWorkspace((s) => s.panes[pane].tabs);
   const activeId = useWorkspace((s) => s.panes[pane].activeTabId);
   const paneActive = useWorkspace((s) => s.dualPane && s.activePane === pane);
@@ -70,26 +72,26 @@ export function TabBar({ pane }: { pane: PaneId }) {
   const onContextMenu = async (e: React.MouseEvent, tab: TabState) => {
     e.preventDefault();
     const ws = useWorkspace.getState();
-    const index = tabs.findIndex((t) => t.id === tab.id);
+    const index = tabs.findIndex((other) => other.id === tab.id);
     const menu = await Menu.new({
       items: [
-        { text: "New Tab", action: () => ws.openTab(tab.path, { pane }) },
+        { text: t("New Tab"), action: () => ws.openTab(tab.path, { pane }) },
         { item: "Separator" },
-        { text: "Close Tab", action: () => closeTab(pane, tab.id) },
+        { text: t("Close Tab"), action: () => closeTab(pane, tab.id) },
         {
-          text: "Close Other Tabs",
-          enabled: tabs.some((t) => t.id !== tab.id && !t.pinned),
+          text: t("Close Other Tabs"),
+          enabled: tabs.some((other) => other.id !== tab.id && !other.pinned),
           action: () => ws.closeOtherTabs(pane, tab.id),
         },
         {
-          text: "Close Tabs to the Right",
-          enabled: tabs.slice(index + 1).some((t) => !t.pinned),
+          text: t("Close Tabs to the Right"),
+          enabled: tabs.slice(index + 1).some((other) => !other.pinned),
           action: () => ws.closeTabsToRight(pane, tab.id),
         },
         { item: "Separator" },
-        { text: tab.pinned ? "Unpin Tab" : "Pin Tab", action: () => ws.togglePin(pane, tab.id) },
+        { text: tab.pinned ? t("Unpin Tab") : t("Pin Tab"), action: () => ws.togglePin(pane, tab.id) },
         {
-          text: pane === "left" ? "Move to Right Pane" : "Move to Left Pane",
+          text: pane === "left" ? t("Move to Right Pane") : t("Move to Left Pane"),
           action: () => {
             const to = otherPane(pane);
             ws.moveTab(pane, tab.id, to, ws.panes[to].tabs.length);
@@ -104,10 +106,10 @@ export function TabBar({ pane }: { pane: PaneId }) {
     <div
       data-tab-bar={pane}
       role="tablist"
-      aria-label={`${pane === "left" ? "Left" : "Right"} pane tabs`}
+      aria-label={pane === "left" ? t("Left pane tabs") : t("Right pane tabs")}
       onDoubleClick={(e) => {
         if (e.target === e.currentTarget)
-          useWorkspace.getState().openTab(tabs.find((t) => t.id === activeId)?.path ?? "/", { pane });
+          useWorkspace.getState().openTab(tabs.find((x) => x.id === activeId)?.path ?? "/", { pane });
       }}
       className={`relative flex h-[28px] shrink-0 items-stretch border-b border-border bg-toolbar ${
         paneActive
@@ -130,10 +132,10 @@ export function TabBar({ pane }: { pane: PaneId }) {
       {slot?.pane === pane && slot.index === tabs.length && <span className="w-0.5 bg-accent" />}
       <button
         type="button"
-        title="New Tab"
-        aria-label="New Tab"
+        title={t("New Tab")}
+        aria-label={t("New Tab")}
         onClick={() =>
-          useWorkspace.getState().openTab(tabs.find((t) => t.id === activeId)?.path ?? "/", { pane })
+          useWorkspace.getState().openTab(tabs.find((x) => x.id === activeId)?.path ?? "/", { pane })
         }
         className="flex w-7 shrink-0 items-center justify-center text-fg-muted hover:bg-hover hover:text-fg"
       >
@@ -160,6 +162,7 @@ function TabButton({
   onContextMenu: (e: React.MouseEvent) => void;
   onClose: () => void;
 }) {
+  const { t } = useT();
   const search = parseSearchPath(tab.path);
   const name = search ? searchTitle(search) : tab.path === "/" ? "Macintosh HD" : basename(tab.path);
   return (
@@ -192,13 +195,13 @@ function TabButton({
         />
       )}
       {tab.pinned ? (
-        <Pin aria-label="Pinned" className="absolute right-0.5 bottom-0.5 size-2 text-fg-muted" />
+        <Pin aria-label={t("Pinned")} className="absolute right-0.5 bottom-0.5 size-2 text-fg-muted" />
       ) : (
         <>
           <span className="min-w-0 flex-1 truncate">{name}</span>
           <button
             type="button"
-            aria-label={`Close ${name}`}
+            aria-label={t("Close {name}", { name })}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={onClose}
             className="flex size-4 shrink-0 items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 hover:bg-hover"

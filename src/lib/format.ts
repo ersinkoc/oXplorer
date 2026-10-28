@@ -1,9 +1,10 @@
 import prettyBytes from "pretty-bytes";
+import { msg, t } from "@/i18n";
 import type { FileEntry } from "@/lib/ipc";
 
 /** Finder uses base-10 units with one decimal ("2,1 MB"). */
 export function formatSize(bytes: number): string {
-  if (bytes === 0) return "Zero bytes";
+  if (bytes === 0) return t("Zero bytes");
   return prettyBytes(bytes, { locale: true, maximumFractionDigits: 1 });
 }
 
@@ -23,9 +24,9 @@ export function formatDate(ms: number, now: number = Date.now()): string {
   startOfToday.setHours(0, 0, 0, 0);
   const t0 = startOfToday.getTime();
   const time = timeFmt.format(d);
-  if (ms >= t0 && ms < t0 + DAY) return `Today at ${time}`;
-  if (ms >= t0 - DAY && ms < t0) return `Yesterday at ${time}`;
-  return `${dateFmt.format(d)} at ${time}`;
+  if (ms >= t0 && ms < t0 + DAY) return t("Today at {time}", { time });
+  if (ms >= t0 - DAY && ms < t0) return t("Yesterday at {time}", { time });
+  return t("{date} at {time}", { date: dateFmt.format(d), time });
 }
 
 /** Directories, and symlinks that point at directories, are navigable. */
@@ -33,52 +34,54 @@ export function isFolderLike(entry: FileEntry): boolean {
   return entry.kind === "dir" || (entry.kind === "symlink" && !!entry.symlink?.targetIsDir);
 }
 
+/** Kind names, translated where they're shown; product names stay as they are. */
 const KINDS: Record<string, string> = {
-  txt: "Plain Text",
+  txt: msg("Plain Text"),
   md: "Markdown",
-  pdf: "PDF document",
-  png: "PNG image",
-  jpg: "JPEG image",
-  jpeg: "JPEG image",
-  heic: "HEIF image",
-  gif: "GIF image",
-  webp: "WebP image",
-  svg: "SVG image",
-  mp4: "MPEG-4 movie",
-  mov: "QuickTime movie",
-  mp3: "MP3 audio",
-  wav: "Waveform audio",
-  zip: "ZIP archive",
-  gz: "gzip archive",
-  dmg: "Disk Image",
+  pdf: msg("PDF document"),
+  png: msg("PNG image"),
+  jpg: msg("JPEG image"),
+  jpeg: msg("JPEG image"),
+  heic: msg("HEIF image"),
+  gif: msg("GIF image"),
+  webp: msg("WebP image"),
+  svg: msg("SVG image"),
+  mp4: msg("MPEG-4 movie"),
+  mov: msg("QuickTime movie"),
+  mp3: msg("MP3 audio"),
+  wav: msg("Waveform audio"),
+  zip: msg("ZIP archive"),
+  gz: msg("gzip archive"),
+  dmg: msg("Disk Image"),
   json: "JSON",
   ts: "TypeScript",
   tsx: "TypeScript JSX",
   js: "JavaScript",
-  rs: "Rust source",
-  html: "HTML document",
+  rs: msg("Rust source"),
+  html: msg("HTML document"),
   css: "CSS",
-  sh: "Shell script",
-  py: "Python script",
-  docx: "Word document",
-  xlsx: "Excel spreadsheet",
-  pptx: "PowerPoint presentation",
+  sh: msg("Shell script"),
+  py: msg("Python script"),
+  docx: msg("Word document"),
+  xlsx: msg("Excel spreadsheet"),
+  pptx: msg("PowerPoint presentation"),
 };
 
 export function kindLabel(entry: FileEntry): string {
   switch (entry.kind) {
     case "dir":
-      return "Folder";
+      return t("Folder");
     case "package":
-      return entry.extension?.toLowerCase() === "app" ? "Application" : "Package";
+      return entry.extension?.toLowerCase() === "app" ? t("Application") : t("Package");
     case "symlink":
-      return entry.symlink?.broken ? "Broken alias" : "Alias";
+      return entry.symlink?.broken ? t("Broken alias") : t("Alias");
     case "other":
-      return "Special file";
+      return t("Special file");
     case "file": {
       const ext = entry.extension?.toLowerCase();
-      if (!ext) return "Document";
-      return KINDS[ext] ?? `${ext.toUpperCase()} file`;
+      if (!ext) return t("Document");
+      const kind = KINDS[ext];
+      return kind ? t(kind) : t("{ext} file", { ext: ext.toUpperCase() });
     }
   }
 }

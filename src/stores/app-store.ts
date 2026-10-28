@@ -20,6 +20,8 @@ export interface Preferences {
   /** Height of the terminal panel in px. */
   terminalHeight: number;
   theme: Theme;
+  /** UI language; "system" follows macOS. */
+  languagePref: "system" | "en" | "tr";
   /** Where ⌘T opens: the current folder or Home. */
   newTabLocation: "current" | "home";
   /** Bring back tabs and layout at launch. */
@@ -46,6 +48,9 @@ interface AppState extends Preferences {
   /** Items shown in the Get Info panel. */
   infoPaths: string[] | null;
   paletteOpen: boolean;
+  /** The resolved UI language (see `languagePref`). */
+  language: "en" | "tr";
+  whatsNewOpen: boolean;
   /** Items in the "Rename N Items" dialog. */
   batchRename: FileEntry[] | null;
 
@@ -60,6 +65,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalVisible: false,
   terminalHeight: 260,
   theme: "system",
+  languagePref: "system",
   newTabLocation: "current",
   restoreSession: true,
   terminalFontSize: 12,
@@ -81,6 +87,8 @@ export const useApp = create<AppState>()((set) => ({
   renaming: null,
   infoPaths: null,
   paletteOpen: false,
+  language: "en",
+  whatsNewOpen: false,
   batchRename: null,
 
   set: (patch) => set(patch),

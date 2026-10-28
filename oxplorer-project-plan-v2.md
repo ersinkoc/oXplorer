@@ -677,7 +677,7 @@ All shortcuts are defined in `commands/keymap.ts` and can be changed in the sett
 - [x] Two-way copy/paste with Finder via NSPasteboard (⌘X + ⌘V = move, ⌥⌘V)
 - [x] In-app DnD (same volume moves, different volume copies, ⌥ = copy) + drop in from Finder + drag out to Finder (`tauri-plugin-drag`)
 - [x] Directory size calculation (inode dedupe, cancellable) + "Info" (⌘I) panel
-- [ ] macOS notification (when long jobs finish) — Phase 9
+- [x] macOS notification (when long jobs finish) — done in Phase 9: jobs over 10 s notify when OXplorer isn't in front
 - **DoD:** A 10 GB / 50k-file copy can be cancelled, progress is accurate, undo works. Rust integration tests (`tempfile`) cover all operation types.
 - **Measured:** 50k files + 1 GB on the same volume in 4.7 s; 0 leftovers at the destination when cancelled midway; the in-app IPC self-test (create → copy → duplicate → trash → undo → rename → measure → delete) passed.
 
@@ -732,11 +732,11 @@ A single-pane, real-time, native-looking, secure file manager. Distributed as a 
 
 ### Phase 9 — Polish and v1.0 (2 weeks)
 
-- [ ] Accessibility: ARIA grid/tree roles, VoiceOver testing, full keyboard navigation
-- [ ] Performance pass: React Profiler, Rust `cargo flamegraph`, large-directory benchmarks (§11)
-- [ ] Updater (signed) + "What's New" screen
-- [ ] Crash/error logs (`tauri-plugin-log`), "Report a problem" button (GitHub issue template with logs attached)
-- [ ] i18n: Turkish + English (simple JSON dictionary)
+- [ ] Accessibility: ARIA grid/tree roles, VoiceOver testing, full keyboard navigation — ARIA roles and labels are in place (Biome a11y rules enforced, labels translated); ⏳ VoiceOver testing needs a person
+- [x] Performance pass: React Profiler, Rust `cargo flamegraph`, large-directory benchmarks (§11) — measured 2026-10-28 on an M-series Mac, release build: 10k listing 16 ms, 100k 160 ms (then 1.6 s of background tag reading), UI ready 315–330 ms (689 ms on the very first launch), idle memory 86 MB (app 33 + WebKit 53) with one tab and 127 MB with terminal and preview open, app 10.4 MB, DMG 5.6 MB (arm64)
+- [ ] Updater (signed) + "What's New" screen — ✅ What's New (CHANGELOG.md, shown once after an update); ⏳ updater needs an update-signing key and a release feed
+- [x] Crash/error logs (`tauri-plugin-log`), "Report a problem" button (GitHub issue template with logs attached) — panics are logged with a backtrace; Help → Report a Problem opens a prefilled issue form (versions only; the log has paths, so the user attaches the relevant part via Help → Show Log File)
+- [x] i18n: Turkish + English (simple JSON dictionary) — English text as keys, `src/i18n/tr.ts` (360+ entries), native menu labels sent to Rust, language follows macOS or the setting; a test fails on missing/unused keys or placeholder mismatches
 - [ ] Homebrew cask, README, screenshots, website
 - **DoD:** v1.0.0 release.
 
@@ -785,7 +785,7 @@ Helper tools: `cargo install cargo-nextest cargo-flamegraph cargo-machete` (dete
 | Watcher latency                   | < 300 ms                      | e2e: `touch` → DOM                           |
 | Same-volume copy (APFS)           | Instant (clonefile)           |                                              |
 | Cross-volume copy                 | ≥ 90% of disk speed           | Comparison with `dd`                         |
-| Idle RAM                          | < 80 MB (including WebKit)    | Activity Monitor "Memory"                    |
+| Idle RAM                          | < 80 MB (including WebKit)    | Activity Monitor "Memory" (measured: 86 MB) |
 | DMG size                          | < 15 MB (universal)           |                                              |
 
 `scripts/gen-fixture.sh` generates 10k, 100k and deeply nested directories, unicode and NFD names, symlink cycles and large files.

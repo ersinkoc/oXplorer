@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { commands } from "@/bindings";
 import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
+import { useT } from "@/i18n";
 import { formatSize, isFolderLike } from "@/lib/format";
 import type { PaneId } from "@/stores/workspace-store";
 
 export function StatusBar({ pane }: { pane: PaneId }) {
+  const { t, tn } = useT();
   const { tab, entries, dir } = useVisibleEntries(pane);
   const [available, setAvailable] = useState<number | null>(null);
 
@@ -24,12 +26,21 @@ export function StatusBar({ pane }: { pane: PaneId }) {
 
   const parts: string[] = [];
   if (selected.length > 0) {
-    parts.push(`${selected.length} of ${count} selected`);
+    parts.push(
+      t("{selected} of {total} selected", {
+        selected: selected.length.toLocaleString(),
+        total: count.toLocaleString(),
+      }),
+    );
     if (selectedBytes > 0) parts.push(formatSize(selectedBytes));
   } else {
-    parts.push(dir?.status === "loading" ? `${count} items…` : `${count} item${count === 1 ? "" : "s"}`);
+    parts.push(
+      dir?.status === "loading"
+        ? t("{count} items…", { count: count.toLocaleString() })
+        : tn(count, "{count} item", "{count} items"),
+    );
   }
-  if (available !== null) parts.push(`${formatSize(available)} available`);
+  if (available !== null) parts.push(t("{size} available", { size: formatSize(available) }));
 
   return (
     <footer className="flex h-[24px] shrink-0 items-center justify-center border-t border-border bg-toolbar px-3 text-[11px] text-fg-muted">

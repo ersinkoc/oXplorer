@@ -12,6 +12,7 @@ import { commands, type PtyEvent_Deserialize, type PtyEvent_Serialize } from "@/
 import { navigateTo } from "@/commands/navigation";
 import { registerTerminal } from "@/features/terminal/terminal-registry";
 import { darkScheme, terminalTheme } from "@/features/terminal/terminal-theme";
+import { t } from "@/i18n";
 import { describeError, toAppError } from "@/lib/ipc";
 import { parseOsc7 } from "@/lib/shell";
 import { useApp } from "@/stores/app-store";
@@ -88,7 +89,10 @@ export function TerminalView({ session, active }: { session: TerminalSession; ac
       if (ev.type === "output") term.write(ev.data);
       else {
         useTerminals.getState().update(id, { exited: true });
-        term.write(`\r\n\x1b[2m[Process completed${ev.code ? ` with code ${ev.code}` : ""}]\x1b[0m\r\n`);
+        const done = ev.code
+          ? t("[Process completed with code {code}]", { code: ev.code })
+          : t("[Process completed]");
+        term.write(`\r\n\x1b[2m${done}\x1b[0m\r\n`);
       }
     };
     void commands.ptyOpen(id, session.cwd, term.cols, term.rows, channel).then((r) => {

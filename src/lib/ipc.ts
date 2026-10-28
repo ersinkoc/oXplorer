@@ -1,4 +1,5 @@
 import type { AppError_Serialize as AppError, FileEntry_Serialize } from "@/bindings";
+import { t } from "@/i18n";
 
 export type { AppError };
 export type FileEntry = FileEntry_Serialize;
@@ -30,21 +31,21 @@ export function toAppError(err: unknown): AppError {
 export function describeError(error: AppError): string {
   switch (error.kind) {
     case "notFound":
-      return `“${error.path}” could not be found.`;
+      return t("“{path}” could not be found.", { path: error.path });
     case "permissionDenied":
       return error.needsFullDiskAccess
-        ? `OXplorer needs Full Disk Access to open “${error.path}”.`
-        : `You don’t have permission to open “${error.path}”.`;
+        ? t("OXplorer needs Full Disk Access to open “{path}”.", { path: error.path })
+        : t("You don’t have permission to open “{path}”.", { path: error.path });
     case "alreadyExists":
-      return `“${error.path}” already exists.`;
+      return t("“{path}” already exists.", { path: error.path });
     case "notADirectory":
-      return `“${error.path}” is not a folder.`;
+      return t("“{path}” is not a folder.", { path: error.path });
     case "invalidPath":
-      return `Invalid path “${error.path}”: ${error.reason}.`;
+      return t("Invalid path “{path}”: {reason}.", { path: error.path, reason: error.reason });
     case "cancelled":
-      return "The operation was cancelled.";
+      return t("The operation was cancelled.");
     case "invalidQuery":
-      return `The search pattern isn’t valid: ${error.message}`;
+      return t("The search pattern isn’t valid: {message}", { message: error.message });
     case "io":
       return error.message;
   }

@@ -65,9 +65,13 @@ export const commands = {
 	searchCancel: (id: string) => __TAURI_INVOKE<void>("search_cancel", { id }),
 	/**  Finder's sidebar tags, for the sidebar's Tags section. */
 	favoriteTags: () => __TAURI_INVOKE<FinderTag[]>("favorite_tags"),
+	/**  The app's log file (for "Show Log File" / bug reports); the folder if there's no file yet. */
+	logFile: () => typedError<string, AppError_Serialize>(__TAURI_INVOKE("log_file")),
 	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
 	/**  Rebuilds the menu bar with the user's shortcuts. */
 	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),
+	/**  Rebuilds the menu bar in the UI language (labels keyed by their English text). */
+	setMenuTitles: (titles: { [key in string]: string }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_menu_titles", { titles })),
 	/**  Shows the settings window, creating it the first time. */
 	openSettings: () => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_settings")),
 	homeDir: () => typedError<string, AppError_Serialize>(__TAURI_INVOKE("home_dir")),

@@ -2,6 +2,7 @@ import { Menu, Submenu } from "@tauri-apps/api/menu";
 import { commands } from "@/bindings";
 import { ARCHIVE_FORMATS, isArchive, toggleTag } from "@/commands/file-commands";
 import { runCommand } from "@/commands/registry";
+import { t } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { useApp } from "@/stores/app-store";
@@ -25,9 +26,9 @@ async function openWithSubmenu(entries: readonly FileEntry[]): Promise<Submenu |
   if (res.status === "error" || res.data.length === 0) return null;
   const targets = entries.map((e) => e.path);
   return Submenu.new({
-    text: "Open With",
+    text: t("Open With"),
     items: res.data.map((app) => ({
-      text: app.isDefault ? `${app.name} (default)` : app.name,
+      text: app.isDefault ? t("{name} (default)", { name: app.name }) : app.name,
       action: () => void commands.openWith(app.path, targets),
     })),
   });
@@ -37,7 +38,7 @@ async function openWithSubmenu(entries: readonly FileEntry[]): Promise<Submenu |
 async function tagsSubmenu(entries: readonly FileEntry[]): Promise<Submenu> {
   const tags = await commands.favoriteTags();
   return Submenu.new({
-    text: "Tags",
+    text: t("Tags"),
     items: tags.map((tag) => ({
       text: tag.name,
       checked: entries.length > 0 && entries.every((e) => e.tags.some((t) => t.name === tag.name)),
@@ -48,9 +49,9 @@ async function tagsSubmenu(entries: readonly FileEntry[]): Promise<Submenu> {
 
 async function compressSubmenu(): Promise<Submenu> {
   return Submenu.new({
-    text: "Compress",
+    text: t("Compress"),
     items: ARCHIVE_FORMATS.map(([format, label]) => ({
-      text: label === "zip" ? "Zip Archive" : `${label} Archive`,
+      text: label === "zip" ? t("Zip Archive") : t("{format} Archive", { format: label }),
       action: () => runCommand(`file.compress.${format}`),
     })),
   });
@@ -69,42 +70,51 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
   const menu = await Menu.new({
     items: [
       ...build([
-        { text: "Open", command: "file.open" },
+        { text: t("Open"), command: "file.open" },
         ...(one && isFolderLike(entries[0] as FileEntry)
           ? [
-              { text: "Open in New Tab", command: "tab.openSelected" },
-              { text: "Open in Other Pane", command: "pane.openInOther" },
+              { text: t("Open in New Tab"), command: "tab.openSelected" },
+              { text: t("Open in Other Pane"), command: "pane.openInOther" },
             ]
           : []),
-        { text: "Quick Look", command: "file.quickLook" },
+        { text: t("Quick Look"), command: "file.quickLook" },
       ]),
       ...(openWith ? [openWith] : []),
       ...build([
         "-",
-        { text: "Move to Trash", command: "file.trash" },
+        { text: t("Move to Trash"), command: "file.trash" },
         "-",
-        { text: "Get Info", command: "file.getInfo" },
-        { text: one ? "Rename" : `Rename ${entries.length} Items…`, command: "file.rename" },
-        { text: "Duplicate", command: "file.duplicate" },
+        { text: t("Get Info"), command: "file.getInfo" },
+        {
+          text: one ? t("Rename") : t("Rename {count} Items…", { count: entries.length.toLocaleString() }),
+          command: "file.rename",
+        },
+        { text: t("Duplicate"), command: "file.duplicate" },
       ]),
       compress,
       ...build([
         ...(archives > 0
           ? [
               {
-                text: archives === 1 ? "Extract Here" : `Extract ${archives} Archives Here`,
+                text:
+                  archives === 1
+                    ? t("Extract Here")
+                    : t("Extract {count} Archives Here", { count: archives }),
                 command: "file.extract",
               },
             ]
           : []),
         "-",
-        { text: one ? "Copy" : `Copy ${entries.length} Items`, command: "edit.copy" },
-        { text: "Copy Path", command: "file.copyPath" },
+        {
+          text: one ? t("Copy") : t("Copy {count} Items", { count: entries.length.toLocaleString() }),
+          command: "edit.copy",
+        },
+        { text: t("Copy Path"), command: "file.copyPath" },
         "-",
-        { text: "Copy to Other Pane", command: "file.copyToOther", enabled: dual },
-        { text: "Move to Other Pane", command: "file.moveToOther", enabled: dual },
+        { text: t("Copy to Other Pane"), command: "file.copyToOther", enabled: dual },
+        { text: t("Move to Other Pane"), command: "file.moveToOther", enabled: dual },
         "-",
-        { text: "Show in Finder", command: "file.revealInFinder" },
+        { text: t("Show in Finder"), command: "file.revealInFinder" },
         "-",
       ]),
       tags,
@@ -121,16 +131,20 @@ export async function showBackgroundMenu(): Promise<void> {
   const last = undo.at(-1);
   const menu = await Menu.new({
     items: build([
-      { text: "New Folder", command: "file.newFolder" },
-      { text: "New File", command: "file.newFile" },
+      { text: t("New Folder"), command: "file.newFolder" },
+      { text: t("New File"), command: "file.newFile" },
       "-",
-      { text: last ? `Undo ${last.label}` : "Undo", command: "edit.undo", enabled: !!last },
-      { text: "Paste", command: "edit.paste", enabled: canPaste },
+      {
+        text: last ? t("Undo {action}", { action: t(last.label) }) : t("Undo"),
+        command: "edit.undo",
+        enabled: !!last,
+      },
+      { text: t("Paste"), command: "edit.paste", enabled: canPaste },
       "-",
-      { text: "Get Info", command: "file.getInfo" },
-      { text: "New Terminal at Folder", command: "terminal.new" },
-      { text: showHidden ? "Hide Hidden Files" : "Show Hidden Files", command: "view.toggleHidden" },
-      { text: "Show in Finder", command: "file.revealInFinder" },
+      { text: t("Get Info"), command: "file.getInfo" },
+      { text: t("New Terminal at Folder"), command: "terminal.new" },
+      { text: showHidden ? t("Hide Hidden Files") : t("Show Hidden Files"), command: "view.toggleHidden" },
+      { text: t("Show in Finder"), command: "file.revealInFinder" },
     ]),
   });
   await menu.popup();

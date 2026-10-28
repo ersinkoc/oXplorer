@@ -97,6 +97,13 @@ const GO: &[Item] = &[
 
 const SETTINGS: Item = ("app.settings", "Settings…", Some("CmdOrCtrl+Comma"));
 
+const HELP: &[Item] = &[
+    ("help.whatsNew", "What’s New in OXplorer", None),
+    SEP,
+    ("help.report", "Report a Problem…", None),
+    ("help.showLog", "Show Log File", None),
+];
+
 /// Customizable items by menu, in menu order.
 const MENUS: &[(&str, &[Item])] = &[
     ("OXplorer", &[SETTINGS]),
@@ -105,13 +112,18 @@ const MENUS: &[(&str, &[Item])] = &[
     ("View", VIEW),
     ("Go", GO),
     ("Window", WINDOW),
+    ("Help", HELP),
 ];
 
 /// User-chosen accelerators by item id; `None` means "no shortcut".
 pub type Overrides = HashMap<String, Option<String>>;
 
+/// Translated labels keyed by their English text (sent by the frontend).
+pub type Titles = HashMap<String, String>;
+
+/// What the menu bar is currently built with.
 #[derive(Default)]
-pub struct Shortcuts(Mutex<Overrides>);
+pub struct MenuConfig(Mutex<(Overrides, Titles)>);
 
 fn accelerator<'a>(id: &str, default: Option<&'a str>, overrides: &'a Overrides) -> Option<&'a str> {
     match overrides.get(id) {
@@ -121,15 +133,20 @@ fn accelerator<'a>(id: &str, default: Option<&'a str>, overrides: &'a Overrides)
 }
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
-    build_with(app, &Overrides::new())
+    build_with(app, &Overrides::new(), &Titles::new())
 }
 
-fn build_with<R: Runtime>(app: &AppHandle<R>, overrides: &Overrides) -> tauri::Result<Menu<R>> {
+fn build_with<R: Runtime>(
+    app: &AppHandle<R>,
+    overrides: &Overrides,
+    titles: &Titles,
+) -> tauri::Result<Menu<R>> {
+    let l = |en: &'static str| -> String { titles.get(en).cloned().unwrap_or_else(|| en.to_owned()) };
     let item = |(id, title, accel): &Item| {
-        MenuItem::with_id(app, *id, *title, true, accelerator(id, *accel, overrides))
+        MenuItem::with_id(app, *id, l(title), true, accelerator(id, *accel, overrides))
     };
-    let submenu = |title: &str, list: &[Item]| -> tauri::Result<Submenu<R>> {
-        let menu = Submenu::new(app, title, true)?;
+    let submenu = |title: &'static str, list: &[Item]| -> tauri::Result<Submenu<R>> {
+        let menu = Submenu::new(app, l(title), true)?;
         for entry in list {
             if entry.0 == "-" {
                 menu.append(&PredefinedMenuItem::separator(app)?)?;
@@ -145,26 +162,26 @@ fn build_with<R: Runtime>(app: &AppHandle<R>, overrides: &Overrides) -> tauri::R
         "OXplorer",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some("About OXplorer"), None)?,
+            &PredefinedMenuItem::about(app, Some(&l("About OXplorer")), None)?,
             &PredefinedMenuItem::separator(app)?,
             &item(&SETTINGS)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::services(app, None)?,
+            &PredefinedMenuItem::services(app, Some(&l("Services")))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, None)?,
-            &PredefinedMenuItem::hide_others(app, None)?,
-            &PredefinedMenuItem::show_all(app, None)?,
+            &PredefinedMenuItem::hide(app, Some(&l("Hide OXplorer")))?,
+            &PredefinedMenuItem::hide_others(app, Some(&l("Hide Others")))?,
+            &PredefinedMenuItem::show_all(app, Some(&l("Show All")))?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            &PredefinedMenuItem::quit(app, Some(&l("Quit OXplorer")))?,
         ],
     )?;
 
     // ⌘W closes a tab here; "Close Window" (⇧⌘W) lives in the File menu.
     let window = submenu("Window", WINDOW)?;
     window.prepend_items(&[
-        &PredefinedMenuItem::minimize(app, None)?,
-        &PredefinedMenuItem::maximize(app, Some("Zoom"))?,
-        &PredefinedMenuItem::fullscreen(app, None)?,
+        &PredefinedMenuItem::minimize(app, Some(&l("Minimize")))?,
+        &PredefinedMenuItem::maximize(app, Some(&l("Zoom")))?,
+        &PredefinedMenuItem::fullscreen(app, Some(&l("Enter Full Screen")))?,
         &PredefinedMenuItem::separator(app)?,
     ])?;
 
@@ -177,6 +194,7 @@ fn build_with<R: Runtime>(app: &AppHandle<R>, overrides: &Overrides) -> tauri::R
             &submenu("View", VIEW)?,
             &submenu("Go", GO)?,
             &window,
+            &submenu("Help", HELP)?,
         ],
     )
 }
@@ -232,16 +250,29 @@ pub fn validate(overrides: &Overrides) -> AppResult<()> {
     Ok(())
 }
 
+fn rebuild(app: &AppHandle, overrides: &Overrides, titles: &Titles) -> AppResult<()> {
+    let menu = build_with(app, overrides, titles).map_err(|e| invalid(e.to_string()))?;
+    app.set_menu(menu).map(|_| ()).map_err(|e| invalid(e.to_string()))
+}
+
 /// Rebuilds the menu bar with the user's shortcuts.
 #[tauri::command]
 #[specta::specta]
-pub fn set_shortcuts(app: AppHandle, state: State<'_, Shortcuts>, shortcuts: Overrides) -> AppResult<()> {
+pub fn set_shortcuts(app: AppHandle, state: State<'_, MenuConfig>, shortcuts: Overrides) -> AppResult<()> {
     validate(&shortcuts)?;
-    let menu = build_with(&app, &shortcuts).map_err(|e| invalid(e.to_string()))?;
-    app.set_menu(menu).map_err(|e| invalid(e.to_string()))?;
-    if let Ok(mut current) = state.0.lock() {
-        *current = shortcuts;
-    }
+    let mut config = state.0.lock().map_err(|e| invalid(e.to_string()))?;
+    rebuild(&app, &shortcuts, &config.1)?;
+    config.0 = shortcuts;
+    Ok(())
+}
+
+/// Rebuilds the menu bar in the UI language (labels keyed by their English text).
+#[tauri::command]
+#[specta::specta]
+pub fn set_menu_titles(app: AppHandle, state: State<'_, MenuConfig>, titles: Titles) -> AppResult<()> {
+    let mut config = state.0.lock().map_err(|e| invalid(e.to_string()))?;
+    rebuild(&app, &config.0, &titles)?;
+    config.1 = titles;
     Ok(())
 }
 

@@ -2,6 +2,7 @@ import { FolderOpen, Loader2, ShieldAlert, TriangleAlert } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { commands } from "@/bindings";
 import { reload } from "@/commands/navigation";
+import { useT } from "@/i18n";
 import { type AppError, describeError, type FileEntry } from "@/lib/ipc";
 import type { DirState } from "@/stores/dir-cache-store";
 
@@ -33,15 +34,17 @@ function LoadingState() {
 }
 
 function EmptyState({ filtered }: { filtered: boolean }) {
+  const { t } = useT();
   return (
     <Centered>
       <FolderOpen className="size-10 text-fg-faint" strokeWidth={1.25} />
-      <p className="text-fg-muted">{filtered ? "No items match the filter" : "This folder is empty"}</p>
+      <p className="text-fg-muted">{filtered ? t("No items match the filter") : t("This folder is empty")}</p>
     </Centered>
   );
 }
 
 function ErrorState({ error }: { error: AppError }) {
+  const { t } = useT();
   const needsFda = error.kind === "permissionDenied" && error.needsFullDiskAccess;
   const Icon = error.kind === "permissionDenied" ? ShieldAlert : TriangleAlert;
   return (
@@ -55,7 +58,7 @@ function ErrorState({ error }: { error: AppError }) {
             className="rounded-md bg-accent px-3 py-1 text-white"
             onClick={() => void commands.openFullDiskAccessSettings()}
           >
-            Grant Full Disk Access
+            {t("Grant Full Disk Access")}
           </button>
         )}
         <button
@@ -63,7 +66,7 @@ function ErrorState({ error }: { error: AppError }) {
           className="rounded-md border border-border px-3 py-1 hover:bg-hover"
           onClick={reload}
         >
-          Try Again
+          {t("Try Again")}
         </button>
       </div>
     </Centered>

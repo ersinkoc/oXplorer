@@ -11,6 +11,7 @@ import { RenameInput } from "@/features/file-view/rename-input";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
 import { EntryPreview } from "@/features/preview/preview-pane";
+import { useT } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { parent } from "@/lib/path";
@@ -89,6 +90,7 @@ export function FileColumns({ pane }: { pane: PaneId }) {
 }
 
 function ActiveColumn({ pane, root }: { pane: PaneId; root: string }) {
+  const { t } = useT();
   const view = useFileView(pane, 1, (i) => virtualizer.scrollToIndex(i, { align: "auto" }));
   const { tab, dir, entries, selection, scrollRef, focusIndex, renaming } = view;
   const dropTarget = useDrag((s) => s.target);
@@ -131,7 +133,7 @@ function ActiveColumn({ pane, root }: { pane: PaneId; root: string }) {
       <div
         ref={scrollRef}
         role="grid"
-        aria-label="Files"
+        aria-label={t("Files")}
         aria-multiselectable
         aria-activedescendant={focusIndex >= 0 ? `${pane}-col-${focusIndex}` : undefined}
         tabIndex={0}
@@ -200,6 +202,7 @@ function StaticColumn({
   /** The caller takes care of listing the folder. */
   listed?: boolean;
 }) {
+  const { t } = useT();
   const sort = useActiveTab(pane).view.sort;
   const dir = useDirCache((s) => s.dirs[path]);
   const entries = useSortedEntries(path, sort);
@@ -229,7 +232,7 @@ function StaticColumn({
     <div
       ref={scrollRef}
       role="grid"
-      aria-label={`Contents of ${path}`}
+      aria-label={t("Contents of {path}", { path })}
       data-drop-dir={path}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget || e.target === e.currentTarget.firstChild) navigateTo(path);

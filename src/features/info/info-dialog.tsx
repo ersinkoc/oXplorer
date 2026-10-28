@@ -4,6 +4,7 @@ import { commands, type MeasureEvent, type SizeInfo } from "@/bindings";
 import { FileIcon } from "@/features/file-view/file-icon";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
+import { useT } from "@/i18n";
 import { formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
@@ -11,10 +12,11 @@ import { useApp } from "@/stores/app-store";
 
 /** "Get Info" for the selection (⌘I). Folder sizes are computed live and cancelled on close. */
 export function InfoDialog() {
+  const { t } = useT();
   const paths = useApp((s) => s.infoPaths);
   const close = () => useApp.getState().set({ infoPaths: null });
   return (
-    <Dialog open={!!paths} onClose={close} label="Info" className="w-[380px]">
+    <Dialog open={!!paths} onClose={close} label={t("Info")} className="w-[380px]">
       {paths && <InfoBody key={paths.join("\n")} paths={paths} onClose={close} />}
     </Dialog>
   );
@@ -56,6 +58,7 @@ function permissions(mode: number): string {
 }
 
 function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) {
+  const { t, tn } = useT();
   const entries = useEntries(paths);
   const home = useApp((s) => s.home);
   const [single] = entries;
@@ -63,41 +66,43 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
     entries.length > 1 || (!!single && (isFolderLike(single) || single.kind === "package"));
   const { size, done } = useMeasure(paths, needsMeasure);
 
-  if (!single) return <div className="p-5 text-fg-muted">Loading…</div>;
+  if (!single) return <div className="p-5 text-fg-muted">{t("Loading…")}</div>;
 
   const sizeLabel = needsMeasure
     ? size
-      ? `${formatSize(size.bytes)} on disk ${formatSize(size.allocated)} for ${size.files.toLocaleString()} items${done ? "" : "…"}`
-      : "Calculating…"
-    : `${formatSize(single.size)} (${single.size.toLocaleString()} bytes)`;
+      ? `${tn(size.files, "{size} on disk {allocated} for {count} item", "{size} on disk {allocated} for {count} items", { size: formatSize(size.bytes), allocated: formatSize(size.allocated) })}${done ? "" : "…"}`
+      : t("Calculating…")
+    : t("{size} ({bytes} bytes)", { size: formatSize(single.size), bytes: single.size.toLocaleString() });
 
   const rows: [string, React.ReactNode][] =
     entries.length > 1
       ? [
-          ["Items", entries.length.toLocaleString()],
-          ["Size", sizeLabel],
-          ["Where", tildify(parent(single.path) ?? "/", home)],
+          [t("Items"), entries.length.toLocaleString()],
+          [t("Size"), sizeLabel],
+          [t("Where"), tildify(parent(single.path) ?? "/", home)],
         ]
       : [
-          ["Kind", kindLabel(single)],
-          ["Size", sizeLabel],
-          ["Where", tildify(parent(single.path) ?? "/", home)],
-          ["Created", single.createdMs ? formatDate(single.createdMs) : "--"],
-          ["Modified", formatDate(single.modifiedMs)],
+          [t("Kind"), kindLabel(single)],
+          [t("Size"), sizeLabel],
+          [t("Where"), tildify(parent(single.path) ?? "/", home)],
+          [t("Created"), single.createdMs ? formatDate(single.createdMs) : "--"],
+          [t("Modified"), formatDate(single.modifiedMs)],
           [
-            "Permissions",
+            t("Permissions"),
             <span key="perm" className="font-mono text-[11px]">
               {permissions(single.mode)}
             </span>,
           ],
-          ...(single.symlink ? ([["Original", single.symlink.target]] as [string, React.ReactNode][]) : []),
+          ...(single.symlink
+            ? ([[t("Original"), single.symlink.target]] as [string, React.ReactNode][])
+            : []),
           ...(single.tags.length > 0
             ? ([
                 [
-                  "Tags",
+                  t("Tags"),
                   <span key="tags" className="flex items-center gap-1">
                     <TagDots tags={single.tags} />
-                    {single.tags.map((t) => t.name).join(", ")}
+                    {single.tags.map((tag) => tag.name).join(", ")}
                   </span>,
                 ],
               ] as [string, React.ReactNode][])
@@ -110,7 +115,7 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
         <FileIcon entry={single} size={64} thumbnail />
         <div className="min-w-0">
           <div className="truncate text-[14px] font-semibold" title={single.name}>
-            {entries.length > 1 ? `${entries.length} items` : single.name}
+            {entries.length > 1 ? tn(entries.length, "{count} item", "{count} items") : single.name}
           </div>
           <div className="text-[12px] text-fg-muted">
             {entries.length > 1 ? "" : formatDate(single.modifiedMs)}
@@ -127,7 +132,7 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
       </dl>
       <div className="flex justify-end">
         <DialogButton primary autoFocus onClick={onClose}>
-          Done
+          {t("Done")}
         </DialogButton>
       </div>
     </div>

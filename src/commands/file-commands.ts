@@ -6,6 +6,7 @@ import { applyFsChanges, recordUndo, runJob } from "@/commands/jobs";
 import { currentFolder, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
+import { msg, t } from "@/i18n";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
 import { basename, parent } from "@/lib/path";
 import { isSearchPath } from "@/lib/search-path";
@@ -37,7 +38,7 @@ async function toPasteboard(cut: boolean): Promise<void> {
     await unwrap(commands.pasteboardWriteFiles(sel));
     useApp.getState().set({ clipboard: { paths: sel, cut } });
   } catch (err) {
-    report(err, "Couldn’t copy to the clipboard.");
+    report(err, t("Couldn’t copy to the clipboard."));
   }
 }
 
@@ -64,11 +65,14 @@ export async function createItem(folder: boolean): Promise<void> {
   try {
     const entry = await unwrap(commands.createItem(dir, folder ? "untitled folder" : "untitled.txt", folder));
     applyFsChanges([entry], []);
-    recordUndo({ label: folder ? "New Folder" : "New File", steps: [{ kind: "trash", path: entry.path }] });
+    recordUndo({
+      label: folder ? msg("New Folder") : msg("New File"),
+      steps: [{ kind: "trash", path: entry.path }],
+    });
     useWorkspace.getState().setSelection(selectOne(entry.path));
     useApp.getState().set({ renaming: entry.path });
   } catch (err) {
-    report(err, folder ? "Couldn’t create the folder." : "Couldn’t create the file.");
+    report(err, folder ? t("Couldn’t create the folder.") : t("Couldn’t create the file."));
   }
 }
 
@@ -79,13 +83,13 @@ export async function commitRename(entry: FileEntry, newName: string): Promise<b
   try {
     const renamed = await unwrap(commands.renamePath(entry.path, name));
     applyFsChanges([renamed], [entry.path]);
-    recordUndo({ label: "Rename", steps: [{ kind: "move", from: renamed.path, to: entry.path }] });
+    recordUndo({ label: msg("Rename"), steps: [{ kind: "move", from: renamed.path, to: entry.path }] });
     const here = getActiveTab().path;
     if (isSearchPath(here) || parent(renamed.path) === here)
       useWorkspace.getState().setSelection(selectOne(renamed.path));
     return true;
   } catch (err) {
-    report(err, `Couldn’t rename “${entry.name}”.`);
+    report(err, t("Couldn’t rename “{name}”.", { name: entry.name }));
     return false;
   }
 }
@@ -97,7 +101,12 @@ async function undoRedo(redo: boolean): Promise<void> {
   if (!action) return;
   h.set(redo ? { redo: stack.slice(0, -1) } : { undo: stack.slice(0, -1) });
   const outcome = await runJob({ kind: "undo", action }, { history: redo ? "redo" : "undo" });
-  if (outcome && outcome.failures.length === 0) toast(`${redo ? "Redo" : "Undo"} ${action.label}`);
+  if (outcome && outcome.failures.length === 0)
+    toast(
+      redo
+        ? t("Redo {action}", { action: t(action.label) })
+        : t("Undo {action}", { action: t(action.label) }),
+    );
 }
 
 /**
@@ -139,6 +148,13 @@ export const ARCHIVE_FORMATS: readonly [ArchiveFormat, string][] = [
   ["tarZst", "tar.zst"],
 ];
 
+/** Command titles, translated where they're shown. */
+const COMPRESS_TITLES: Record<ArchiveFormat, string> = {
+  zip: msg("Compress (zip)"),
+  tarGz: msg("Compress (tar.gz)"),
+  tarZst: msg("Compress (tar.zst)"),
+};
+
 const ARCHIVE_SUFFIXES = [".zip", ".tar", ".tar.gz", ".tgz", ".tar.zst", ".tzst"];
 
 /** Archives OXplorer can extract (the same list as `jobs/archive.rs`). */
@@ -153,7 +169,7 @@ async function compress(format: ArchiveFormat): Promise<void> {
   if (sel.length === 0) return;
   const folders = new Set(sel.map((p) => parent(p)));
   if (folders.size > 1) {
-    toast("Items from different folders can’t go into one archive.");
+    toast(t("Items from different folders can’t go into one archive."));
     return;
   }
   await runJob({ kind: "compress", sources: sel, format });
@@ -166,7 +182,7 @@ export async function toggleTag(entries: readonly FileEntry[], tag: FinderTag): 
     const updated = await unwrap(commands.editTags(paths(entries), all ? [] : [tag], all ? [tag.name] : []));
     applyFsChanges(updated, []);
   } catch (err) {
-    report(err, "Couldn’t change the tags.");
+    report(err, t("Couldn’t change the tags."));
   }
 }
 
@@ -255,19 +271,24 @@ export function registerFileCommands(): void {
       run: async () => {
         const sel = paths(selectedEntries());
         if (sel.length === 0) return;
-        const what = sel.length === 1 ? `“${basename(sel[0] ?? "")}”` : `these ${sel.length} items`;
-        const ok = await ask(`Are you sure you want to delete ${what} immediately?`, {
-          title: "Delete Immediately",
+        const question =
+          sel.length === 1
+            ? t("Are you sure you want to delete “{name}” immediately?", { name: basename(sel[0] ?? "") })
+            : t("Are you sure you want to delete these {count} items immediately?", {
+                count: sel.length.toLocaleString(),
+              });
+        const ok = await ask(question, {
+          title: t("Delete Immediately"),
           kind: "warning",
-          okLabel: "Delete",
-          cancelLabel: "Cancel",
+          okLabel: t("Delete"),
+          cancelLabel: t("Cancel"),
         });
         if (ok) await runJob({ kind: "delete", paths: sel }, { select: false });
       },
     },
-    ...ARCHIVE_FORMATS.map(([format, label]) => ({
+    ...ARCHIVE_FORMATS.map(([format]) => ({
       id: `file.compress.${format}`,
-      title: `Compress (${label})`,
+      title: COMPRESS_TITLES[format],
       run: () => compress(format),
     })),
     {

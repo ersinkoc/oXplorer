@@ -1,8 +1,10 @@
 import { Copy, Files } from "lucide-react";
 import { useDrag } from "@/features/dnd/drag-store";
+import { useT } from "@/i18n";
 
 /** Follows the pointer during an in-app drag. */
 export function DragGhost() {
+  const { tn } = useT();
   const { active, count, x, y, copy, target } = useDrag();
   if (!active) return null;
   return (
@@ -12,7 +14,7 @@ export function DragGhost() {
       style={{ left: x + 12, top: y + 12, opacity: target ? 1 : 0.75 }}
     >
       {copy ? <Copy className="size-3.5" /> : <Files className="size-3.5" />}
-      {count} item{count === 1 ? "" : "s"}
+      {tn(count, "{count} item", "{count} items")}
     </div>
   );
 }

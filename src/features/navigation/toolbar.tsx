@@ -12,10 +12,12 @@ import {
 import { runCommand } from "@/commands/registry";
 import { JobsIndicator } from "@/features/jobs/jobs-indicator";
 import { PathBar } from "@/features/navigation/path-bar";
+import { useT } from "@/i18n";
 import { useActiveTab, useWorkspace } from "@/stores/workspace-store";
 
 /** Title-bar toolbar. `inset` leaves room for the traffic lights when the sidebar is hidden. */
 export function Toolbar({ inset }: { inset: boolean }) {
+  const { t } = useT();
   const tab = useActiveTab();
   const dual = useWorkspace((s) => s.dualPane);
   const preview = useWorkspace((s) => s.preview.visible);
@@ -30,19 +32,23 @@ export function Toolbar({ inset }: { inset: boolean }) {
       }`}
     >
       <div className="flex items-center">
-        <ToolButton label="Back" disabled={!canBack} onClick={() => runCommand("nav.back")}>
+        <ToolButton label={t("Back")} disabled={!canBack} onClick={() => runCommand("nav.back")}>
           <ChevronLeft className="size-5" />
         </ToolButton>
-        <ToolButton label="Forward" disabled={!canForward} onClick={() => runCommand("nav.forward")}>
+        <ToolButton label={t("Forward")} disabled={!canForward} onClick={() => runCommand("nav.forward")}>
           <ChevronRight className="size-5" />
         </ToolButton>
-        <ToolButton label="Enclosing Folder" disabled={tab.path === "/"} onClick={() => runCommand("nav.up")}>
+        <ToolButton
+          label={t("Enclosing Folder")}
+          disabled={tab.path === "/"}
+          onClick={() => runCommand("nav.up")}
+        >
           <ChevronUp className="size-5" />
         </ToolButton>
       </div>
       <PathBar path={tab.path} />
       <JobsIndicator />
-      <fieldset aria-label="View" className="m-0 flex items-center rounded-md border border-border p-px">
+      <fieldset aria-label={t("View")} className="m-0 flex items-center rounded-md border border-border p-px">
         {(
           [
             ["list", "as List", List, "view.asList"],
@@ -54,8 +60,8 @@ export function Toolbar({ inset }: { inset: boolean }) {
             key={mode}
             type="button"
             aria-pressed={tab.view.mode === mode}
-            title={label}
-            aria-label={label}
+            title={t(label)}
+            aria-label={t(label)}
             onClick={() => runCommand(command)}
             className={`flex h-6 w-7 items-center justify-center rounded-[5px] ${
               tab.view.mode === mode ? "bg-sidebar-active text-fg" : "text-fg-muted hover:text-fg"
@@ -66,10 +72,14 @@ export function Toolbar({ inset }: { inset: boolean }) {
         ))}
       </fieldset>
       <div className="flex items-center">
-        <ToolButton label="Dual Pane (⌘U)" pressed={dual} onClick={() => runCommand("pane.toggleDual")}>
+        <ToolButton label={t("Dual Pane (⌘U)")} pressed={dual} onClick={() => runCommand("pane.toggleDual")}>
           <Columns2 className="size-4" />
         </ToolButton>
-        <ToolButton label="Preview (⇧⌘P)" pressed={preview} onClick={() => runCommand("view.togglePreview")}>
+        <ToolButton
+          label={t("Preview (⇧⌘P)")}
+          pressed={preview}
+          onClick={() => runCommand("view.togglePreview")}
+        >
           <PanelRight className="size-4" />
         </ToolButton>
       </div>
@@ -77,7 +87,7 @@ export function Toolbar({ inset }: { inset: boolean }) {
         <Search className="size-3.5 shrink-0 text-fg-muted" />
         <input
           type="search"
-          placeholder="Filter"
+          placeholder={t("Filter")}
           data-filter-input
           value={tab.view.filter}
           onChange={(e) => useWorkspace.getState().updateView({ filter: e.target.value })}

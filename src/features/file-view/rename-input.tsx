@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { commitRename } from "@/commands/file-commands";
+import { useT } from "@/i18n";
 import type { FileEntry } from "@/lib/ipc";
 import { useApp } from "@/stores/app-store";
 
 /** Inline name editor. Selects the name without its extension, like Finder. */
 export function RenameInput({ entry, className }: { entry: FileEntry; className?: string }) {
+  const { t } = useT();
   const [value, setValue] = useState(entry.name);
   const ref = useRef<HTMLInputElement>(null);
   const settled = useRef(false);
@@ -35,7 +37,7 @@ export function RenameInput({ entry, className }: { entry: FileEntry; className?
   return (
     <input
       ref={ref}
-      aria-label={`Rename ${entry.name}`}
+      aria-label={t("Rename {name}", { name: entry.name })}
       value={value}
       spellCheck={false}
       autoCorrect="off"

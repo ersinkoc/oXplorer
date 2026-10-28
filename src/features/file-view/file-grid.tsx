@@ -7,6 +7,7 @@ import { RenameInput } from "@/features/file-view/rename-input";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
+import { useT } from "@/i18n";
 import type { FileEntry } from "@/lib/ipc";
 import { isSearchPath } from "@/lib/search-path";
 import type { PaneId } from "@/stores/workspace-store";
@@ -18,6 +19,7 @@ const PADDING = 12;
 
 /** Icon view: virtualized by rows, column count follows the pane width. */
 export function FileGrid({ pane }: { pane: PaneId }) {
+  const { t } = useT();
   const [width, setWidth] = useState(0);
   const columns = Math.max(1, Math.floor((width - PADDING * 2) / CELL_WIDTH));
   const view = useFileView(pane, columns, (i) =>
@@ -51,7 +53,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
       <div
         ref={scrollRef}
         role="grid"
-        aria-label="Files"
+        aria-label={t("Files")}
         aria-multiselectable
         aria-activedescendant={focusIndex >= 0 ? cellId(pane, focusIndex) : undefined}
         tabIndex={0}

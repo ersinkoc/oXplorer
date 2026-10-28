@@ -6,6 +6,7 @@ import { openEntries } from "@/commands/navigation";
 import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { toggleQuickLook } from "@/features/preview/quick-look";
 import { TextPreview } from "@/features/preview/text-preview";
+import { useT } from "@/i18n";
 import { entrySizeLabel, formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
 import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
@@ -36,6 +37,7 @@ function previewKind(entry: FileEntry): Kind {
 
 /** Right-hand column: what the active pane's selection looks like and what it is. */
 export function PreviewPane({ width }: { width: number }) {
+  const { t } = useT();
   const pane = useWorkspace((s) => s.activePane);
   const { tab, entries } = useVisibleEntries(pane);
   const selected = entries.filter((e) => tab.selection.paths.has(e.path));
@@ -43,7 +45,7 @@ export function PreviewPane({ width }: { width: number }) {
 
   return (
     <aside
-      aria-label="Preview"
+      aria-label={t("Preview")}
       style={{ width }}
       className="flex shrink-0 flex-col overflow-hidden bg-bg-alt"
     >
@@ -147,13 +149,14 @@ function BigIcon({ entry, thumbnail = false }: { entry: FileEntry; thumbnail?: b
 }
 
 function InfoCard({ entry }: { entry: FileEntry }) {
+  const { t } = useT();
   const rows: [string, string][] = [
-    ["Kind", kindLabel(entry)],
-    ["Size", isFolderLike(entry) ? "--" : entrySizeLabel(entry)],
-    ["Created", entry.createdMs ? formatDate(entry.createdMs) : "--"],
-    ["Modified", formatDate(entry.modifiedMs)],
+    [t("Kind"), kindLabel(entry)],
+    [t("Size"), isFolderLike(entry) ? "--" : entrySizeLabel(entry)],
+    [t("Created"), entry.createdMs ? formatDate(entry.createdMs) : "--"],
+    [t("Modified"), formatDate(entry.modifiedMs)],
   ];
-  if (entry.symlink) rows.push(["Original", entry.symlink.target]);
+  if (entry.symlink) rows.push([t("Original"), entry.symlink.target]);
   return (
     <div className="shrink-0 border-t border-border px-3 py-2.5">
       <p className="truncate text-[13px] font-semibold" title={entry.name}>
@@ -161,13 +164,13 @@ function InfoCard({ entry }: { entry: FileEntry }) {
       </p>
       {entry.tags.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
-          {entry.tags.map((t) => (
-            <span key={t.name} className="flex items-center gap-1 text-[11px] text-fg-muted">
+          {entry.tags.map((tag) => (
+            <span key={tag.name} className="flex items-center gap-1 text-[11px] text-fg-muted">
               <span
                 className="size-2 rounded-full"
-                style={{ background: TAG_COLORS[t.color] ?? "transparent" }}
+                style={{ background: TAG_COLORS[tag.color] ?? "transparent" }}
               />
-              {t.name}
+              {tag.name}
             </span>
           ))}
         </div>
@@ -188,15 +191,15 @@ function InfoCard({ entry }: { entry: FileEntry }) {
           onClick={() => void openEntries([entry])}
           className="h-6 rounded-md border border-border bg-bg px-2.5 text-[12px] hover:bg-hover"
         >
-          Open
+          {t("Open")}
         </button>
         <button
           type="button"
           onClick={toggleQuickLook}
-          title="Quick Look (Space)"
+          title={t("Quick Look (Space)")}
           className="flex h-6 items-center gap-1 rounded-md border border-border bg-bg px-2.5 text-[12px] hover:bg-hover"
         >
-          <Eye className="size-3.5" /> Quick Look
+          <Eye className="size-3.5" /> {t("Quick Look")}
         </button>
       </div>
     </div>
@@ -206,6 +209,7 @@ function InfoCard({ entry }: { entry: FileEntry }) {
 function Summary({ entries }: { entries: FileEntry[] }) {
   const bytes = entries.reduce((sum, e) => sum + (isFolderLike(e) ? 0 : e.size), 0);
   const folders = entries.filter(isFolderLike).length;
+  const { tn } = useT();
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-4 text-center">
       <div className="relative h-28 w-28">
@@ -221,17 +225,20 @@ function Summary({ entries }: { entries: FileEntry[] }) {
           />
         ))}
       </div>
-      <p className="text-[13px] font-semibold">{entries.length} items</p>
+      <p className="text-[13px] font-semibold">{tn(entries.length, "{count} item", "{count} items")}</p>
       <p className="text-[11px] text-fg-muted">
-        {folders > 0 && `${folders} folder${folders === 1 ? "" : "s"} · `}
-        {formatSize(bytes)}
-        {folders > 0 && " in files"}
+        {folders > 0
+          ? tn(folders, "{count} folder · {size} in files", "{count} folders · {size} in files", {
+              size: formatSize(bytes),
+            })
+          : formatSize(bytes)}
       </p>
     </div>
   );
 }
 
 function FolderSummary({ path }: { path: string }) {
+  const { tn } = useT();
   const dir = useDirCache((s) => s.dirs[path]);
   const [entry, setEntry] = useState<FileEntry | null>(null);
   useEffect(() => {
@@ -248,9 +255,7 @@ function FolderSummary({ path }: { path: string }) {
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-3">
         <BigIcon entry={entry} />
         {count !== undefined && (
-          <p className="text-[11px] text-fg-muted">
-            {count} item{count === 1 ? "" : "s"}
-          </p>
+          <p className="text-[11px] text-fg-muted">{tn(count, "{count} item", "{count} items")}</p>
         )}
       </div>
       <InfoCard entry={entry} />

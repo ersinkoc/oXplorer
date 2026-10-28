@@ -18,6 +18,7 @@
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-read-text",
     "drag:default",
+    "notification:default",
     "opener:allow-open-url",
     "core:menu:default",
     "core:webview:allow-internal-toggle-devtools",
@@ -64,6 +65,8 @@
     "allow-edit-tags",
     "allow-menu-items",
     "allow-set-shortcuts",
-    "allow-open-settings"
+    "allow-set-menu-titles",
+    "allow-open-settings",
+    "allow-log-file"
   ]
 }

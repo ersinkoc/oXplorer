@@ -4,6 +4,7 @@ import { commands } from "@/bindings";
 import { applyFsChanges, recordUndo } from "@/commands/jobs";
 import { findPattern, previewRenames, type RenameRule } from "@/features/rename/batch-rules";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
+import { useT } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
@@ -14,10 +15,11 @@ const PREVIEW_ROWS = 200;
 
 /** "Rename N Items…" — Finder's three modes with a live preview. */
 export function BatchRenameDialog() {
+  const { t } = useT();
   const entries = useApp((s) => s.batchRename);
   const close = () => useApp.getState().set({ batchRename: null });
   return (
-    <Dialog open={!!entries} onClose={close} label="Rename items" className="w-[560px]">
+    <Dialog open={!!entries} onClose={close} label={t("Rename items")} className="w-[560px]">
       {entries && <Body entries={entries} onClose={close} />}
     </Dialog>
   );
@@ -27,6 +29,7 @@ const input =
   "h-7 min-w-0 rounded-md border border-border bg-bg px-2 text-[13px] outline-none focus:ring-2 focus:ring-accent/40";
 
 function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void }) {
+  const { t, tn } = useT();
   const [kind, setKind] = useState<RenameRule["kind"]>("replace");
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
@@ -73,7 +76,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
       recordUndo(out.undo);
       onClose();
     } catch (err) {
-      toast.error(err instanceof CommandError ? err.message : "Couldn’t rename the items.");
+      toast.error(err instanceof CommandError ? err.message : t("Couldn’t rename the items."));
       setBusy(false);
     }
   };
@@ -86,21 +89,23 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
         if (canApply) void apply();
       }}
     >
-      <h2 className="m-0 text-[14px] font-semibold">Rename {entries.length} Items</h2>
+      <h2 className="m-0 text-[14px] font-semibold">
+        {t("Rename {count} Items", { count: entries.length.toLocaleString() })}
+      </h2>
       <select
-        aria-label="Rename mode"
+        aria-label={t("Rename mode")}
         value={kind}
         onChange={(e) => setKind(e.target.value as RenameRule["kind"])}
         className={`${input} w-48`}
       >
-        <option value="replace">Replace Text</option>
-        <option value="add">Add Text</option>
-        <option value="format">Format</option>
+        <option value="replace">{t("Replace Text")}</option>
+        <option value="add">{t("Add Text")}</option>
+        <option value="format">{t("Format")}</option>
       </select>
 
       {kind === "replace" && (
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2">
-          <label htmlFor="br-find">Find:</label>
+          <label htmlFor="br-find">{t("Find:")}</label>
           <input
             id="br-find"
             // biome-ignore lint/a11y/noAutofocus: the dialog's first field
@@ -110,7 +115,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
             onChange={(e) => setFind(e.target.value)}
             className={input}
           />
-          <label htmlFor="br-replace">Replace with:</label>
+          <label htmlFor="br-replace">{t("Replace with:")}</label>
           <input
             id="br-replace"
             value={replace}
@@ -126,15 +131,15 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
                 checked={caseSensitive}
                 onChange={(e) => setCaseSensitive(e.target.checked)}
               />
-              Match case
+              {t("Match case")}
             </label>
             <label className="flex items-center gap-1.5">
               <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />
-              Regular expression ($1 for groups)
+              {t("Regular expression ($1 for groups)")}
             </label>
           </div>
           {typeof regexError === "string" && (
-            <p className="col-span-2 m-0 text-[12px] text-red-500">{regexError}</p>
+            <p className="col-span-2 m-0 text-[12px] text-red-500">{t(regexError)}</p>
           )}
         </div>
       )}
@@ -142,7 +147,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
       {kind === "add" && (
         <div className="flex items-center gap-2">
           <input
-            aria-label="Text to add"
+            aria-label={t("Text to add")}
             // biome-ignore lint/a11y/noAutofocus: the dialog's first field
             autoFocus
             value={text}
@@ -155,7 +160,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
 
       {kind === "format" && (
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2">
-          <label htmlFor="br-base">Custom name:</label>
+          <label htmlFor="br-base">{t("Custom name:")}</label>
           <div className="flex gap-2">
             <input
               id="br-base"
@@ -167,7 +172,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
             />
             <WhereSelect value={where} onChange={setWhere} />
           </div>
-          <label htmlFor="br-start">Start numbers at:</label>
+          <label htmlFor="br-start">{t("Start numbers at:")}</label>
           <div className="flex items-center gap-2">
             <input
               id="br-start"
@@ -177,7 +182,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
               onChange={(e) => setStart(Math.max(0, Number(e.target.value) || 0))}
               className={`${input} w-24`}
             />
-            <label htmlFor="br-digits">Digits:</label>
+            <label htmlFor="br-digits">{t("Digits:")}</label>
             <input
               id="br-digits"
               type="number"
@@ -204,10 +209,10 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
                   <td className="w-4 text-center text-fg-faint">→</td>
                   <td
                     className={`max-w-0 truncate px-2 py-1 ${p.problem && changed ? "text-red-500" : changed ? "" : "text-fg-faint"}`}
-                    title={p.problem && changed ? p.problem : p.newName}
+                    title={p.problem && changed ? t(p.problem) : p.newName}
                   >
                     {p.newName}
-                    {p.problem && changed && <span className="ml-1.5 text-[11px]">({p.problem})</span>}
+                    {p.problem && changed && <span className="ml-1.5 text-[11px]">({t(p.problem)})</span>}
                   </td>
                 </tr>
               );
@@ -218,17 +223,20 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
       <div className="flex items-center justify-between">
         <p className="m-0 text-[12px] text-fg-muted">
           {problems > 0
-            ? `${problems} name${problems === 1 ? "" : "s"} can’t be used`
-            : `${changes.length} of ${entries.length} will be renamed`}
+            ? tn(problems, "{count} name can’t be used", "{count} names can’t be used")
+            : t("{changed} of {total} will be renamed", {
+                changed: changes.length.toLocaleString(),
+                total: entries.length.toLocaleString(),
+              })}
         </p>
         <div className="flex gap-2">
-          <DialogButton onClick={onClose}>Cancel</DialogButton>
+          <DialogButton onClick={onClose}>{t("Cancel")}</DialogButton>
           <button
             type="submit"
             disabled={!canApply}
             className="h-7 rounded-md bg-accent px-3 text-[13px] text-white disabled:opacity-40"
           >
-            Rename
+            {t("Rename")}
           </button>
         </div>
       </div>
@@ -243,15 +251,16 @@ function WhereSelect({
   value: "before" | "after";
   onChange: (v: "before" | "after") => void;
 }) {
+  const { t } = useT();
   return (
     <select
-      aria-label="Position"
+      aria-label={t("Position")}
       value={value}
       onChange={(e) => onChange(e.target.value as "before" | "after")}
       className={input}
     >
-      <option value="after">after name</option>
-      <option value="before">before name</option>
+      <option value="after">{t("after name")}</option>
+      <option value="before">{t("before name")}</option>
     </select>
   );
 }

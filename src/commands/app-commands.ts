@@ -14,6 +14,7 @@ import {
 import { defineCommands, runCommand } from "@/commands/registry";
 import { paneLayout } from "@/features/file-view/visible-order";
 import { focusedTerminal } from "@/features/terminal/terminal-registry";
+import { t, tn } from "@/i18n";
 import { CommandError, describeError, unwrap } from "@/lib/ipc";
 import { isSearchPath, searchPath } from "@/lib/search-path";
 import { selectAll } from "@/lib/selection";
@@ -45,7 +46,7 @@ export function registerAppCommands(): void {
         try {
           await unwrap(commands.revealInFinder(target));
         } catch (err) {
-          toast.error(err instanceof CommandError ? err.message : "Couldn’t show in Finder.");
+          toast.error(err instanceof CommandError ? err.message : t("Couldn’t show in Finder."));
         }
       },
     },
@@ -56,7 +57,7 @@ export function registerAppCommands(): void {
         const sel = selectedEntries().map((e) => e.path);
         const paths = sel.length > 0 ? sel : [currentFolder()];
         await writeText(paths.join("\n"));
-        toast.success(paths.length === 1 ? "Path copied" : `${paths.length} paths copied`);
+        toast.success(tn(paths.length, "Path copied", "{count} paths copied"));
       },
     },
 

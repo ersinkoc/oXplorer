@@ -4,6 +4,7 @@ import { runJob } from "@/commands/jobs";
 import { navigateTo, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { toggleQuickLook } from "@/features/preview/quick-look";
+import { t } from "@/i18n";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, otherPane, type PaneId, useWorkspace } from "@/stores/workspace-store";
 
@@ -28,7 +29,7 @@ export function closeTab(pane: PaneId, id: string): void {
 async function transferToOtherPane(kind: "copy" | "move"): Promise<void> {
   const { dualPane, activePane } = useWorkspace.getState();
   if (!dualPane) {
-    toast("Open the second pane first (⌘U).");
+    toast(t("Open the second pane first (⌘U)."));
     return;
   }
   const sources = selectedEntries().map((e) => e.path);

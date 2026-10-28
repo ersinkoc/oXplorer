@@ -2,10 +2,12 @@ import { useRef } from "react";
 import { PreviewPane } from "@/features/preview/preview-pane";
 import { Pane } from "@/features/workspace/pane";
 import { Splitter } from "@/features/workspace/splitter";
+import { useT } from "@/i18n";
 import { PREVIEW_LIMITS, useWorkspace } from "@/stores/workspace-store";
 
 /** Panes side by side, then the preview column. */
 export function Workspace() {
+  const { t } = useT();
   const dual = useWorkspace((s) => s.dualPane);
   const split = useWorkspace((s) => s.split);
   const preview = useWorkspace((s) => s.preview);
@@ -28,7 +30,7 @@ export function Workspace() {
         {dual && (
           <>
             <Splitter
-              label="Resize panes"
+              label={t("Resize panes")}
               value={split * 100}
               onDrag={onSplitDrag}
               onReset={() => useWorkspace.getState().setSplit(0.5)}
@@ -40,7 +42,7 @@ export function Workspace() {
       {preview.visible && (
         <>
           <Splitter
-            label="Resize preview"
+            label={t("Resize preview")}
             value={(preview.width / PREVIEW_LIMITS.max) * 100}
             onDrag={onPreviewDrag}
             onReset={() => useWorkspace.getState().setPreview({ width: PREVIEW_LIMITS.default })}

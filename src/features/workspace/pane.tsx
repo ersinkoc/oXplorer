@@ -4,6 +4,7 @@ import { FileView } from "@/features/file-view/file-view";
 import { SearchHeader } from "@/features/search/search-header";
 import { StatusBar } from "@/features/status/status-bar";
 import { TabBar } from "@/features/workspace/tab-bar";
+import { useT } from "@/i18n";
 import { isSearchPath } from "@/lib/search-path";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { recordVisit } from "@/stores/recents-store";
@@ -11,6 +12,7 @@ import { type PaneId, useActiveTab, useWorkspace } from "@/stores/workspace-stor
 
 /** One side of the workspace: its tabs, the active tab's folder and a status bar. */
 export function Pane({ pane, style }: { pane: PaneId; style?: React.CSSProperties }) {
+  const { t } = useT();
   const path = useActiveTab(pane).path;
   const dual = useWorkspace((s) => s.dualPane);
   const tabCount = useWorkspace((s) => s.panes[pane].tabs.length);
@@ -31,7 +33,7 @@ export function Pane({ pane, style }: { pane: PaneId; style?: React.CSSPropertie
 
   return (
     <section
-      aria-label={pane === "left" ? "Left pane" : "Right pane"}
+      aria-label={pane === "left" ? t("Left pane") : t("Right pane")}
       data-pane={pane}
       onMouseDownCapture={activate}
       onFocusCapture={activate}

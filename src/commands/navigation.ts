@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { commands } from "@/bindings";
+import { t } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { normalizeUserInput, parent } from "@/lib/path";
@@ -60,7 +61,7 @@ export function currentFolder(pane?: PaneId): string {
 export function writableFolder(pane?: PaneId): string | null {
   const { path } = getActiveTab(pane);
   if (!isSearchPath(path)) return path;
-  toast("Search results aren’t a folder. Open a folder to add items to it.");
+  toast(t("Search results aren’t a folder. Open a folder to add items to it."));
   return null;
 }
 
@@ -83,7 +84,7 @@ export async function openEntries(entries: readonly FileEntry[]): Promise<void> 
     try {
       await unwrap(commands.openPath(e.path));
     } catch (err) {
-      toast.error(err instanceof CommandError ? err.message : `Couldn’t open “${e.name}”.`);
+      toast.error(err instanceof CommandError ? err.message : t("Couldn’t open “{name}”.", { name: e.name }));
     }
   }
 }
@@ -108,7 +109,7 @@ export async function openExternalPaths(paths: readonly string[]): Promise<void>
 export async function goToTypedPath(input: string): Promise<boolean> {
   const path = normalizeUserInput(input, useApp.getState().home);
   if (!path) {
-    toast.error("Enter an absolute path, or one starting with ~.");
+    toast.error(t("Enter an absolute path, or one starting with ~."));
     return false;
   }
   try {
@@ -118,7 +119,11 @@ export async function goToTypedPath(input: string): Promise<boolean> {
     return true;
   } catch (err) {
     const e = toAppError(err);
-    toast.error(e.kind === "notFound" ? `The folder “${path}” can’t be found.` : new CommandError(e).message);
+    toast.error(
+      e.kind === "notFound"
+        ? t("The folder “{path}” can’t be found.", { path })
+        : new CommandError(e).message,
+    );
     return false;
   }
 }

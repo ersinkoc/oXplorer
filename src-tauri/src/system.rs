@@ -251,6 +251,16 @@ mod tests {
     }
 }
 
+/// The app's log file (for "Show Log File" / bug reports); the folder if there's no file yet.
+#[tauri::command]
+#[specta::specta]
+pub fn log_file(app: AppHandle) -> AppResult<String> {
+    use tauri::Manager as _;
+    let dir = app.path().app_log_dir().map_err(|e| AppError::Io { path: None, message: e.to_string() })?;
+    let file = dir.join(format!("{}.log", app.package_info().name));
+    Ok(if file.exists() { file } else { dir }.to_string_lossy().into_owned())
+}
+
 /// Finder's sidebar tags, for the sidebar's Tags section.
 #[tauri::command]
 #[specta::specta]

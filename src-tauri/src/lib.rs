@@ -47,8 +47,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             search::search_start,
             search::search_cancel,
             system::favorite_tags,
+            system::log_file,
             menu::menu_items,
             menu::set_shortcuts,
+            menu::set_menu_titles,
             menu::open_settings,
             system::home_dir,
             system::launch_dir,
@@ -82,8 +84,20 @@ pub fn export_bindings(builder: &tauri_specta::Builder<tauri::Wry>, path: &str) 
         .expect("failed to export typescript bindings");
 }
 
+/// Panics end up in the log file (release builds abort right after), so a
+/// "Report a Problem" can include what happened.
+fn log_panics() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log::error!("panic: {info}\n{}", std::backtrace::Backtrace::force_capture());
+        log::logger().flush();
+        default(info);
+    }));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    log_panics();
     let builder = specta_builder();
 
     #[cfg(debug_assertions)]
@@ -110,12 +124,13 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(builder.invoke_handler())
         .menu(menu::build)
         .on_menu_event(|app, event| menu::forward_event(app, event.id().as_ref()))
         .register_asynchronous_uri_scheme_protocol(uri_scheme::SCHEME, uri_scheme::handle)
         .manage(system::OpenRequests::default())
-        .manage(menu::Shortcuts::default())
+        .manage(menu::MenuConfig::default())
         .setup(move |app| {
             builder.mount_events(app);
             if let Some(window) = app.get_webview_window("main") {

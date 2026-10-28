@@ -5,7 +5,8 @@ import { Keyboard, Palette, Settings2, SquareTerminal, Wrench } from "lucide-rea
 import { useEffect, useState } from "react";
 import { events } from "@/bindings";
 import { ShortcutsSection } from "@/features/settings/shortcuts-section";
-import { applyTheme } from "@/features/settings/use-preference-effects";
+import { applyLanguage, applyTheme } from "@/features/settings/use-preference-effects";
+import { msg, useT } from "@/i18n";
 import { copyText, cutText, focusedTextField, pasteText, undoText } from "@/lib/text-edit";
 import { DEFAULT_PREFERENCES, type Preferences } from "@/stores/app-store";
 
@@ -31,11 +32,11 @@ export function usePref<K extends keyof Preferences>(key: K): [Preferences[K], (
 }
 
 const SECTIONS = [
-  { id: "general", label: "General", icon: Settings2 },
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "terminal", label: "Terminal", icon: SquareTerminal },
-  { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
-  { id: "advanced", label: "Advanced", icon: Wrench },
+  { id: "general", label: msg("General"), icon: Settings2 },
+  { id: "appearance", label: msg("Appearance"), icon: Palette },
+  { id: "terminal", label: msg("Terminal"), icon: SquareTerminal },
+  { id: "shortcuts", label: msg("Shortcuts"), icon: Keyboard },
+  { id: "advanced", label: msg("Advanced"), icon: Wrench },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -73,15 +74,18 @@ function useOwnMenuItems(): void {
 }
 
 export function SettingsApp() {
+  const { t } = useT();
   const [section, setSection] = useState<SectionId>("general");
   const [theme] = usePref("theme");
+  const [languagePref] = usePref("languagePref");
   useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => void applyLanguage(languagePref), [languagePref]);
   useOwnMenuItems();
 
   return (
     <div className="flex h-full bg-bg text-[13px]">
       <nav
-        aria-label="Settings sections"
+        aria-label={t("Settings sections")}
         className="flex w-[170px] shrink-0 flex-col gap-px border-r border-border bg-bg-alt p-2"
       >
         {SECTIONS.map((s) => (
@@ -95,7 +99,7 @@ export function SettingsApp() {
             }`}
           >
             <s.icon className="size-4 text-accent" strokeWidth={1.75} />
-            {s.label}
+            {t(s.label)}
           </button>
         ))}
       </nav>
@@ -175,25 +179,26 @@ function GeneralSection() {
   const [newTab, setNewTab] = usePref("newTabLocation");
   const [restore, setRestore] = usePref("restoreSession");
   const [hidden, setHidden] = usePref("showHidden");
+  const { t } = useT();
   return (
     <section>
-      <h1 className="m-0 mb-2 text-[17px] font-semibold">General</h1>
-      <Row label="New tabs open" hint="Where ⌘T starts.">
+      <h1 className="m-0 mb-2 text-[17px] font-semibold">{t("General")}</h1>
+      <Row label={t("New tabs open")} hint={t("Where ⌘T starts.")}>
         <Choice
-          label="New tabs open"
+          label={t("New tabs open")}
           value={newTab}
           onChange={setNewTab}
           options={[
-            ["current", "The current folder"],
-            ["home", "Home"],
+            ["current", t("The current folder")],
+            ["home", t("Home")],
           ]}
         />
       </Row>
-      <Row label="Restore tabs and layout at launch">
-        <Toggle label="Restore tabs and layout at launch" value={restore} onChange={setRestore} />
+      <Row label={t("Restore tabs and layout at launch")}>
+        <Toggle label={t("Restore tabs and layout at launch")} value={restore} onChange={setRestore} />
       </Row>
-      <Row label="Show hidden files" hint="Also ⇧⌘. in any folder.">
-        <Toggle label="Show hidden files" value={hidden} onChange={setHidden} />
+      <Row label={t("Show hidden files")} hint={t("Also ⇧⌘. in any folder.")}>
+        <Toggle label={t("Show hidden files")} value={hidden} onChange={setHidden} />
       </Row>
     </section>
   );
@@ -201,18 +206,36 @@ function GeneralSection() {
 
 function AppearanceSection() {
   const [theme, setTheme] = usePref("theme");
+  const [language, setLanguage] = usePref("languagePref");
+  const { t } = useT();
   return (
     <section>
-      <h1 className="m-0 mb-2 text-[17px] font-semibold">Appearance</h1>
-      <Row label="Appearance" hint="System follows macOS light and dark mode.">
+      <h1 className="m-0 mb-2 text-[17px] font-semibold">{t("Appearance")}</h1>
+      <Row label={t("Appearance")} hint={t("System follows macOS light and dark mode.")}>
         <Choice
-          label="Appearance"
+          label={t("Appearance")}
           value={theme}
           onChange={setTheme}
           options={[
-            ["system", "System"],
-            ["light", "Light"],
-            ["dark", "Dark"],
+            ["system", t("System")],
+            ["light", t("Light")],
+            ["dark", t("Dark")],
+          ]}
+        />
+      </Row>
+      <Row
+        label={t("Language")}
+        hint={t("System uses Turkish when macOS is set to Turkish, otherwise English.")}
+      >
+        <Choice
+          label={t("Language")}
+          value={language}
+          onChange={setLanguage}
+          options={[
+            ["system", t("System")],
+            // Language names are shown in their own language.
+            ["en", "English"],
+            ["tr", "Türkçe"],
           ]}
         />
       </Row>
@@ -223,13 +246,14 @@ function AppearanceSection() {
 function TerminalSection() {
   const [size, setSize] = usePref("terminalFontSize");
   const [startIn, setStartIn] = usePref("terminalStartIn");
+  const { t } = useT();
   return (
     <section>
-      <h1 className="m-0 mb-2 text-[17px] font-semibold">Terminal</h1>
-      <Row label="Font size">
+      <h1 className="m-0 mb-2 text-[17px] font-semibold">{t("Terminal")}</h1>
+      <Row label={t("Font size")}>
         <input
           type="number"
-          aria-label="Font size"
+          aria-label={t("Font size")}
           min={9}
           max={24}
           value={size}
@@ -237,57 +261,59 @@ function TerminalSection() {
           className="h-7 w-20 rounded-md border border-border bg-bg px-2"
         />
       </Row>
-      <Row label="New terminals start in">
+      <Row label={t("New terminals start in")}>
         <Choice
-          label="New terminals start in"
+          label={t("New terminals start in")}
           value={startIn}
           onChange={setStartIn}
           options={[
-            ["pane", "The active pane’s folder"],
-            ["home", "Home"],
+            ["pane", t("The active pane’s folder")],
+            ["home", t("Home")],
           ]}
         />
       </Row>
       <p className="mt-3 text-[12px] text-fg-muted">
-        The shell is your login shell ($SHELL) with your usual configuration. In zsh, the pane can follow `cd`
-        (Link button in the terminal bar).
+        {t(
+          "The shell is your login shell ($SHELL) with your usual configuration. In zsh, the pane can follow `cd` (Link button in the terminal bar).",
+        )}
       </p>
     </section>
   );
 }
 
 function AdvancedSection() {
+  const { t } = useT();
   const [done, setDone] = useState<string | null>(null);
   const action = (name: "resetLayout" | "clearRecents", message: string) => {
     void emitTo("main", "settings-action", { action: name }).then(() => setDone(message));
   };
   return (
     <section>
-      <h1 className="m-0 mb-2 text-[17px] font-semibold">Advanced</h1>
+      <h1 className="m-0 mb-2 text-[17px] font-semibold">{t("Advanced")}</h1>
       <Row
-        label="Reset tabs and layout"
-        hint="Closes all tabs and returns to a single pane on your Home folder."
+        label={t("Reset tabs and layout")}
+        hint={t("Closes all tabs and returns to a single pane on your Home folder.")}
       >
         <button
           type="button"
-          onClick={() => action("resetLayout", "Tabs and layout were reset.")}
+          onClick={() => action("resetLayout", msg("Tabs and layout were reset."))}
           className="h-7 rounded-md border border-border bg-bg px-3 hover:bg-hover"
         >
-          Reset
+          {t("Reset")}
         </button>
       </Row>
-      <Row label="Clear recent folders" hint="Used by the command palette (⌘K).">
+      <Row label={t("Clear recent folders")} hint={t("Used by the command palette (⌘K).")}>
         <button
           type="button"
-          onClick={() => action("clearRecents", "Recent folders were cleared.")}
+          onClick={() => action("clearRecents", msg("Recent folders were cleared."))}
           className="h-7 rounded-md border border-border bg-bg px-3 hover:bg-hover"
         >
-          Clear
+          {t("Clear")}
         </button>
       </Row>
       {done && (
         <p role="status" className="mt-3 text-[12px] text-fg-muted">
-          {done}
+          {t(done)}
         </p>
       )}
     </section>

@@ -5,13 +5,17 @@ import { Toaster, toast } from "sonner";
 import { commands, events } from "@/bindings";
 import { registerAppCommands } from "@/commands/app-commands";
 import { registerFileCommands } from "@/commands/file-commands";
+import { registerHelpCommands } from "@/commands/help-commands";
 import { installGlobalKeys } from "@/commands/keymap";
 import { openExternalPaths } from "@/commands/navigation";
 import { listenToMenu } from "@/commands/registry";
 import { registerTabCommands } from "@/commands/tab-commands";
 import { openTerminal, registerTerminalCommands } from "@/commands/terminal-commands";
+import { showWhatsNewAfterUpdate } from "@/features/help/whats-new";
 import { AppShell } from "@/features/layout/app-shell";
 import { installQuickLook } from "@/features/preview/quick-look";
+import { applyLanguage } from "@/features/settings/use-preference-effects";
+import { t } from "@/i18n";
 import { unwrap } from "@/lib/ipc";
 import { loadPreferences, useApp, watchPreferences } from "@/stores/app-store";
 import { clearRecents, loadRecents } from "@/stores/recents-store";
@@ -22,6 +26,7 @@ registerAppCommands();
 registerFileCommands();
 registerTabCommands();
 registerTerminalCommands();
+registerHelpCommands();
 
 let booted: Promise<void> | null = null;
 /** Idempotent: StrictMode runs effects twice in dev. */
@@ -42,6 +47,8 @@ async function loadInitialState(): Promise<void> {
     loadRecents(),
   ]);
   useApp.getState().set({ ...prefs, home, locations, volumes, fullDiskAccess: fda });
+  // Before the first render, so the UI doesn't flash in English.
+  await applyLanguage(prefs.languagePref ?? "system");
   // Tabs and layout come back as they were; a folder given at launch opens in a new tab.
   useWorkspace.setState(fromSession(prefs.restoreSession === false ? undefined : session, home));
   if (launchDir) openOrActivate(launchDir);
@@ -49,6 +56,7 @@ async function loadInitialState(): Promise<void> {
   // Shells don't survive a restart; an open panel comes back with a fresh one.
   if (prefs.terminalVisible) openTerminal();
   await openPendingRequests();
+  void showWhatsNewAfterUpdate();
   void info(`bootstrap: home=${home} volumes=${volumes.length} fda=${fda} restored=${session !== undefined}`);
   if (import.meta.env.DEV) {
     selfCheckIcons();
@@ -68,10 +76,10 @@ function openOrActivate(path: string): void {
 function handleSettingsAction(action: string): void {
   if (action === "resetLayout") {
     useWorkspace.setState(fromSession(undefined, useApp.getState().home));
-    toast("Tabs and layout were reset.");
+    toast(t("Tabs and layout were reset."));
   } else if (action === "clearRecents") {
     clearRecents();
-    toast("Recent folders were cleared.");
+    toast(t("Recent folders were cleared."));
   }
 }
 
@@ -108,7 +116,10 @@ export function App() {
     bootstrap()
       .catch((err: unknown) => void logError(`bootstrap failed: ${String(err)}`))
       .finally(() => {
-        if (!disposed) setReady(true);
+        if (disposed) return;
+        setReady(true);
+        // Epoch ms, so startup can be measured from outside (time from `open` to this line).
+        requestAnimationFrame(() => void info(`ui ready at ${Date.now()}`));
       });
     return () => {
       disposed = true;

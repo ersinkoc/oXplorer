@@ -8,6 +8,7 @@ import { RenameInput } from "@/features/file-view/rename-input";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
+import { useT } from "@/i18n";
 import { entrySizeLabel, formatDate, kindLabel } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
@@ -20,6 +21,7 @@ const ROW_HEIGHT = 24;
 const LAYOUT = { columns: 1, rowHeight: ROW_HEIGHT };
 
 export function FileList({ pane }: { pane: PaneId }) {
+  const { t } = useT();
   const widths = useApp((s) => s.columnWidths);
   const view = useFileView(pane, 1, (i) => virtualizer.scrollToIndex(i, { align: "auto" }));
   const { tab, dir, entries, selection, scrollRef, focusIndex, renaming } = view;
@@ -52,12 +54,12 @@ export function FileList({ pane }: { pane: PaneId }) {
       <ListHeader
         sort={tab.view.sort}
         onSort={(sort) => useWorkspace.getState().updateView({ sort }, pane)}
-        kindLabel={search ? (search.mode === "content" ? "Match" : "Where") : undefined}
+        kindLabel={search ? (search.mode === "content" ? t("Match") : t("Where")) : undefined}
       />
       <div
         ref={scrollRef}
         role="grid"
-        aria-label="Files"
+        aria-label={t("Files")}
         aria-rowcount={entries.length}
         aria-multiselectable
         aria-activedescendant={focusIndex >= 0 ? rowId(pane, focusIndex) : undefined}
@@ -128,6 +130,8 @@ const Row = memo(function Row({
   onDoubleClick: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
 }) {
+  // Dates and kinds are worded in the UI language.
+  useT();
   return (
     <div
       id={id}

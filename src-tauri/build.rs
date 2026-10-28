@@ -42,7 +42,9 @@ const COMMANDS: &[&str] = &[
     "edit_tags",
     "menu_items",
     "set_shortcuts",
+    "set_menu_titles",
     "open_settings",
+    "log_file",
 ];
 
 fn main() {
