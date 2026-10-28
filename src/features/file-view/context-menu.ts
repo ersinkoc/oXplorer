@@ -5,7 +5,7 @@ import { runCommand } from "@/commands/registry";
 import { t } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
-import { isSearchPath } from "@/lib/search-path";
+import { isSearchPath, isVirtualPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useHistory } from "@/stores/history-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
@@ -76,6 +76,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           ? [
               { text: t("Open in New Tab"), command: "tab.openSelected" },
               { text: t("Open in Other Pane"), command: "pane.openInOther" },
+              ...(isVirtualPath((entries[0] as FileEntry).path)
+                ? []
+                : [{ text: t("Open in New Window"), command: "window.openSelected" }]),
             ]
           : []),
         ...(one && entries[0]?.kind === "package"

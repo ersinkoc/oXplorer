@@ -9,7 +9,7 @@ import { toggleQuickLook } from "@/features/preview/quick-look";
 import { t } from "@/i18n";
 import { compareEntries, differences } from "@/lib/compare";
 import { describeError, toAppError } from "@/lib/ipc";
-import { isSearchPath } from "@/lib/search-path";
+import { isSearchPath, isVirtualPath } from "@/lib/search-path";
 import { filterEntries } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
 import { useCompare } from "@/stores/compare-store";
@@ -82,6 +82,17 @@ export function registerTabCommands(): void {
       run: async () => {
         // Windows start in a real folder; a search or server tab opens its folder (or Home).
         const r = await commands.openWindow(currentFolder());
+        if (r.status === "error") toast.error(describeError(toAppError(r.error)));
+      },
+    },
+    {
+      id: "window.openSelected",
+      title: "Open in New Window",
+      run: async () => {
+        const [first] = selectedEntries();
+        if (!first || !(first.kind === "dir" || first.symlink?.targetIsDir) || isVirtualPath(first.path))
+          return;
+        const r = await commands.openWindow(first.path);
         if (r.status === "error") toast.error(describeError(toAppError(r.error)));
       },
     },
