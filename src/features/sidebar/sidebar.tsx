@@ -9,7 +9,9 @@ import {
   Image,
   type LucideIcon,
   Monitor,
+  Search,
   Server,
+  X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -19,8 +21,9 @@ import { useDrag } from "@/features/dnd/drag-store";
 import { msg, t, useT } from "@/i18n";
 import { TAG_COLORS } from "@/lib/icons";
 import { describeError } from "@/lib/ipc";
-import { remotePath } from "@/lib/remote-path";
-import { searchPath } from "@/lib/search-path";
+import { locationTitle } from "@/lib/location-title";
+import { isRemotePath, remotePath } from "@/lib/remote-path";
+import { isSearchPath, isVirtualPath, searchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, useActiveTab } from "@/stores/workspace-store";
 
@@ -48,6 +51,7 @@ export function Sidebar() {
   const locations = useApp((s) => s.locations);
   const volumes = useApp((s) => s.volumes);
   const connections = useApp((s) => s.connections);
+  const favorites = useApp((s) => s.favorites);
   const current = useActiveTab().path;
   const [tags, setTags] = useState<FinderTag[]>([]);
   useEffect(() => {
@@ -70,6 +74,26 @@ export function Sidebar() {
               onClick={() => navigateTo(l.path)}
             />
           ))}
+          {favorites.map((path) => {
+            const label = locationTitle(path, connections);
+            return (
+              <Item
+                key={path}
+                icon={isSearchPath(path) ? Search : isRemotePath(path) ? Server : Folder}
+                label={label}
+                title={path}
+                active={current === path}
+                dropDir={isVirtualPath(path) ? undefined : path}
+                onClick={() => navigateTo(path)}
+                action={{
+                  label: t("Remove “{name}” from the sidebar", { name: label }),
+                  icon: X,
+                  onHover: true,
+                  run: () => removeFavorite(path),
+                }}
+              />
+            );
+          })}
         </Section>
         <Section title={t("Locations")}>
           {volumes.map((v) => (
@@ -149,6 +173,14 @@ function TagDot({ color }: { color: number }) {
   );
 }
 
+function removeFavorite(path: string): void {
+  const { favorites, setPreference } = useApp.getState();
+  setPreference(
+    "favorites",
+    favorites.filter((p) => p !== path),
+  );
+}
+
 async function eject(volume: VolumeInfo): Promise<void> {
   const home = useApp.getState().home;
   // Don't leave the pane pointing into a volume that's about to disappear.
@@ -173,6 +205,7 @@ function Item({
   icon: Icon,
   leading,
   label,
+  title,
   active,
   dropDir,
   onClick,
@@ -182,10 +215,13 @@ function Item({
   /** Replaces the icon (tag color dots). */
   leading?: ReactNode;
   label: string;
+  /** Tooltip (the full path of a user favorite). */
+  title?: string;
   active: boolean;
   dropDir?: string;
   onClick: () => void;
-  action?: { label: string; icon: LucideIcon; run: () => void };
+  /** `onHover`: only shown while the pointer is over the item. */
+  action?: { label: string; icon: LucideIcon; run: () => void; onHover?: boolean };
 }) {
   const isDropTarget = useDrag((s) => !!dropDir && s.target === dropDir);
   return (
@@ -193,6 +229,7 @@ function Item({
       <button
         type="button"
         data-drop-dir={dropDir}
+        title={title}
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={`flex h-7 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] ${
@@ -208,7 +245,9 @@ function Item({
           title={action.label}
           aria-label={action.label}
           onClick={action.run}
-          className="absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded text-fg-muted hover:bg-hover hover:text-fg"
+          className={`absolute top-1/2 right-1 flex size-5 -translate-y-1/2 items-center justify-center rounded text-fg-muted hover:bg-hover hover:text-fg ${
+            action.onHover ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""
+          }`}
         >
           <action.icon className="size-3.5" />
         </button>

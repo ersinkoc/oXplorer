@@ -136,6 +136,19 @@ export function registerAppCommands(): void {
       },
     },
     {
+      id: "file.addToSidebar",
+      title: "Add to Sidebar",
+      run: () => {
+        // A selected folder, or else the folder (or search) on screen.
+        const [first] = selectedEntries();
+        const path = first?.kind === "dir" ? first.path : getActiveTab().path;
+        const { favorites, setPreference } = useApp.getState();
+        if (favorites.includes(path)) return;
+        setPreference("favorites", [...favorites, path]);
+        toast.success(t("Added to the sidebar"));
+      },
+    },
+    {
       id: "view.calculateSizes",
       title: "Calculate Folder Sizes",
       run: () => {

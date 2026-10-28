@@ -31,6 +31,8 @@ export interface Preferences {
   terminalFontSize: number;
   /** Where new terminals start. */
   terminalStartIn: "pane" | "home";
+  /** Folders, saved searches and server folders the user added to the sidebar. */
+  favorites: string[];
   /** Saved server connections (secrets are in the Keychain, not here). */
   connections: Connection[];
   /** Menu shortcut overrides by command id; null removes the shortcut. */
@@ -80,6 +82,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalFontSize: 12,
   terminalStartIn: "pane",
   shortcuts: {},
+  favorites: [],
   connections: [],
 };
 

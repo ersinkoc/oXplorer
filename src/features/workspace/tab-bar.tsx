@@ -3,11 +3,11 @@ import { Pin, Plus, Search, Server, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { closeTab } from "@/commands/tab-commands";
 import { useT } from "@/i18n";
-import { archiveTitle, parseArchivePath } from "@/lib/archive-path";
+import { parseArchivePath } from "@/lib/archive-path";
 import { pathIconUrl } from "@/lib/icons";
-import { basename } from "@/lib/path";
-import { isRemotePath, remoteTitle } from "@/lib/remote-path";
-import { parseSearchPath, searchTitle } from "@/lib/search-path";
+import { locationTitle } from "@/lib/location-title";
+import { isRemotePath } from "@/lib/remote-path";
+import { parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { otherPane, type PaneId, type TabState, useWorkspace } from "@/stores/workspace-store";
 
@@ -170,15 +170,7 @@ function TabButton({
   const archive = parseArchivePath(tab.path);
   const remote = isRemotePath(tab.path);
   const connections = useApp((s) => s.connections);
-  const name = search
-    ? searchTitle(search)
-    : archive
-      ? archiveTitle(tab.path)
-      : remote
-        ? remoteTitle(tab.path, connections)
-        : tab.path === "/"
-          ? "Macintosh HD"
-          : basename(tab.path);
+  const name = locationTitle(tab.path, connections);
   return (
     <div
       data-tab-id={tab.id}

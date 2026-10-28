@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { globMatcher } from "@/lib/glob";
+import { locationTitle } from "@/lib/location-title";
 import { EMPTY_SELECTION, invert, selectOne, selectWhere } from "@/lib/selection";
 
 describe("globMatcher", () => {
@@ -42,5 +43,14 @@ describe("selection helpers", () => {
     expect([...removed.paths].sort()).toEqual(["/a", "/d"]);
     expect(removed.focus).toBeNull();
     expect(selectWhere(EMPTY_SELECTION, order, () => false, true).paths.size).toBe(0);
+  });
+});
+
+describe("locationTitle", () => {
+  it("names folders, the disk and servers", () => {
+    const conns = [{ id: "c1", name: "NAS" }] as unknown as Parameters<typeof locationTitle>[1];
+    expect(locationTitle("/Users/me/Work", conns)).toBe("Work");
+    expect(locationTitle("/", conns)).toBe("Macintosh HD");
+    expect(locationTitle("remote:c1/", conns)).toBe("NAS");
   });
 });

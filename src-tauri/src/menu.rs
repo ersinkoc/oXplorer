@@ -31,6 +31,7 @@ const FILE: &[Item] = &[
     ("file.rename", "Rename", None),
     ("file.duplicate", "Duplicate", Some("CmdOrCtrl+D")),
     ("file.copyPath", "Copy Path", Some("Alt+CmdOrCtrl+C")),
+    ("file.addToSidebar", "Add to Sidebar", Some("Ctrl+CmdOrCtrl+T")),
     ("file.compress.zip", "Compress", None),
     ("file.extract", "Extract Here", None),
     SEP,

@@ -23,6 +23,7 @@ The first public build of OXplorer.
 
 - Filter a folder (⌘F), search names, contents or Spotlight (⇧⌘F), Finder tags in the sidebar.
 - Command palette (⌘K) with your most used folders.
+- Add folders, searches and server folders to the sidebar (⌃⌘T).
 
 ### Look inside
 
