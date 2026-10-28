@@ -9,7 +9,7 @@ import {
   type UsageNode,
 } from "@/bindings";
 import { runJob } from "@/commands/jobs";
-import { goUp, navigateTo } from "@/commands/navigation";
+import { goHistory, goUp, navigateTo } from "@/commands/navigation";
 import { runCommand } from "@/commands/registry";
 import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
 import { terminalById } from "@/features/terminal/terminal-registry";
@@ -18,7 +18,7 @@ import { MENU_LABELS } from "@/i18n/menu-labels";
 import { archivePath } from "@/lib/archive-path";
 import { highlight } from "@/lib/highlight";
 import { unwrap } from "@/lib/ipc";
-import { join } from "@/lib/path";
+import { join, parent } from "@/lib/path";
 import { remotePath } from "@/lib/remote-path";
 import { searchPath } from "@/lib/search-path";
 import { selectOne } from "@/lib/selection";
@@ -391,6 +391,21 @@ export async function runSelfTest(): Promise<void> {
       "checksum",
       sum.status === "ok" && sum.data === "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       sum.status === "ok" ? sum.data : JSON.stringify(sum.error),
+    );
+
+    const syncRoot = parent(folder.path) ?? "/";
+    // Back / Forward history menu: jump several places at once.
+    useWorkspace.getState().setActivePane("left");
+    navigateTo(nfDir.path, { pane: "left" });
+    navigateTo(folder.path, { pane: "left" });
+    navigateTo(syncRoot, { pane: "left" });
+    goHistory(-2);
+    const jumpedBack = getActiveTab("left").path;
+    goHistory(2);
+    step(
+      "history jump",
+      jumpedBack === nfDir.path && getActiveTab("left").path === syncRoot,
+      `back=${jumpedBack} forward=${getActiveTab("left").path}`,
     );
 
     // Synchronized browsing: the right pane follows the left into "sub" and back up.

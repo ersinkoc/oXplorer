@@ -11,6 +11,7 @@ The first public build of OXplorer.
 - Sort by Name, Kind, Date Modified or Size from the View menu (⌃⌥⌘1 / 2 / 5 / 7), in every view; Keep Folders on Top can be turned off.
 - Tabs in each pane, dual pane (⌘U), and your tabs and layout come back at launch.
 - More windows with New Window (⌘N).
+- Right-click Back or Forward to jump several folders at once.
 
 ### Work with files
 

@@ -65,6 +65,17 @@ export function goForward(): void {
   if (target !== undefined) navigateTo(target, { history: "forward" });
 }
 
+/** Jumps `steps` places back (negative) or forward in the active tab's history. */
+export function goHistory(steps: number): void {
+  const mode = steps < 0 ? "back" : "forward";
+  for (let i = 0; i < Math.abs(steps); i++) {
+    const { history } = getActiveTab();
+    const target = history.stack[history.index + (steps < 0 ? -1 : 1)];
+    if (target === undefined) return;
+    navigateTo(target, { history: mode });
+  }
+}
+
 /** Enclosing folder; the folder we came from stays selected, like Finder. */
 export function goUp(): void {
   const { path } = getActiveTab();

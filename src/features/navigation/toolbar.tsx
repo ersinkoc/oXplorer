@@ -1,3 +1,4 @@
+import { Menu } from "@tauri-apps/api/menu";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,11 +10,34 @@ import {
   PanelRight,
   Search,
 } from "lucide-react";
+import { goHistory } from "@/commands/navigation";
 import { runCommand } from "@/commands/registry";
 import { JobsIndicator } from "@/features/jobs/jobs-indicator";
 import { PathBar } from "@/features/navigation/path-bar";
 import { useT } from "@/i18n";
-import { useActiveTab, useWorkspace } from "@/stores/workspace-store";
+import { locationTitle } from "@/lib/location-title";
+import { useApp } from "@/stores/app-store";
+import { getActiveTab, useActiveTab, useWorkspace } from "@/stores/workspace-store";
+
+/** Right-click on Back / Forward: the places in that direction, nearest first (like Finder). */
+async function showHistoryMenu(direction: -1 | 1): Promise<void> {
+  const { history } = getActiveTab();
+  const { connections } = useApp.getState();
+  const items = [];
+  for (
+    let i = history.index + direction, n = 1;
+    i >= 0 && i < history.stack.length && n <= 20;
+    i += direction, n++
+  ) {
+    const path = history.stack[i];
+    if (path === undefined) break;
+    const steps = n * direction;
+    items.push({ text: locationTitle(path, connections), action: () => goHistory(steps) });
+  }
+  if (items.length === 0) return;
+  const menu = await Menu.new({ items });
+  await menu.popup();
+}
 
 /** Title-bar toolbar. `inset` leaves room for the traffic lights when the sidebar is hidden. */
 export function Toolbar({ inset }: { inset: boolean }) {
@@ -32,10 +56,20 @@ export function Toolbar({ inset }: { inset: boolean }) {
       }`}
     >
       <div className="flex items-center">
-        <ToolButton label={t("Back")} disabled={!canBack} onClick={() => runCommand("nav.back")}>
+        <ToolButton
+          label={t("Back")}
+          disabled={!canBack}
+          onClick={() => runCommand("nav.back")}
+          onContextMenu={() => void showHistoryMenu(-1)}
+        >
           <ChevronLeft className="size-5" />
         </ToolButton>
-        <ToolButton label={t("Forward")} disabled={!canForward} onClick={() => runCommand("nav.forward")}>
+        <ToolButton
+          label={t("Forward")}
+          disabled={!canForward}
+          onClick={() => runCommand("nav.forward")}
+          onContextMenu={() => void showHistoryMenu(1)}
+        >
           <ChevronRight className="size-5" />
         </ToolButton>
         <ToolButton
@@ -107,12 +141,14 @@ function ToolButton({
   disabled,
   pressed,
   onClick,
+  onContextMenu,
   children,
 }: {
   label: string;
   disabled?: boolean;
   pressed?: boolean;
   onClick: () => void;
+  onContextMenu?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -123,6 +159,11 @@ function ToolButton({
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
+      onContextMenu={(e) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        onContextMenu();
+      }}
       className={`flex size-7 items-center justify-center rounded-md enabled:hover:bg-hover enabled:hover:text-fg disabled:opacity-35 ${
         pressed ? "bg-sidebar-active text-fg" : "text-fg-muted"
       }`}
