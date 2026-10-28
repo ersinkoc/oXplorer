@@ -15,6 +15,11 @@ export const commands = {
 	openDir: (path: string, onEvent: Channel<DirEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_dir", { path, onEvent })),
 	/**  Metadata for a single path (follows nothing — the entry itself). */
 	statPath: (path: string) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("stat_path", { path })),
+	/**
+	 *  Folder names in `dir` starting with `prefix` (case-insensitive), for Tab in
+	 *  Go to Folder. Hidden folders only when the prefix starts with a dot.
+	 */
+	completePath: (dir: string, prefix: string) => typedError<string[], AppError_Serialize>(__TAURI_INVOKE("complete_path", { dir, prefix })),
 	/**  Starts (or ref-counts) live updates for `path`; changes arrive as `DirChanged` events. */
 	watchDir: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("watch_dir", { path })),
 	unwatchDir: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("unwatch_dir", { path })),

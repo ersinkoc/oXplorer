@@ -1,6 +1,7 @@
 const COMMANDS: &[&str] = &[
     "open_dir",
     "stat_path",
+    "complete_path",
     "watch_dir",
     "unwatch_dir",
     "start_job",

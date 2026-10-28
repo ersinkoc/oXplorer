@@ -30,6 +30,7 @@ export const tr: Readonly<Record<string, string>> = {
   "Add to Sidebar": "Kenar Çubuğuna Ekle",
   "New Window": "Yeni Pencere",
   "Show Package Contents": "Paket İçeriğini Göster",
+  Folders: "Klasörler",
   "New Folder with Selection": "Seçimle Yeni Klasör",
   "New Folder with Selection ({count} Items)": "Seçimle Yeni Klasör ({count} Öğe)",
   "New Folder With Items": "Öğeleri İçeren Yeni Klasör",

@@ -24,6 +24,7 @@
     "core:webview:allow-internal-toggle-devtools",
     "allow-open-dir",
     "allow-stat-path",
+    "allow-complete-path",
     "allow-watch-dir",
     "allow-unwatch-dir",
     "allow-start-job",

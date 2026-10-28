@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-complete-path"
+description = "Enables the complete_path command without any pre-configured scope."
+commands.allow = ["complete_path"]
+
+[[permission]]
+identifier = "deny-complete-path"
+description = "Denies the complete_path command without any pre-configured scope."
+commands.deny = ["complete_path"]

@@ -385,6 +385,9 @@ export async function runSelfTest(): Promise<void> {
     useApp.getState().set({ syncBrowse: false });
     step("synchronized browsing", followedIn && followedUp, `in=${followedIn} up=${followedUp}`);
 
+    const completed = await unwrap(commands.completePath(folder.path, "SY"));
+    step("path completion", completed.join("|") === "sync a|sync b", completed.join("|"));
+
     await unwrap(commands.openWindow(folder.path));
     const win = await waitForAsync(() => WebviewWindow.getByLabel("window-2"), 5000);
     await sleep(2500);

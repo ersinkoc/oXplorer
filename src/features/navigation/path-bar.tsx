@@ -1,5 +1,6 @@
 import { ChevronRight, HardDrive, Search, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { commands } from "@/bindings";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
 import { useT } from "@/i18n";
 import { archivePath, parseArchivePath } from "@/lib/archive-path";
@@ -85,9 +86,30 @@ export function PathBar({ path }: { path: string }) {
   );
 }
 
+/** Typed text split into the folder to look in and the name being typed (`~` kept as typed). */
+function splitTyped(value: string, home: string): { dir: string; typedDir: string; prefix: string } | null {
+  const slash = value.lastIndexOf("/");
+  if (slash < 0) return null;
+  const typedDir = value.slice(0, slash + 1);
+  const dir = typedDir.startsWith("~") ? home + typedDir.slice(1) : typedDir;
+  if (!dir.startsWith("/")) return null;
+  return { dir: dir.length > 1 ? dir.replace(/\/+$/, "") : dir, typedDir, prefix: value.slice(slash + 1) };
+}
+
+function commonPrefix(names: readonly string[]): string {
+  const [first = ""] = names;
+  let n = first.length;
+  for (const name of names) {
+    while (n > 0 && name.slice(0, n).toLowerCase() !== first.slice(0, n).toLowerCase()) n--;
+  }
+  return first.slice(0, n);
+}
+
 function PathInput({ initial }: { initial: string }) {
   const { t } = useT();
+  const home = useApp((s) => s.home);
   const [value, setValue] = useState(initial);
+  const [suggestions, setSuggestions] = useState<{ typedDir: string; names: string[] } | null>(null);
   const ref = useRef<HTMLInputElement>(null);
   const close = () => useApp.getState().set({ editingPath: false });
 
@@ -95,26 +117,77 @@ function PathInput({ initial }: { initial: string }) {
     ref.current?.select();
   }, []);
 
+  /** Tab: completes a unique folder (adding "/"), or the shared start and lists the choices. */
+  const complete = async () => {
+    const parts = splitTyped(value, home);
+    if (!parts) return;
+    const r = await commands.completePath(parts.dir, parts.prefix);
+    const names = r.status === "ok" ? r.data : [];
+    const [only] = names;
+    if (names.length === 1 && only) {
+      setValue(`${parts.typedDir}${only}/`);
+      setSuggestions(null);
+    } else if (names.length > 1) {
+      const shared = commonPrefix(names);
+      if (shared.length > parts.prefix.length) setValue(parts.typedDir + shared);
+      setSuggestions({ typedDir: parts.typedDir, names });
+    } else setSuggestions(null);
+  };
+
   return (
-    <input
-      ref={ref}
-      aria-label={t("Go to folder")}
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={close}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          close();
-        } else if (e.key === "Enter") {
-          e.preventDefault();
-          void goToTypedPath(value).then((ok) => ok && close());
-        }
-      }}
-      spellCheck={false}
-      autoCorrect="off"
-      autoCapitalize="off"
-      className="h-7 min-w-0 flex-1 rounded-md border border-border bg-bg px-2 font-mono text-[12px] outline-none ring-2 ring-accent/40"
-    />
+    <div className="relative flex min-w-0 flex-1">
+      <input
+        ref={ref}
+        aria-label={t("Go to folder")}
+        aria-autocomplete="list"
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setSuggestions(null);
+        }}
+        onBlur={close}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            if (suggestions) setSuggestions(null);
+            else close();
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            void goToTypedPath(value).then((ok) => ok && close());
+          } else if (e.key === "Tab" && !e.shiftKey) {
+            e.preventDefault();
+            void complete();
+          }
+        }}
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+        className="h-7 min-w-0 flex-1 rounded-md border border-border bg-bg px-2 font-mono text-[12px] outline-none ring-2 ring-accent/40"
+      />
+      {suggestions && (
+        <ul
+          aria-label={t("Folders")}
+          className="absolute top-8 left-0 z-50 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-bg py-1 font-mono text-[12px] shadow-lg"
+        >
+          {suggestions.names.map((name) => (
+            <li key={name}>
+              <button
+                type="button"
+                // Keeps focus in the field (a blur would close it).
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setValue(`${suggestions.typedDir}${name}/`);
+                  setSuggestions(null);
+                  ref.current?.focus();
+                }}
+                className="w-full truncate px-2 py-0.5 text-left hover:bg-hover"
+              >
+                {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

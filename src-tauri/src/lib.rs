@@ -25,6 +25,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         .commands(collect_commands![
             dir::open_dir,
             dir::stat_path,
+            dir::complete_path,
             dir::watch_dir,
             dir::unwatch_dir,
             jobs::start_job,
