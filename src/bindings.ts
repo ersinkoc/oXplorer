@@ -201,7 +201,9 @@ export type BatchRenameOutcome_Serialize = {
 	undo: UndoAction | null,
 };
 
-export type ConflictChoice = "replace" | "skip" | "keepBoth" | "stop";
+export type ConflictChoice = "replace" | "skip" | "keepBoth" | "stop" | 
+/**  Folder onto folder: put the incoming folder's items into the existing one. */
+"merge";
 
 export type ConflictResolution = {
 	choice: ConflictChoice,

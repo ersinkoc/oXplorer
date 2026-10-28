@@ -53,6 +53,8 @@ struct Runner<'a> {
     done_bytes: u64,
     done_items: u32,
     policy: Option<ConflictChoice>,
+    /// "Apply to all" with Merge: later folder clashes merge, file clashes still ask.
+    merge_all: bool,
     log: Vec<Done>,
     removed: Vec<PathBuf>,
     failures: Vec<JobFailure>,
@@ -66,6 +68,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         done_bytes: 0,
         done_items: 0,
         policy: None,
+        merge_all: false,
         log: Vec::new(),
         removed: Vec::new(),
         failures: Vec::new(),
@@ -236,18 +239,33 @@ impl Runner<'_> {
             });
         }
 
-        if dst.symlink_metadata().is_ok() {
+        if let Ok(existing) = dst.symlink_metadata() {
+            let folders = meta.is_dir() && existing.is_dir();
             let choice = match self.policy {
+                _ if folders && self.merge_all => ConflictChoice::Merge,
                 Some(c) => c,
                 None => {
                     let res = self.r.conflict(src, &dst);
                     if res.apply_to_all {
-                        self.policy = Some(res.choice);
+                        if res.choice == ConflictChoice::Merge {
+                            self.merge_all = true;
+                        } else {
+                            self.policy = Some(res.choice);
+                        }
                     }
                     res.choice
                 }
             };
             match choice {
+                ConflictChoice::Merge if folders => return self.merge(src, &dst, mode),
+                // Merge only applies to folders; anything else keeps both.
+                ConflictChoice::Merge => {
+                    dst = names::keep_both(
+                        dst.parent().unwrap_or(Path::new("/")),
+                        &file_name(&dst),
+                        has_extension(src),
+                    );
+                }
                 ConflictChoice::Skip => return Ok(false),
                 ConflictChoice::Stop => {
                     self.stopped = true;
@@ -292,6 +310,32 @@ impl Runner<'_> {
             self.removed.push(src.to_path_buf());
         } else {
             self.log.push(Done::Created(dst));
+        }
+        Ok(true)
+    }
+
+    /// Folder onto an existing folder: each item goes in (clashes inside are asked
+    /// about again); a moved folder that ends up empty is removed.
+    fn merge(&mut self, src: &Path, dst: &Path, mode: Mode) -> Result<bool, JobFailure> {
+        let children: Vec<PathBuf> =
+            fs::read_dir(src).map_err(|e| err(src, &e))?.flatten().map(|e| e.path()).collect();
+        let mut all = true;
+        for child in children {
+            if self.should_stop() {
+                return Ok(false);
+            }
+            match self.transfer_one(&child, dst.join(child.file_name().unwrap_or_default()), mode) {
+                Ok(true) => {}
+                Ok(false) => all = false,
+                Err(f) => {
+                    all = false;
+                    self.failures.push(f);
+                }
+            }
+        }
+        if mode == Mode::Move && all {
+            // Empty now; undo recreates it when moving the items back.
+            let _ = fs::remove_dir(src);
         }
         Ok(true)
     }
@@ -415,6 +459,12 @@ impl Runner<'_> {
                         continue;
                     }
                     let parent = to.parent().unwrap_or(Path::new("/")).to_path_buf();
+                    // A merged folder was removed once empty; bring it back for its items.
+                    if let Err(e) = fs::create_dir_all(&parent) {
+                        self.failures.push(err(&parent, &e));
+                        stranded.push(from);
+                        continue;
+                    }
                     let result = if fsops::same_device(&from, &parent) {
                         fs::rename(&from, &to)
                     } else {
@@ -700,6 +750,41 @@ mod tests {
         let out = run(JobSpec::Undo { action }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
         assert_eq!(out.failures.len(), 1);
         assert_eq!(fs::read(root.join("box/a.txt")).unwrap(), b"old");
+    }
+
+    #[test]
+    fn merge_moves_into_an_existing_folder_and_undoes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir_all(root.join("a/sub")).unwrap();
+        fs::write(root.join("a/x.txt"), b"x").unwrap();
+        fs::write(root.join("a/same.txt"), b"new").unwrap();
+        fs::write(root.join("a/sub/y.txt"), b"y").unwrap();
+        fs::create_dir_all(root.join("dest/a")).unwrap();
+        fs::write(root.join("dest/a/z.txt"), b"z").unwrap();
+        fs::write(root.join("dest/a/same.txt"), b"old").unwrap();
+
+        // Merge for the folder; the file clash inside keeps both.
+        let out = run(
+            JobSpec::Move { sources: vec![s(&root.join("a"))], dest_dir: s(&root.join("dest")) },
+            &mut Fake::new(ConflictChoice::Merge),
+        )
+        .unwrap();
+        assert!(out.failures.is_empty(), "{:?}", out.failures);
+        assert!(!root.join("a").exists(), "the emptied source folder is removed");
+        for (path, body) in [("x.txt", "x"), ("z.txt", "z"), ("same.txt", "old"), ("same 2.txt", "new")] {
+            assert_eq!(fs::read_to_string(root.join("dest/a").join(path)).unwrap(), body, "{path}");
+        }
+        assert_eq!(fs::read_to_string(root.join("dest/a/sub/y.txt")).unwrap(), "y");
+
+        let back =
+            run(JobSpec::Undo { action: out.undo.unwrap() }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
+        assert!(back.failures.is_empty(), "{:?}", back.failures);
+        assert_eq!(fs::read_to_string(root.join("a/same.txt")).unwrap(), "new");
+        assert_eq!(fs::read_to_string(root.join("a/sub/y.txt")).unwrap(), "y");
+        assert_eq!(fs::read_to_string(root.join("dest/a/same.txt")).unwrap(), "old");
+        assert!(!root.join("dest/a/x.txt").exists());
+        assert!(root.join("dest/a/z.txt").exists());
     }
 
     #[test]

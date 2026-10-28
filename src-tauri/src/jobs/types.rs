@@ -84,6 +84,8 @@ pub enum ConflictChoice {
     Skip,
     KeepBoth,
     Stop,
+    /// Folder onto folder: put the incoming folder's items into the existing one.
+    Merge,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, specta::Type)]

@@ -267,6 +267,7 @@ export const tr: Readonly<Record<string, string>> = {
   Stop: "Durdur",
   Skip: "Atla",
   "Keep Both": "İkisini de Sakla",
+  Merge: "Birleştir",
   Replace: "Değiştir",
   "Show progress": "İlerlemeyi göster",
   "{count} operation in progress": "{count} işlem sürüyor",

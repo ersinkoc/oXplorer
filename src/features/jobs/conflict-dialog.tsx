@@ -14,6 +14,8 @@ export function ConflictDialog() {
   const job = useJobs((s) => Object.values(s.jobs).find((j) => j.conflict));
   const [applyToAll, setApplyToAll] = useState(false);
   const conflict = job?.conflict;
+  // Folder onto folder can also merge (Finder offers it with ⌥ held; here it's always shown).
+  const folders = conflict?.source.kind === "dir" && conflict.existing.kind === "dir";
   // The name is set in bold, so the sentence is split around its placeholder.
   const [before = "", after = ""] = (
     job?.label.toLowerCase().startsWith("mov")
@@ -58,6 +60,7 @@ export function ConflictDialog() {
             <div className="flex gap-2">
               <DialogButton onClick={() => answer("skip")}>{t("Skip")}</DialogButton>
               <DialogButton onClick={() => answer("keepBoth")}>{t("Keep Both")}</DialogButton>
+              {folders && <DialogButton onClick={() => answer("merge")}>{t("Merge")}</DialogButton>}
               <DialogButton primary autoFocus onClick={() => answer("replace")}>
                 {t("Replace")}
               </DialogButton>

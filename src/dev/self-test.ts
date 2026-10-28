@@ -8,7 +8,7 @@ import {
   type UsageEvent_Serialize,
   type UsageNode,
 } from "@/bindings";
-import { runJob } from "@/commands/jobs";
+import { resolveConflict, runJob } from "@/commands/jobs";
 import { goHistory, goUp, navigateTo } from "@/commands/navigation";
 import { runCommand } from "@/commands/registry";
 import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
@@ -26,6 +26,7 @@ import { shellQuote } from "@/lib/shell";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { useHistory } from "@/stores/history-store";
+import { useJobs } from "@/stores/jobs-store";
 import { useSearchInfo } from "@/stores/search-store";
 import { useTerminals } from "@/stores/terminal-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
@@ -383,6 +384,30 @@ export async function runSelfTest(): Promise<void> {
       "make alias + undo",
       alias?.kind === "symlink" && alias.symlink?.target === nf1.path && !!unaliased,
       `kind=${alias?.kind} target=${alias?.symlink?.target} undone=${!!unaliased}`,
+    );
+
+    // Folder clash: Merge puts the incoming items into the existing folder.
+    const mergeSrc = await unwrap(commands.createItem(folder.path, "merge src", true));
+    const mergeDest = await unwrap(commands.createItem(folder.path, "merge dest", true));
+    const incoming = await unwrap(commands.createItem(mergeSrc.path, "box", true));
+    await unwrap(commands.createItem(incoming.path, "new.txt", false));
+    const existing = await unwrap(commands.createItem(mergeDest.path, "box", true));
+    await unwrap(commands.createItem(existing.path, "old.txt", false));
+    const merging = runJob({ kind: "copy", sources: [incoming.path], destDir: mergeDest.path });
+    const paused = await waitForAsync(
+      async () => Object.values(useJobs.getState().jobs).find((j) => j.conflict) ?? null,
+      5000,
+    );
+    if (paused) resolveConflict(paused.id, { choice: "merge", applyToAll: false });
+    await merging;
+    const merged = await Promise.all([
+      commands.statPath(join(existing.path, "new.txt")),
+      commands.statPath(join(existing.path, "old.txt")),
+    ]);
+    step(
+      "merge folders",
+      !!paused && merged.every((r) => r.status === "ok"),
+      `paused=${!!paused} ${merged.map((r) => r.status).join(",")}`,
     );
 
     // SHA-256 (Get Info) of an empty file.
