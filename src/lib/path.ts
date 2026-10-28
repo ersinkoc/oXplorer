@@ -52,3 +52,14 @@ export function tildify(path: string, home: string): string {
   if (path === home) return "~";
   return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
 }
+
+/**
+ * Synchronized browsing: where the other pane goes when one pane moves from
+ * `from` to `to` — into the same-named subfolder, or up one level. `null` for
+ * any other jump (the other pane stays).
+ */
+export function mirrorMove(from: string, to: string, other: string): string | null {
+  if (parent(to) === from && to !== from) return join(other, basename(to));
+  if (parent(from) === to) return parent(other);
+  return null;
+}

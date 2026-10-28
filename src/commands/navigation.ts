@@ -5,9 +5,9 @@ import { t } from "@/i18n";
 import { archiveParent, archivePath, isArchiveName, isArchivePath } from "@/lib/archive-path";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
-import { normalizeUserInput, parent } from "@/lib/path";
+import { mirrorMove, normalizeUserInput, parent } from "@/lib/path";
 import { isRemotePath, remoteParent } from "@/lib/remote-path";
-import { isSearchPath, parseSearchPath, realFolder } from "@/lib/search-path";
+import { isSearchPath, isVirtualPath, parseSearchPath, realFolder } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { clearFolderSizes } from "@/stores/folder-size-store";
@@ -18,7 +18,30 @@ export function navigateTo(
   path: string,
   opts: { pane?: PaneId; history?: HistoryMode; select?: string | null } = {},
 ): void {
-  useWorkspace.getState().setPath(path, opts);
+  const ws = useWorkspace.getState();
+  const pane = opts.pane ?? ws.activePane;
+  const from = getActiveTab(pane).path;
+  ws.setPath(path, opts);
+  if (useApp.getState().syncBrowse && ws.dualPane && pane === ws.activePane)
+    followInOtherPane(pane, from, path);
+}
+
+/** Synchronized browsing: the other pane makes the same move when it can. */
+function followInOtherPane(pane: PaneId, from: string, to: string): void {
+  if (isVirtualPath(from) || isVirtualPath(to)) return;
+  const other = pane === "left" ? "right" : "left";
+  const otherPath = getActiveTab(other).path;
+  if (isVirtualPath(otherPath)) return;
+  const target = mirrorMove(from, to, otherPath);
+  if (!target) return;
+  // Into a subfolder only if the other pane has one by that name.
+  const listed = useDirCache.getState().dirs[otherPath]?.entries;
+  if (target !== parent(otherPath) && listed && !listed.some((e) => e.path === target && isFolderLike(e)))
+    return;
+  useWorkspace.getState().setPath(target, {
+    pane: other,
+    select: target === parent(otherPath) ? otherPath : undefined,
+  });
 }
 
 /** Lists `path` unless a listing is already in flight (two panes on one folder). */

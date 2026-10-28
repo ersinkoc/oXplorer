@@ -55,6 +55,7 @@ const WINDOW: &[Item] = &[
     SEP,
     ("pane.switch", "Switch to Other Pane", None),
     ("pane.swap", "Swap Panes", None),
+    ("pane.syncBrowse", "Synchronized Browsing", None),
     SEP,
     ("pane.compare", "Compare Panes", None),
     ("pane.selectDifferences", "Select Differences", None),

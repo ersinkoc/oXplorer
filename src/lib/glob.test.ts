@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { globMatcher } from "@/lib/glob";
 import { locationTitle } from "@/lib/location-title";
+import { mirrorMove } from "@/lib/path";
 import { moveToGap } from "@/lib/reorder";
 import { EMPTY_SELECTION, invert, selectOne, selectWhere } from "@/lib/selection";
 
@@ -63,5 +64,15 @@ describe("moveToGap", () => {
     expect(moveToGap(["a", "b", "c"], 1, 1)).toEqual(["a", "b", "c"]);
     expect(moveToGap(["a", "b", "c"], 1, 2)).toEqual(["a", "b", "c"]);
     expect(moveToGap(["a", "b", "c"], 5, 0)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("mirrorMove", () => {
+  it("follows into subfolders and up", () => {
+    expect(mirrorMove("/a", "/a/src", "/b")).toBe("/b/src");
+    expect(mirrorMove("/", "/Users", "/Volumes/X")).toBe("/Volumes/X/Users");
+    expect(mirrorMove("/a/src", "/a", "/b/src")).toBe("/b");
+    expect(mirrorMove("/a/src", "/a", "/")).toBeNull();
+    expect(mirrorMove("/a", "/c/d", "/b")).toBeNull();
   });
 });

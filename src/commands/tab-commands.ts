@@ -86,6 +86,16 @@ export function registerTabCommands(): void {
       },
     },
     { id: "window.close", title: "Close Window", run: closeWindow },
+    {
+      id: "pane.syncBrowse",
+      title: "Synchronized Browsing",
+      run: () => {
+        const { syncBrowse, set } = useApp.getState();
+        if (!syncBrowse && !useWorkspace.getState().dualPane) useWorkspace.getState().setDualPane(true);
+        set({ syncBrowse: !syncBrowse });
+        toast(syncBrowse ? t("Synchronized browsing is off") : t("Synchronized browsing is on"));
+      },
+    },
     { id: "tab.next", title: "Show Next Tab", run: () => useWorkspace.getState().cycleTab(1) },
     { id: "tab.prev", title: "Show Previous Tab", run: () => useWorkspace.getState().cycleTab(-1) },
     {

@@ -29,6 +29,10 @@ export const tr: Readonly<Record<string, string>> = {
   "Calculate Folder Sizes": "Klasör Boyutlarını Hesapla",
   "Add to Sidebar": "Kenar Çubuğuna Ekle",
   "New Window": "Yeni Pencere",
+  "Synchronized Browsing": "Eşzamanlı Gezinme",
+  "Synchronized browsing is on": "Eşzamanlı gezinme açık",
+  "Synchronized browsing is off": "Eşzamanlı gezinme kapalı",
+  Synced: "Eşzamanlı",
   "Added to the sidebar": "Kenar çubuğuna eklendi",
   "Remove “{name}” from the sidebar": "“{name}” öğesini kenar çubuğundan kaldır",
   "Start the host with ftps:// to use TLS. Plain FTP sends the password unencrypted.":

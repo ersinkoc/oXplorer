@@ -9,7 +9,7 @@ import {
   type UsageNode,
 } from "@/bindings";
 import { runJob } from "@/commands/jobs";
-import { navigateTo } from "@/commands/navigation";
+import { goUp, navigateTo } from "@/commands/navigation";
 import { runCommand } from "@/commands/registry";
 import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
 import { terminalById } from "@/features/terminal/terminal-registry";
@@ -326,6 +326,29 @@ export async function runSelfTest(): Promise<void> {
     await unwrap(commands.quickLookClose());
     await sleep(400);
     step("quick look panel", shown && !(await commands.quickLookVisible()), `shown=${shown}`);
+
+    // Synchronized browsing: the right pane follows the left into "sub" and back up.
+    const syncA = await unwrap(commands.createItem(folder.path, "sync a", true));
+    const syncB = await unwrap(commands.createItem(folder.path, "sync b", true));
+    await unwrap(commands.createItem(syncA.path, "sub", true));
+    await unwrap(commands.createItem(syncB.path, "sub", true));
+    const wsBefore = useWorkspace.getState();
+    wsBefore.setDualPane(true);
+    navigateTo(syncA.path, { pane: "left" });
+    navigateTo(syncB.path, { pane: "right" });
+    void useDirCache.getState().load(syncB.path);
+    await waitFor(
+      () => !!useDirCache.getState().dirs[syncB.path]?.entries.some((e) => e.name === "sub"),
+      3000,
+    );
+    useWorkspace.getState().setActivePane("left");
+    useApp.getState().set({ syncBrowse: true });
+    navigateTo(join(syncA.path, "sub"));
+    const followedIn = getActiveTab("right").path === join(syncB.path, "sub");
+    goUp();
+    const followedUp = getActiveTab("right").path === syncB.path;
+    useApp.getState().set({ syncBrowse: false });
+    step("synchronized browsing", followedIn && followedUp, `in=${followedIn} up=${followedUp}`);
 
     await unwrap(commands.openWindow(folder.path));
     const win = await waitForAsync(() => WebviewWindow.getByLabel("window-2"), 5000);
