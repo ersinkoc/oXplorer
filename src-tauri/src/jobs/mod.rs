@@ -8,7 +8,7 @@ mod rename;
 mod run;
 mod types;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -39,7 +39,12 @@ struct Handle {
 #[derive(Default)]
 pub struct JobManager {
     jobs: Mutex<HashMap<String, Handle>>,
+    /// Cancels that arrived before their job registered (the page cancels right after starting).
+    early_cancels: Mutex<HashSet<String>>,
 }
+
+/// Unclaimed early cancels kept at most (ids of jobs that never started).
+const EARLY_CANCELS: usize = 256;
 
 impl JobManager {
     fn register(&self, id: &str) -> AppResult<(Arc<AtomicBool>, ConflictSlot)> {
@@ -47,10 +52,25 @@ impl JobManager {
         if jobs.contains_key(id) {
             return Err(AppError::AlreadyExists { path: format!("job {id}") });
         }
-        let cancel = Arc::new(AtomicBool::new(false));
+        let early = self.early_cancels.lock().unwrap_or_else(PoisonError::into_inner).remove(id);
+        let cancel = Arc::new(AtomicBool::new(early));
         let conflict = Arc::new(Mutex::new(None));
         jobs.insert(id.to_owned(), Handle { cancel: Arc::clone(&cancel), conflict: Arc::clone(&conflict) });
         Ok((cancel, conflict))
+    }
+
+    fn cancel(&self, id: String) {
+        // Checked and remembered under the jobs lock, so `register` can't slip in between.
+        let jobs = self.jobs.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(h) = jobs.get(&id) {
+            h.cancel.store(true, Ordering::Relaxed);
+            return;
+        }
+        let mut early = self.early_cancels.lock().unwrap_or_else(PoisonError::into_inner);
+        if early.len() >= EARLY_CANCELS {
+            early.clear();
+        }
+        early.insert(id);
     }
 
     fn unregister(&self, id: &str) {
@@ -139,9 +159,7 @@ pub fn start_job(
 #[tauri::command]
 #[specta::specta]
 pub fn cancel_job(jobs: State<'_, Arc<JobManager>>, id: String) {
-    if let Some(h) = jobs.jobs.lock().unwrap_or_else(PoisonError::into_inner).get(&id) {
-        h.cancel.store(true, Ordering::Relaxed);
-    }
+    jobs.cancel(id);
 }
 
 #[tauri::command]
@@ -265,6 +283,16 @@ pub async fn make_symlink(target: String, name: String) -> AppResult<FileEntry> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cancel_before_register_still_cancels() {
+        let jobs = JobManager::default();
+        jobs.cancel("early".into());
+        let (cancel, _) = jobs.register("early").unwrap();
+        assert!(cancel.load(Ordering::Relaxed));
+        let (other, _) = jobs.register("other").unwrap();
+        assert!(!other.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn make_symlink_points_at_the_target_and_picks_a_free_name() {
