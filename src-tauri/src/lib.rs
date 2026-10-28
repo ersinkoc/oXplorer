@@ -15,6 +15,7 @@ mod security;
 mod system;
 mod uri_scheme;
 mod usage;
+mod windows;
 
 use tauri::Manager as _;
 use tauri_specta::{collect_commands, collect_events};
@@ -84,6 +85,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             system::reveal_in_finder,
             system::open_full_disk_access_settings,
             system::take_open_requests,
+            windows::open_window,
+            windows::window_start_path,
         ])
         .events(collect_events![
             menu::MenuCommand,
@@ -126,7 +129,7 @@ pub fn run() {
     tauri::Builder::default()
         // Must be registered first so a second launch focuses the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            if let Some(w) = app.get_webview_window("main") {
+            if let Some(w) = windows::primary(app) {
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
@@ -150,6 +153,13 @@ pub fn run() {
         .invoke_handler(builder.invoke_handler())
         .menu(menu::build)
         .on_menu_event(|app, event| menu::forward_event(app, event.id().as_ref()))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event
+                && let Some(ptys) = window.try_state::<std::sync::Arc<pty::PtyManager>>()
+            {
+                ptys.close_window(window.label());
+            }
+        })
         .register_asynchronous_uri_scheme_protocol(uri_scheme::SCHEME, uri_scheme::handle)
         .manage(system::OpenRequests::default())
         .manage(menu::MenuConfig::default())

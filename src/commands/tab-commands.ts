@@ -1,12 +1,14 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
+import { commands } from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { transferSpec } from "@/commands/locations";
-import { navigateTo, selectedEntries, writableFolder } from "@/commands/navigation";
+import { currentFolder, navigateTo, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { toggleQuickLook } from "@/features/preview/quick-look";
 import { t } from "@/i18n";
 import { compareEntries, differences } from "@/lib/compare";
+import { describeError, toAppError } from "@/lib/ipc";
 import { isSearchPath } from "@/lib/search-path";
 import { filterEntries } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
@@ -72,6 +74,15 @@ export function registerTabCommands(): void {
         for (const e of selectedEntries()) {
           if (e.kind === "dir" || e.symlink?.targetIsDir) ws.openTab(e.path, { activate: false });
         }
+      },
+    },
+    {
+      id: "window.new",
+      title: "New Window",
+      run: async () => {
+        // Windows start in a real folder; a search or server tab opens its folder (or Home).
+        const r = await commands.openWindow(currentFolder());
+        if (r.status === "error") toast.error(describeError(toAppError(r.error)));
       },
     },
     { id: "window.close", title: "Close Window", run: closeWindow },

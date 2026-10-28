@@ -26,6 +26,8 @@ const COMMANDS: &[&str] = &[
     "reveal_in_finder",
     "open_full_disk_access_settings",
     "take_open_requests",
+    "open_window",
+    "window_start_path",
     "quick_look",
     "quick_look_close",
     "quick_look_visible",

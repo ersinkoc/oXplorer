@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main browser window. No fs/shell plugin access: all disk I/O goes through app commands.",
-  "windows": ["main"],
+  "description": "Browser windows (main and those opened with New Window). No fs/shell plugin access: all disk I/O goes through app commands.",
+  "windows": ["main", "window-*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -49,6 +49,8 @@
     "allow-reveal-in-finder",
     "allow-open-full-disk-access-settings",
     "allow-take-open-requests",
+    "allow-open-window",
+    "allow-window-start-path",
     "allow-quick-look",
     "allow-quick-look-close",
     "allow-quick-look-visible",

@@ -18,6 +18,7 @@ import { installQuickLook } from "@/features/preview/quick-look";
 import { applyLanguage } from "@/features/settings/use-preference-effects";
 import { t } from "@/i18n";
 import { unwrap } from "@/lib/ipc";
+import { isMainWindow } from "@/lib/window";
 import { loadPreferences, useApp, watchPreferences } from "@/stores/app-store";
 import { clearRecents, loadRecents } from "@/stores/recents-store";
 import { autosaveSession, fromSession, loadSession } from "@/stores/session";
@@ -50,6 +51,14 @@ async function loadInitialState(): Promise<void> {
   useApp.getState().set({ ...prefs, home, locations, volumes, fullDiskAccess: fda });
   // Before the first render, so the UI doesn't flash in English.
   await applyLanguage(prefs.languagePref ?? "system");
+  if (!isMainWindow) {
+    // A New Window: one tab on the folder it was opened for.
+    const start = (await commands.windowStartPath()) ?? home;
+    useWorkspace.setState(fromSession(undefined, start));
+    if (prefs.terminalVisible) openTerminal();
+    void info(`bootstrap: new window at ${start}`);
+    return;
+  }
   // Tabs and layout come back as they were; a folder given at launch opens in a new tab.
   useWorkspace.setState(fromSession(prefs.restoreSession === false ? undefined : session, home));
   if (launchDir) openOrActivate(launchDir);

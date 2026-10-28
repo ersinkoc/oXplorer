@@ -308,7 +308,10 @@ pub fn request_open(app: &AppHandle, paths: impl IntoIterator<Item = PathBuf>) {
     {
         q.extend(valid);
     }
-    let _ = crate::model::OpenRequested { count }.emit(app);
+    // Only one window picks the folders up.
+    if let Some(w) = crate::windows::primary(app) {
+        let _ = crate::model::OpenRequested { count }.emit_to(app, w.label());
+    }
 }
 
 #[tauri::command]

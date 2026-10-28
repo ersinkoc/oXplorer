@@ -5,6 +5,8 @@ import { move } from "@/lib/selection";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
 let visible = false;
+/** This window opened the panel (it's shared by all windows). */
+let owner = false;
 
 /** Selected paths of the active pane in on-screen order, and the focused one's index. */
 function currentItems(): { paths: string[]; index: number } {
@@ -21,7 +23,9 @@ export function toggleQuickLook(): void {
     return;
   }
   const { paths, index } = currentItems();
-  if (paths.length > 0) void realPaths(paths).then((real) => commands.quickLook(real, index, true));
+  if (paths.length === 0) return;
+  owner = true;
+  void realPaths(paths).then((real) => commands.quickLook(real, index, true));
 }
 
 /** Items inside an archive or on a server are copied to a temporary folder for Quick Look. */
@@ -35,7 +39,7 @@ async function realPaths(paths: readonly string[]): Promise<string[]> {
  */
 export function installQuickLook(): () => void {
   const unsubscribe = useWorkspace.subscribe((s, prev) => {
-    if (!visible) return;
+    if (!visible || !owner) return;
     const pane = s.activePane;
     if (s.panes[pane] === prev.panes[pane] && pane === prev.activePane) return;
     const { paths, index } = currentItems();
@@ -43,8 +47,10 @@ export function installQuickLook(): () => void {
   });
   const unlistenState = events.quickLookState.listen((e) => {
     visible = e.payload.visible;
+    if (!visible) owner = false;
   });
   const unlistenKey = events.quickLookKey.listen(({ payload }) => {
+    if (!owner) return;
     const { activePane, setSelection } = useWorkspace.getState();
     const { order, columns } = paneLayout(activePane);
     const deltas: Record<string, number> = {

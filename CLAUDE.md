@@ -23,6 +23,7 @@ Tauri 2.12 · React 19 (React Compiler on) · TypeScript 7 · Vite 8 · Tailwind
 - Settings window: `settings.html` → `src/settings-main.tsx`, capability `capabilities/settings.json` (no FS commands). It writes `settings.json`; the main window picks changes up via `watchPreferences()`. Menu commands only run in the focused window (`listenToMenu`).
 - Menu shortcuts: defaults in `src-tauri/src/menu.rs`, user overrides applied with `set_shortcuts` (validated, rebuilds the menu bar).
 - UI text: English in code, wrapped in `t()` / `tn()` (components: `useT()`), constants marked with `msg()`; Turkish in `src/i18n/tr.ts`. `src/i18n/i18n.test.ts` fails on missing/unused keys. Native menu labels go to Rust via `set_menu_titles`. Logs stay English.
+- Windows: `main` keeps the session and handles open requests; File → New Window opens `window-<n>` (`src-tauri/src/windows.rs`, `src/lib/window.ts`), which starts fresh. Terminal shells end with their window.
 - Finder extension: `extensions/finder-sync` (Swift), built by `scripts/build-finder-extension.sh` before bundling and embedded as `Contents/PlugIns/OXplorerFinder.appex`; not part of `tauri dev`.
 - In dev, Vite reloads the page once after new dependencies are installed; the self-test then runs twice — rerun with an empty folder.
 

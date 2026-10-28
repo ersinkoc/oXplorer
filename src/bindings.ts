@@ -137,6 +137,10 @@ export const commands = {
 	revealInFinder: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("reveal_in_finder", { path })),
 	openFullDiskAccessSettings: () => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_full_disk_access_settings")),
 	takeOpenRequests: () => __TAURI_INVOKE<string[]>("take_open_requests"),
+	/**  Opens a new browser window showing `path`. */
+	openWindow: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_window", { path })),
+	/**  The folder a window opened with `open_window` starts in (asked once, by its page). */
+	windowStartPath: () => __TAURI_INVOKE<string | null>("window_start_path"),
 };
 
 /** Events */

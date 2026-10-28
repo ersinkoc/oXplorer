@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Serialize;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager as _, State};
+use tauri::{Manager as _, State};
 
 use crate::error::{AppError, AppResult};
 use crate::security::validate_path;
@@ -28,6 +28,8 @@ pub enum PtyEvent {
 }
 
 struct Session {
+    /// Label of the window the terminal is in; its shells end with it.
+    window: String,
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn Child + Send + Sync>,
@@ -58,6 +60,19 @@ impl PtyManager {
 
     fn remove(&self, id: &str) -> Option<Arc<Mutex<Session>>> {
         self.sessions.lock().ok()?.remove(id)
+    }
+
+    /// Ends the shells of a window that was closed.
+    pub fn close_window(&self, label: &str) {
+        let Ok(mut map) = self.sessions.lock() else { return };
+        map.retain(|_, session| {
+            let Ok(mut s) = session.lock() else { return true };
+            if s.window != label {
+                return true;
+            }
+            let _ = s.child.kill();
+            false
+        });
     }
 }
 
@@ -120,7 +135,7 @@ fn decode_utf8(pending: &mut Vec<u8>) -> String {
 #[tauri::command]
 #[specta::specta]
 pub fn pty_open(
-    app: AppHandle,
+    window: tauri::Window,
     manager: State<'_, Arc<PtyManager>>,
     id: String,
     cwd: String,
@@ -134,13 +149,18 @@ pub fn pty_open(
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("/"));
     let pair = native_pty_system().openpty(size(cols, rows)).map_err(pty_err)?;
-    let base = app.path().app_cache_dir().ok();
+    let base = window.path().app_cache_dir().ok();
     let child = pair.slave.spawn_command(shell_command(&cwd, base.as_deref())).map_err(pty_err)?;
     // The child holds its own copy of the slave side.
     drop(pair.slave);
     let mut reader = pair.master.try_clone_reader().map_err(pty_err)?;
     let writer = pair.master.take_writer().map_err(pty_err)?;
-    let session = Arc::new(Mutex::new(Session { master: pair.master, writer, child }));
+    let session = Arc::new(Mutex::new(Session {
+        window: window.label().to_owned(),
+        master: pair.master,
+        writer,
+        child,
+    }));
     if let Ok(mut map) = manager.sessions.lock() {
         map.insert(id.clone(), Arc::clone(&session));
     }

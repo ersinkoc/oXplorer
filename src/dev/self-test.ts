@@ -327,6 +327,13 @@ export async function runSelfTest(): Promise<void> {
     await sleep(400);
     step("quick look panel", shown && !(await commands.quickLookVisible()), `shown=${shown}`);
 
+    await unwrap(commands.openWindow(folder.path));
+    const win = await waitForAsync(() => WebviewWindow.getByLabel("window-2"), 5000);
+    await sleep(2500);
+    await win?.close();
+    const closed = await waitFor(() => true, 1000).then(() => WebviewWindow.getByLabel("window-2"));
+    step("new window", !!win && !closed);
+
     const gone = await runJob(
       {
         kind: "delete",
