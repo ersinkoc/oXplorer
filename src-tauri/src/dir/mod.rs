@@ -48,13 +48,13 @@ pub async fn stat_path(path: String) -> AppResult<FileEntry> {
 /// Starts (or ref-counts) live updates for `path`; changes arrive as `DirChanged` events.
 #[tauri::command]
 #[specta::specta]
-pub fn watch_dir(watcher: State<'_, DirWatcher>, path: String) -> AppResult<()> {
-    watcher.watch(&validate_path(&path)?)
+pub fn watch_dir(window: tauri::Window, watcher: State<'_, DirWatcher>, path: String) -> AppResult<()> {
+    watcher.watch(&validate_path(&path)?, window.label())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn unwatch_dir(watcher: State<'_, DirWatcher>, path: String) -> AppResult<()> {
-    watcher.unwatch(&validate_path(&path)?);
+pub fn unwatch_dir(window: tauri::Window, watcher: State<'_, DirWatcher>, path: String) -> AppResult<()> {
+    watcher.unwatch(&validate_path(&path)?, window.label());
     Ok(())
 }

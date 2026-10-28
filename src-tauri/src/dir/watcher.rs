@@ -24,7 +24,8 @@ const DEBOUNCE: Duration = Duration::from_millis(80);
 struct Watched {
     /// Path as the frontend asked for it; events are reported against this.
     requested: PathBuf,
-    refs: usize,
+    /// Panes / tabs watching it, counted per window so a closed window lets go.
+    refs: HashMap<String, usize>,
 }
 
 type Registry = Arc<Mutex<HashMap<PathBuf, Watched>>>;
@@ -34,7 +35,8 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Non-recursive, ref-counted directory watching (one pane or tab = one ref).
+/// Non-recursive, ref-counted directory watching (one pane or tab = one ref,
+/// counted per window).
 pub struct DirWatcher {
     debouncer: Mutex<Debouncer<RecommendedWatcher, NoCache>>,
     registry: Registry,
@@ -65,22 +67,25 @@ impl DirWatcher {
         Ok(Self { debouncer: Mutex::new(debouncer), registry })
     }
 
-    pub fn watch(&self, dir: &Path) -> AppResult<()> {
+    pub fn watch(&self, dir: &Path, window: &str) -> AppResult<()> {
         let canonical = fs::canonicalize(dir).map_err(|e| AppError::from_io(&e, dir))?;
         let mut reg = lock(&self.registry);
         if let Some(w) = reg.get_mut(&canonical) {
-            w.refs += 1;
+            *w.refs.entry(window.to_owned()).or_default() += 1;
             return Ok(());
         }
         lock(&self.debouncer).watch(&canonical, RecursiveMode::NonRecursive).map_err(|e| AppError::Io {
             path: Some(dir.to_string_lossy().into_owned()),
             message: e.to_string(),
         })?;
-        reg.insert(canonical, Watched { requested: dir.to_path_buf(), refs: 1 });
+        reg.insert(
+            canonical,
+            Watched { requested: dir.to_path_buf(), refs: HashMap::from([(window.to_owned(), 1)]) },
+        );
         Ok(())
     }
 
-    pub fn unwatch(&self, dir: &Path) {
+    pub fn unwatch(&self, dir: &Path, window: &str) {
         let mut reg = lock(&self.registry);
         // The directory may be gone by now; fall back to matching the requested path.
         let key = fs::canonicalize(dir)
@@ -89,12 +94,34 @@ impl DirWatcher {
             .or_else(|| reg.iter().find(|(_, w)| w.requested == dir).map(|(k, _)| k.clone()));
         let Some(key) = key else { return };
         let Some(w) = reg.get_mut(&key) else { return };
-        w.refs -= 1;
-        if w.refs == 0 {
-            reg.remove(&key);
-            if let Err(e) = lock(&self.debouncer).unwatch(&key) {
-                log::debug!("unwatch {}: {e}", key.display());
+        if let Some(n) = w.refs.get_mut(window) {
+            *n -= 1;
+            if *n == 0 {
+                w.refs.remove(window);
             }
+        }
+        if w.refs.is_empty() {
+            reg.remove(&key);
+            self.stop(&key);
+        }
+    }
+
+    /// Drops everything a closed window was watching.
+    pub fn release_window(&self, window: &str) {
+        let mut reg = lock(&self.registry);
+        reg.retain(|key, w| {
+            w.refs.remove(window);
+            if w.refs.is_empty() {
+                self.stop(key);
+                return false;
+            }
+            true
+        });
+    }
+
+    fn stop(&self, key: &Path) {
+        if let Err(e) = lock(&self.debouncer).unwatch(key) {
+            log::debug!("unwatch {}: {e}", key.display());
         }
     }
 }
@@ -196,7 +223,10 @@ mod tests {
         // Pretend the user navigated via a symlinked spelling of the same directory.
         let requested = PathBuf::from("/requested/spelling");
         let registry: Registry = Arc::default();
-        lock(&registry).insert(canonical.clone(), Watched { requested: requested.clone(), refs: 1 });
+        lock(&registry).insert(
+            canonical.clone(),
+            Watched { requested: requested.clone(), refs: HashMap::from([("main".to_owned(), 1)]) },
+        );
 
         fs::write(canonical.join("new.txt"), "x").unwrap();
         let events = vec![
@@ -221,7 +251,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = fs::canonicalize(tmp.path()).unwrap();
         let registry: Registry = Arc::default();
-        lock(&registry).insert(dir.clone(), Watched { requested: dir.clone(), refs: 1 });
+        lock(&registry).insert(
+            dir.clone(),
+            Watched { requested: dir.clone(), refs: HashMap::from([("main".to_owned(), 1)]) },
+        );
         fs::write(dir.join("a.txt"), "abc").unwrap();
 
         let changes =

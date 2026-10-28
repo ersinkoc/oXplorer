@@ -154,10 +154,13 @@ pub fn run() {
         .menu(menu::build)
         .on_menu_event(|app, event| menu::forward_event(app, event.id().as_ref()))
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event
-                && let Some(ptys) = window.try_state::<std::sync::Arc<pty::PtyManager>>()
-            {
-                ptys.close_window(window.label());
+            if let tauri::WindowEvent::Destroyed = event {
+                if let Some(ptys) = window.try_state::<std::sync::Arc<pty::PtyManager>>() {
+                    ptys.close_window(window.label());
+                }
+                if let Some(watcher) = window.try_state::<dir::DirWatcher>() {
+                    watcher.release_window(window.label());
+                }
             }
         })
         .register_asynchronous_uri_scheme_protocol(uri_scheme::SCHEME, uri_scheme::handle)
