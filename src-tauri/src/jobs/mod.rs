@@ -393,6 +393,40 @@ mod tests {
     }
 
     #[test]
+    fn a_paused_job_waits_in_progress_until_resumed_or_cancelled() {
+        use run::Reporter as _;
+        let jobs = JobManager::default();
+        let (cancel, conflict, paused) = jobs.register("p").unwrap();
+        paused.store(true, Ordering::Relaxed);
+        let mut reporter = ChannelReporter {
+            channel: Channel::new(|_| Ok(())),
+            cancel: Arc::clone(&cancel),
+            conflict,
+            paused: Arc::clone(&paused),
+            last_progress: None,
+        };
+        let worker = std::thread::spawn(move || reporter.progress(1, 1, Path::new("/x")));
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!worker.is_finished(), "paused job kept going");
+        paused.store(false, Ordering::Relaxed);
+        worker.join().unwrap();
+
+        // Cancel also releases a paused job.
+        let (cancel, conflict, paused) = jobs.register("q").unwrap();
+        paused.store(true, Ordering::Relaxed);
+        let mut reporter = ChannelReporter {
+            channel: Channel::new(|_| Ok(())),
+            cancel: Arc::clone(&cancel),
+            conflict,
+            paused,
+            last_progress: None,
+        };
+        let worker = std::thread::spawn(move || reporter.progress(1, 1, Path::new("/x")));
+        jobs.cancel("q".into());
+        worker.join().unwrap();
+    }
+
+    #[test]
     fn a_cancel_before_register_still_cancels() {
         let jobs = JobManager::default();
         jobs.cancel("early".into());
