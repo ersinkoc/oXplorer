@@ -335,7 +335,7 @@ mod bench {
                 }
                 if let crate::model::DirEvent::Batch { entries } = &ev {
                     n += entries.len();
-                    bytes += serde_json::to_vec(&ev).map(|v| v.len()).unwrap_or(0);
+                    bytes += serde_json::to_vec(&ev).map_or(0, |v| v.len());
                 }
                 true
             })

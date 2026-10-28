@@ -278,7 +278,7 @@ mod tests {
     #[test]
     #[ignore = "manual benchmark"]
     fn bench_git() {
-        let dir = std::env::var("OX_BENCH_DIR").map(std::path::PathBuf::from).unwrap_or_else(|_| ".".into());
+        let dir = std::env::var("OX_BENCH_DIR").map_or_else(|_| ".".into(), std::path::PathBuf::from);
         let started = std::time::Instant::now();
         let s = status_of(&dir).unwrap();
         println!("{:?} in {:?}", s.map(|s| (s.branch, s.children.len(), s.partial)), started.elapsed());

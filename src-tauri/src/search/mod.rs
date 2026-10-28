@@ -184,7 +184,7 @@ pub fn run(
             SearchMode::Content => {
                 let matcher = content::matcher(&spec.query, spec.case_sensitive, spec.regex)?;
                 std::thread::spawn(move || {
-                    content::search(&scope, &matcher, spec.include_hidden, &control, &tx)
+                    content::search(&scope, &matcher, spec.include_hidden, &control, &tx);
                 })
             }
             SearchMode::Spotlight | SearchMode::Tag => {

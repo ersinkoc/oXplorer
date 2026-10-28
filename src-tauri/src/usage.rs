@@ -65,8 +65,7 @@ impl Scan {
     /// Allocated size, or 0 for the second and later names of a hard-linked file.
     fn allocated(&self, meta: &fs::Metadata) -> u64 {
         if meta.nlink() > 1 && !meta.is_dir() {
-            let fresh =
-                self.seen_links.lock().map(|mut s| s.insert((meta.dev(), meta.ino()))).unwrap_or(true);
+            let fresh = self.seen_links.lock().map_or(true, |mut s| s.insert((meta.dev(), meta.ino())));
             if !fresh {
                 return 0;
             }
@@ -298,7 +297,7 @@ mod tests {
     #[test]
     #[ignore = "manual benchmark"]
     fn bench_usage() {
-        let dir = std::env::var("OX_BENCH_DIR").map(PathBuf::from).unwrap_or_else(|_| ".".into());
+        let dir = std::env::var("OX_BENCH_DIR").map_or_else(|_| ".".into(), PathBuf::from);
         let t = std::time::Instant::now();
         let tree = scan(&dir, Arc::new(AtomicBool::new(false)), &|_, _| {}).unwrap().unwrap();
         let json = serde_json::to_string(&tree).unwrap().len();

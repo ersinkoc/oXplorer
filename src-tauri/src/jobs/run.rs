@@ -102,7 +102,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Download { sources, dest_dir } => job.download(&sources, &validate_path(&dest_dir)?),
         JobSpec::Upload { sources, dest_dir } => job.upload(&validate_all(&sources)?, &dest_dir),
         JobSpec::ExtractMembers { sources, dest_dir } => {
-            job.extract_members(&sources, &validate_path(&dest_dir)?)?
+            job.extract_members(&sources, &validate_path(&dest_dir)?)?;
         }
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
@@ -134,7 +134,7 @@ fn file_name(p: &Path) -> String {
 
 /// Files and packages keep their extension at the end when renamed; folders don't.
 fn has_extension(p: &Path) -> bool {
-    fs::symlink_metadata(p).map(|m| !m.is_dir() || is_package(p)).unwrap_or(true)
+    fs::symlink_metadata(p).map_or(true, |m| !m.is_dir() || is_package(p))
 }
 
 fn is_package(p: &Path) -> bool {

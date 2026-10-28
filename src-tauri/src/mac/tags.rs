@@ -75,10 +75,10 @@ pub fn favorite_tags() -> Vec<FinderTag> {
     let names: Vec<String> = dirs::home_dir()
         .map(|h| h.join("Library/Preferences/com.apple.finder.plist"))
         .and_then(|p| plist::Value::from_file(p).ok())
-        .and_then(|v| v.into_dictionary())
+        .and_then(plist::Value::into_dictionary)
         .and_then(|mut d| d.remove("FavoriteTagNames"))
-        .and_then(|v| v.into_array())
-        .map(|a| a.into_iter().filter_map(|v| v.into_string()).filter(|s| !s.is_empty()).collect())
+        .and_then(plist::Value::into_array)
+        .map(|a| a.into_iter().filter_map(plist::Value::into_string).filter(|s| !s.is_empty()).collect())
         .unwrap_or_default();
     let names = if names.is_empty() {
         ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"].map(str::to_owned).to_vec()

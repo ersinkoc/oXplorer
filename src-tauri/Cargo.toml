@@ -84,3 +84,16 @@ objc2-quick-look-thumbnailing = "0.3"
 objc2-quick-look-ui = "0.3"
 objc2-uniform-type-identifiers = "0.3"
 security-framework = "3.7"
+
+# A selection of pedantic lints that catch real mistakes without much noise.
+[lints.clippy]
+cast_lossless = "warn"
+explicit_iter_loop = "warn"
+implicit_clone = "warn"
+inefficient_to_string = "warn"
+manual_let_else = "warn"
+map_unwrap_or = "warn"
+redundant_closure_for_method_calls = "warn"
+semicolon_if_nothing_returned = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"

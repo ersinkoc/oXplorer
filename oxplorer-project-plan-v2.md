@@ -632,9 +632,9 @@ All shortcuts are defined in `commands/keymap.ts` and can be changed in the sett
 ### Phase 0 — Foundation, CI and signing (1 week)
 
 - [x] `pnpm create tauri-app` (React + TS), Vite 8, TS 7, Tailwind 4, Biome
-- [ ] shadcn (Base UI) — in Phase 3 together with the first dialogs
+- [x] shadcn (Base UI) — in Phase 3 together with the first dialogs — decided against: the few dialogs use the native `<dialog>` element (focus trap, Esc, inert background) and small local components, menus are native
 - [x] edition 2024, clippy `-D warnings`, rustfmt
-- [ ] clippy pedantic (selected lints)
+- [x] clippy pedantic (selected lints) — `[lints.clippy]` in Cargo.toml (cast_lossless, manual_let_else, map_unwrap_or, …); `needless_pass_by_value` left out since Tauri commands take owned arguments
 - [x] tauri-specta setup: `bindings.ts` generation via `cargo test export_bindings` or in debug builds
 - [x] `AppError` + `security.rs` skeleton
 - [x] GitHub Actions: `ci.yml` (biome, tsc, vitest, cargo clippy/test) + `release.yml` (universal binary, signing, notarize, DMG)
@@ -661,7 +661,7 @@ All shortcuts are defined in `commands/keymap.ts` and can be changed in the sett
 - [x] Native icons + `oxthumb://` URI scheme + memory and disk cache
 - [x] Grid (icon) view, with QuickLook thumbnails (⌘2)
 - [x] Finder tags (reading; streamed in a separate phase after listing)
-- [ ] Tags in the sidebar: moved to Phase 7, since clicking requires a Spotlight search
+- [x] Tags in the sidebar: moved to Phase 7, since clicking requires a Spotlight search — done in Phase 7
 - [x] Volumes mount/unmount tracking (`/Volumes` is watched), eject
 - [x] Dark/light theme + system accent color
 - **DoD:** When `touch`/`rm` is run from the terminal, the list updates in < 300 ms. Icons look the same as in Finder.

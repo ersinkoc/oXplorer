@@ -270,8 +270,8 @@ pub async fn remote_rename(path: String, new_name: String) -> AppResult<String> 
     let (op, inner) = resolve(&path)?;
     let parent = inner.rsplit_once('/').map_or("", |(p, _)| p);
     let to = format!("{}{new_name}", dir_key(parent));
-    let is_dir = op.stat(&inner).await.map(|m| m.is_dir()).unwrap_or(false)
-        || op.stat(&format!("{inner}/")).await.is_ok();
+    let is_dir =
+        op.stat(&inner).await.is_ok_and(|m| m.is_dir()) || op.stat(&format!("{inner}/")).await.is_ok();
     let (from_key, to_key) =
         if is_dir { (format!("{inner}/"), format!("{to}/")) } else { (inner.clone(), to.clone()) };
     op.rename(&from_key, &to_key).await.map_err(|e| remote_err(&path, &e))?;
