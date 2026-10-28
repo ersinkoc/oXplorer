@@ -2,14 +2,18 @@ import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { commands } from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { transferSpec } from "@/commands/locations";
+import { navigateTo } from "@/commands/navigation";
 import { useDrag } from "@/features/dnd/drag-store";
-import { dropDirAt, dropMode, isValidDrop, terminalAt } from "@/features/dnd/drop-target";
+import { dropDirAt, dropMode, isValidDrop, springTargetAt, terminalAt } from "@/features/dnd/drop-target";
 import { pasteInto } from "@/features/terminal/terminal-registry";
 import { isArchivePath } from "@/lib/archive-path";
 import { isRemotePath } from "@/lib/remote-path";
 import { shellArgs } from "@/lib/shell";
+import { getActiveTab } from "@/stores/workspace-store";
 
 const THRESHOLD = 5;
+/** Hovering a folder this long during a drag opens it (Finder's spring-loaded folders). */
+const SPRING_MS = 800;
 
 /**
  * Pointer-driven drag for items inside the window. Leaving the window hands the
@@ -28,8 +32,35 @@ export function beginPotentialDrag(
   let dragging = false;
   let paths: string[] = [];
   let preview: Promise<string | null> = Promise.resolve(null);
+  let spring: { key: string; timer: number } | null = null;
+
+  const stopSpring = () => {
+    if (spring) window.clearTimeout(spring.timer);
+    spring = null;
+  };
+
+  /** Restarts the spring timer whenever the pointer moves to another folder. */
+  const updateSpring = (x: number, y: number) => {
+    const hit = springTargetAt(x, y);
+    const shown = hit && getActiveTab(hit.pane).path;
+    // Not the folder already shown, nor one it's inside (column view shows those too).
+    const springs =
+      hit && shown && hit.dir !== shown && !shown.startsWith(`${hit.dir}/`) && isValidDrop(paths, hit.dir);
+    const key = springs ? `${hit.pane}\n${hit.dir}` : null;
+    if (key === spring?.key) return;
+    stopSpring();
+    if (!hit || !key) return;
+    spring = {
+      key,
+      timer: window.setTimeout(() => {
+        spring = null;
+        navigateTo(hit.dir, { pane: hit.pane });
+      }, SPRING_MS),
+    };
+  };
 
   const cleanup = () => {
+    stopSpring();
     window.removeEventListener("mousemove", onMove, true);
     window.removeEventListener("mouseup", onUp, true);
     window.removeEventListener("keydown", onKey, true);
@@ -59,6 +90,7 @@ export function beginPotentialDrag(
     }
     const dir = dropDirAt(ev.clientX, ev.clientY);
     const target = dir && isValidDrop(paths, dir) ? dir : null;
+    updateSpring(ev.clientX, ev.clientY);
     useDrag.setState({
       active: true,
       count: paths.length,

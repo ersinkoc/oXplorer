@@ -17,6 +17,7 @@ The first public build of OXplorer.
 
 - Copy, move, duplicate, trash and delete with progress, cancel, and undo / redo (⌘Z / ⇧⌘Z).
 - Shared clipboard and drag and drop with Finder; F5 / F6 copy or move to the other pane.
+- Spring-loaded folders: hold a dragged item over a folder to open it.
 - Compress to zip, tar.gz or tar.zst and extract archives.
 - Rename many items at once, edit Finder tags.
 - New Folder with Selection (⌃⌘N), undone in one step.

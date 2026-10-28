@@ -8,6 +8,18 @@ export function dropDirAt(x: number, y: number): string | null {
   return el?.dataset.dropDir ?? null;
 }
 
+/**
+ * Folder a drag hovering at a viewport point would spring open: an item in a
+ * pane's file view (not its background, a tab or the sidebar), with that pane.
+ */
+export function springTargetAt(x: number, y: number): { pane: "left" | "right"; dir: string } | null {
+  const el = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-drop-dir]");
+  const dir = el?.dataset.dropDir;
+  if (!el || !dir || el.closest("[role=tab]")) return null;
+  const pane = el.closest<HTMLElement>("[data-pane]")?.dataset.pane;
+  return pane === "left" || pane === "right" ? { pane, dir } : null;
+}
+
 /** Session id of the terminal under a viewport point, if any. */
 export function terminalAt(x: number, y: number): string | null {
   return (
