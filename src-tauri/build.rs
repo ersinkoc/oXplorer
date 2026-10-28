@@ -10,6 +10,7 @@ const COMMANDS: &[&str] = &[
     "measure",
     "rename_path",
     "create_item",
+    "make_symlink",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",

@@ -99,6 +99,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           command: "file.rename",
         },
         { text: t("Duplicate"), command: "file.duplicate" },
+        { text: t("Make Alias"), command: "file.makeAlias" },
         ...(entries.length > 1
           ? [
               {

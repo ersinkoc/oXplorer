@@ -242,3 +242,47 @@ pub async fn create_item(parent: String, name: String, folder: bool) -> AppResul
     .await
     .map_err(|e| AppError::Io { path: Some(parent), message: e.to_string() })?
 }
+
+/// Make Alias: a symbolic link to `target` next to it, named `name` (or `name 2`, …).
+#[tauri::command]
+#[specta::specta]
+pub async fn make_symlink(target: String, name: String) -> AppResult<FileEntry> {
+    let target_path = validate_path(&target)?;
+    check_name(&name)?;
+    let dir = target_path
+        .parent()
+        .ok_or_else(|| AppError::InvalidPath { path: target.clone(), reason: "no enclosing folder".into() })?
+        .to_path_buf();
+    tauri::async_runtime::spawn_blocking(move || {
+        let link = names::untitled(&dir, &name, false);
+        std::os::unix::fs::symlink(&target_path, &link).map_err(|e| AppError::from_io(&e, &link))?;
+        build_entry_for(&link).ok_or_else(|| AppError::NotFound { path: link.to_string_lossy().into_owned() })
+    })
+    .await
+    .map_err(|e| AppError::Io { path: Some(target), message: e.to_string() })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn make_symlink_points_at_the_target_and_picks_a_free_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("photo.jpg");
+        fs::write(&target, b"x").unwrap();
+        let target_str = target.to_string_lossy().into_owned();
+        let make = || {
+            tauri::async_runtime::block_on(make_symlink(target_str.clone(), "photo.jpg alias".into()))
+                .unwrap()
+        };
+        let first = make();
+        let second = make();
+        assert!(first.path.ends_with("/photo.jpg alias"));
+        assert!(second.path.ends_with("/photo.jpg alias 2"));
+        assert_eq!(fs::read_link(&first.path).unwrap(), target);
+        assert!(
+            tauri::async_runtime::block_on(make_symlink(target_str.clone(), "../escape".into())).is_err()
+        );
+    }
+}

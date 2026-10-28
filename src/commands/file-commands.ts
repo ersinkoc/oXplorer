@@ -110,6 +110,27 @@ async function newFolderWithSelection(): Promise<void> {
   }
 }
 
+/** File → Make Alias (⌃⌘A): a symbolic link next to each selected item, undone in one step. */
+async function makeAliases(): Promise<void> {
+  const sources = paths(selectedEntries());
+  if (sources.length === 0 || refuseArchiveMembers(sources) || refuseRemote(sources)) return;
+  const made: FileEntry[] = [];
+  try {
+    for (const source of sources)
+      made.push(await unwrap(commands.makeSymlink(source, t("{name} alias", { name: basename(source) }))));
+  } catch (err) {
+    report(err, t("Couldn’t make the alias."));
+  }
+  if (made.length === 0) return;
+  applyFsChanges(made, []);
+  recordUndo({
+    label: msg("Make Alias"),
+    steps: made.map((e) => ({ kind: "trash", path: e.path })),
+  });
+  const [first] = made;
+  if (made.length === 1 && first) useWorkspace.getState().setSelection(selectOne(first.path));
+}
+
 /** On a server only folders can be created (files are uploaded). */
 async function createRemoteFolder(dir: string, folder: boolean): Promise<void> {
   if (!folder) {
@@ -345,6 +366,7 @@ export function registerFileCommands(): void {
         else if (sel.length > 1) useApp.getState().set({ batchRename: sel });
       },
     },
+    { id: "file.makeAlias", title: "Make Alias", run: makeAliases },
     {
       id: "file.duplicate",
       title: "Duplicate",

@@ -33,6 +33,7 @@
     "allow-measure",
     "allow-rename-path",
     "allow-create-item",
+    "allow-make-symlink",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-apps-for-path",

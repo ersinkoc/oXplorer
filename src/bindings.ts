@@ -36,6 +36,8 @@ export const commands = {
 	renamePath: (path: string, newName: string) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("rename_path", { path, newName })),
 	/**  Creates `name` (or `name 2`, … if taken) inside `parent`. */
 	createItem: (parent: string, name: string, folder: boolean) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("create_item", { parent, name, folder })),
+	/**  Make Alias: a symbolic link to `target` next to it, named `name` (or `name 2`, …). */
+	makeSymlink: (target: string, name: string) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("make_symlink", { target, name })),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */

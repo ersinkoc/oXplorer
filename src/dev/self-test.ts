@@ -21,9 +21,11 @@ import { unwrap } from "@/lib/ipc";
 import { join } from "@/lib/path";
 import { remotePath } from "@/lib/remote-path";
 import { searchPath } from "@/lib/search-path";
+import { selectOne } from "@/lib/selection";
 import { shellQuote } from "@/lib/shell";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
+import { useHistory } from "@/stores/history-store";
 import { useSearchInfo } from "@/stores/search-store";
 import { useTerminals } from "@/stores/terminal-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
@@ -360,6 +362,27 @@ export async function runSelfTest(): Promise<void> {
       "new folder with selection + undo",
       !!grouped && !!ungrouped,
       `grouped=${!!grouped} undone=${!!ungrouped}`,
+    );
+
+    // Make Alias: a symlink next to the item, gone again after undo.
+    useWorkspace.getState().setSelection(selectOne(nf1.path), "left");
+    runCommand("file.makeAlias");
+    const aliasPath = join(nfDir.path, "one.txt alias");
+    const alias = await waitForAsync(async () => {
+      const r = await commands.statPath(aliasPath);
+      return r.status === "ok" ? r.data : null;
+    }, 5000);
+    // The link exists before the undo step is recorded.
+    await waitFor(() => useHistory.getState().undo.at(-1)?.label === "Make Alias", 3000);
+    runCommand("edit.undo");
+    const unaliased = await waitForAsync(
+      async () => ((await commands.statPath(aliasPath)).status === "error" ? true : null),
+      5000,
+    );
+    step(
+      "make alias + undo",
+      alias?.kind === "symlink" && alias.symlink?.target === nf1.path && !!unaliased,
+      `kind=${alias?.kind} target=${alias?.symlink?.target} undone=${!!unaliased}`,
     );
 
     // Synchronized browsing: the right pane follows the left into "sub" and back up.
