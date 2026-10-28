@@ -91,6 +91,7 @@ const VIEW: &[Item] = &[
     ("view.toggleSidebar", "Toggle Sidebar", Some("Ctrl+CmdOrCtrl+S")),
     ("view.reload", "Reload", Some("CmdOrCtrl+R")),
     ("view.diskUsage", "Disk Usage…", Some("Alt+CmdOrCtrl+D")),
+    ("view.calculateSizes", "Calculate Folder Sizes", Some("Alt+CmdOrCtrl+S")),
 ];
 
 const GO: &[Item] = &[

@@ -10,6 +10,7 @@ import { isRemotePath, remoteParent } from "@/lib/remote-path";
 import { isSearchPath, parseSearchPath, realFolder } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
+import { clearFolderSizes } from "@/stores/folder-size-store";
 import { getActiveTab, type HistoryMode, type PaneId, useWorkspace } from "@/stores/workspace-store";
 
 /** Points the active tab at `path`; the pane showing it loads the listing. */
@@ -63,7 +64,9 @@ export function goUp(): void {
 }
 
 export function reload(): void {
-  void useDirCache.getState().load(getActiveTab().path);
+  const { path } = getActiveTab();
+  clearFolderSizes(path);
+  void useDirCache.getState().load(path);
 }
 
 /** The active tab's real folder (a search's scope), for actions that need one. */

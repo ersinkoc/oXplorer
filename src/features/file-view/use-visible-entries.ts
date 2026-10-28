@@ -3,6 +3,7 @@ import type { FileEntry } from "@/lib/ipc";
 import { filterEntries, sortEntries } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
 import { type DirState, useDirCache } from "@/stores/dir-cache-store";
+import { useFolderSizes } from "@/stores/folder-size-store";
 import { type PaneId, type TabState, useActiveTab } from "@/stores/workspace-store";
 
 export interface VisibleEntries {
@@ -19,10 +20,12 @@ export function useVisibleEntries(pane: PaneId): VisibleEntries {
   const showHidden = useApp((s) => s.showHidden);
   const { filter, sort } = tab.view;
   const raw = dir?.entries;
+  // Measured folder sizes only matter (and only re-sort) when sorting by size.
+  const sizes = useFolderSizes((s) => (sort.field === "size" ? s.sizes : undefined));
 
   const entries = useMemo(
-    () => (raw ? sortEntries(filterEntries(raw, { showHidden, filter }), sort) : []),
-    [raw, showHidden, filter, sort],
+    () => (raw ? sortEntries(filterEntries(raw, { showHidden, filter }), sort, sizes) : []),
+    [raw, showHidden, filter, sort, sizes],
   );
   const order = useMemo(() => entries.map((e) => e.path), [entries]);
   return { tab, dir, entries, order };

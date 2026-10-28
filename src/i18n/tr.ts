@@ -26,6 +26,7 @@ export const tr: Readonly<Record<string, string>> = {
   "Copy Path": "Yolu Kopyala",
   "Select All": "Tümünü Seç",
   "Deselect All": "Seçimi Kaldır",
+  "Calculate Folder Sizes": "Klasör Boyutlarını Hesapla",
   "Invert Selection": "Seçimi Tersine Çevir",
   "Select Matching…": "Eşleşenleri Seç…",
   "Select Matching": "Eşleşenleri seç",

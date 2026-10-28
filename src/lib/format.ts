@@ -8,8 +8,11 @@ export function formatSize(bytes: number): string {
   return prettyBytes(bytes, { locale: true, maximumFractionDigits: 1 });
 }
 
-export function entrySizeLabel(entry: FileEntry): string {
-  return isFolderLike(entry) ? "--" : formatSize(entry.size);
+/** `measured` is a folder's size from Calculate Folder Sizes, still counting while `done` is false. */
+export function entrySizeLabel(entry: FileEntry, measured?: { bytes: number; done: boolean }): string {
+  if (!isFolderLike(entry)) return formatSize(entry.size);
+  if (!measured) return "--";
+  return measured.done ? formatSize(measured.bytes) : `${formatSize(measured.bytes)}…`;
 }
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });

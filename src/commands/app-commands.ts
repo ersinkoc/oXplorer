@@ -16,9 +16,11 @@ import { paneLayout } from "@/features/file-view/visible-order";
 import { focusedTerminal } from "@/features/terminal/terminal-registry";
 import { t, tn } from "@/i18n";
 import { CommandError, describeError, unwrap } from "@/lib/ipc";
-import { isSearchPath, searchPath } from "@/lib/search-path";
+import { isSearchPath, isVirtualPath, searchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION, invert, selectAll } from "@/lib/selection";
 import { useApp } from "@/stores/app-store";
+import { useDirCache } from "@/stores/dir-cache-store";
+import { measureFolders } from "@/stores/folder-size-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
 function isTextInput(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
@@ -131,6 +133,21 @@ export function registerAppCommands(): void {
         const [first] = selectedEntries();
         const folder = first && first.kind === "dir" ? first.path : currentFolder();
         useApp.getState().set({ diskUsagePath: folder });
+      },
+    },
+    {
+      id: "view.calculateSizes",
+      title: "Calculate Folder Sizes",
+      run: () => {
+        // The selected folders, or every folder in view when none is selected.
+        const selected = selectedEntries().filter((e) => e.kind === "dir");
+        const { activePane } = useWorkspace.getState();
+        const visible = new Set(paneLayout(activePane).order);
+        const all = (useDirCache.getState().dirs[getActiveTab(activePane).path]?.entries ?? []).filter(
+          (e) => e.kind === "dir" && visible.has(e.path),
+        );
+        const folders = (selected.length > 0 ? selected : all).filter((e) => !isVirtualPath(e.path));
+        if (folders.length > 0) void measureFolders(folders.map((e) => e.path));
       },
     },
     {

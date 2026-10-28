@@ -20,6 +20,7 @@ import { isRemotePath } from "@/lib/remote-path";
 import { isVirtualPath, parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useCompareMarks } from "@/stores/compare-store";
+import { type FolderSize, useFolderSizes } from "@/stores/folder-size-store";
 import { useGitStates } from "@/stores/git-store";
 import { useSearchInfo } from "@/stores/search-store";
 import { type PaneId, useWorkspace } from "@/stores/workspace-store";
@@ -48,6 +49,7 @@ export function FileList({ pane }: { pane: PaneId }) {
   const matches = useSearchInfo((s) => s.searches[tab.path]?.matches);
   const git = useGitStates(tab.path);
   const compare = useCompareMarks(pane);
+  const sizes = useFolderSizes((s) => s.sizes);
   const detail = (entry: FileEntry): string | undefined => {
     if (!search) return undefined;
     const m = matches?.get(entry.path);
@@ -98,6 +100,7 @@ export function FileList({ pane }: { pane: PaneId }) {
                   detail={detail(entry)}
                   git={git?.get(entry.name)}
                   compare={compare?.get(entry.name)}
+                  measured={sizes[entry.path]}
                   onMouseDown={view.onItemMouseDown}
                   onDoubleClick={view.onItemDoubleClick}
                   onContextMenu={view.onItemContextMenu}
@@ -126,6 +129,7 @@ const Row = memo(function Row({
   detail,
   git,
   compare,
+  measured,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
@@ -135,6 +139,7 @@ const Row = memo(function Row({
   detail?: string;
   git?: GitState;
   compare?: CompareMark;
+  measured?: FolderSize;
   entry: FileEntry;
   index: number;
   top: number;
@@ -178,7 +183,7 @@ const Row = memo(function Row({
         {formatDate(entry.modifiedMs)}
       </div>
       <div role="gridcell" className="file-row-muted truncate px-2.5 text-right text-fg-muted tabular-nums">
-        {entrySizeLabel(entry)}
+        {entrySizeLabel(entry, measured)}
       </div>
       <div role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted" title={detail}>
         {detail ?? kindLabel(entry)}

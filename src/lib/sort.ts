@@ -44,25 +44,33 @@ function keyOf(e: FileEntry): string {
   return k;
 }
 
-function fieldValue(e: FileEntry, folder: boolean, field: SortField): number | string {
+/** Measured folder sizes by path (View → Calculate Folder Sizes). */
+export type KnownSizes = Readonly<Record<string, { bytes: number; done: boolean }>>;
+
+function fieldValue(e: FileEntry, folder: boolean, field: SortField, sizes?: KnownSizes): number | string {
   switch (field) {
     case "name":
       return 0;
     case "modified":
       return e.modifiedMs;
     case "size":
-      return folder ? -1 : e.size;
+      if (!folder) return e.size;
+      return sizes?.[e.path]?.done ? (sizes[e.path]?.bytes ?? -1) : -1;
     case "kind":
       return naturalKey(kindLabel(e));
   }
 }
 
-export function sortEntries(entries: readonly FileEntry[], sort: SortConfig): FileEntry[] {
+export function sortEntries(
+  entries: readonly FileEntry[],
+  sort: SortConfig,
+  sizes?: KnownSizes,
+): FileEntry[] {
   const dir = sort.direction === "asc" ? 1 : -1;
   // Decorate once so the comparator does no per-call work.
   const rows = entries.map((e) => {
     const folder = isFolderLike(e);
-    return { e, folder, value: fieldValue(e, folder, sort.field), key: keyOf(e) };
+    return { e, folder, value: fieldValue(e, folder, sort.field, sizes), key: keyOf(e) };
   });
   rows.sort((a, b) => {
     if (sort.foldersFirst && a.folder !== b.folder) return a.folder ? -1 : 1;

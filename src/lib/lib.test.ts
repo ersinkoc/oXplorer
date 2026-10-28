@@ -69,6 +69,18 @@ describe("sort", () => {
     ).toEqual(["a", "b", "c"]);
   });
 
+  it("sorts folders by their measured size", () => {
+    const list = [entry("x", { kind: "dir" }), entry("y", { kind: "dir" }), entry("z", { kind: "dir" })];
+    const sizes = {
+      "/d/x": { bytes: 5, done: true },
+      "/d/y": { bytes: 9, done: true },
+      "/d/z": { bytes: 99, done: false },
+    };
+    expect(
+      sortEntries(list, { field: "size", direction: "desc", foldersFirst: true }, sizes).map((e) => e.name),
+    ).toEqual(["y", "x", "z"]);
+  });
+
   it("filters hidden, junk and by text", () => {
     const list = [entry(".env"), entry(".DS_Store"), entry("Readme.md"), entry("main.rs")];
     expect(filterEntries(list, { showHidden: false, filter: "" }).map((e) => e.name)).toEqual([
