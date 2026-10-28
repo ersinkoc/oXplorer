@@ -20,6 +20,7 @@ A modern, open-source, dual-pane file manager for macOS — Finder's look and fe
 - **Archives as folders:** double-click a zip or tarball to browse it; open, preview or copy items out without extracting everything.
 - **Disk usage:** a treemap of what takes space under a folder (⌥⌘D), zoomable.
 - **Git:** status badges for changed, new and ignored files, and the current branch in the status bar.
+- **Finder integration:** an "Open in OXplorer" item in Finder's context menu and toolbar (enable it in System Settings → General → Login Items & Extensions → Finder).
 - **Native feel:** native icons and thumbnails, macOS menu bar, sidebar vibrancy, dark mode, system accent color.
 - **Views:** list, icon and column views (⌘1 / ⌘2 / ⌘3), keyboard-first with Finder shortcuts, type-ahead and natural sorting.
 - **Sidebar and status bar:** favorites, mounted volumes with eject, free space, Full Disk Access detection.

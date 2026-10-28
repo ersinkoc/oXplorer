@@ -11,6 +11,8 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+    env:
+      HAS_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -34,6 +36,15 @@ jobs:
       #   APPLE_API_ISSUER / APPLE_API_KEY / APPLE_API_KEY_P8   App Store Connect API key for notarization
       #   TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)                  updater key from `tauri signer generate`;
       #                                                         its public key goes into tauri.conf.json
+      # The Finder extension is built and signed before Tauri bundles (beforeBundleCommand),
+      # so the Developer ID certificate must already be in a keychain at that point.
+      - name: Import signing certificate
+        if: ${{ env.HAS_CERT == 'true' }}
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
       - name: Write App Store Connect key
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}

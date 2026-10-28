@@ -25,3 +25,19 @@ Each release:
 2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`. The Release workflow builds a signed, notarized universal DMG (plus the update archive and `latest.json` when the updater key is set) into a draft release.
 3. Check the draft, publish it.
 4. Update `packaging/homebrew/oxplorer.rb` (`version`, `sha256`) in the tap.
+
+## Finder extension
+
+`scripts/build-finder-extension.sh` (run by `build.beforeBundleCommand`) builds
+`extensions/finder-sync` with `swiftc` and the bundle embeds it as
+`Contents/PlugIns/OXplorerFinder.appex`. It's signed with `APPLE_SIGNING_IDENTITY` when that
+certificate is in the keychain (the Release workflow imports it first), otherwise ad hoc.
+Check a release with:
+
+```bash
+codesign -dv OXplorer.app/Contents/PlugIns/OXplorerFinder.appex   # Authority=Developer ID Application: …
+```
+
+Users turn it on in System Settings → General → Login Items & Extensions → Finder (after
+opening OXplorer once from /Applications).
+
