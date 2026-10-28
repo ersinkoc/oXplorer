@@ -23,7 +23,7 @@ function blank(): Connection {
   };
 }
 
-/** Servers shown in the sidebar: SFTP, WebDAV and S3. Secrets go to the Keychain. */
+/** Servers shown in the sidebar: SFTP, FTP, WebDAV and S3. Secrets go to the Keychain. */
 export function ConnectionsSection({ usePref }: { usePref: UsePref }) {
   const { t } = useT();
   const [connections, setConnections] = usePref("connections");
@@ -146,6 +146,7 @@ function ConnectionForm({
 
   const kinds: [RemoteKind, string][] = [
     ["sftp", "SFTP"],
+    ["ftp", "FTP"],
     ["webdav", "WebDAV"],
     ["s3", "S3"],
   ];
@@ -176,6 +177,15 @@ function ConnectionForm({
           {field("user", t("User"))}
           <p className="m-0 ml-[138px] text-[11px] text-fg-muted">
             {t("Signs in with your SSH keys, agent and ~/.ssh/config, like the ssh command.")}
+          </p>
+        </>
+      )}
+      {c.kind === "ftp" && (
+        <>
+          {field("host", t("Host"), "ftp.example.com")}
+          {field("user", t("User"), "anonymous")}
+          <p className="m-0 ml-[138px] text-[11px] text-fg-muted">
+            {t("Start the host with ftps:// to use TLS. Plain FTP sends the password unencrypted.")}
           </p>
         </>
       )}

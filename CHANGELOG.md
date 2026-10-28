@@ -29,6 +29,15 @@ The first public build of OXplorer.
 - Preview pane (⇧⌘P) with syntax-highlighted code, Markdown, images, audio and video.
 - Quick Look (Space).
 
+### Beyond Finder
+
+- Browse zip and tar archives like folders and copy out of them.
+- Servers in the sidebar: SFTP, FTP / FTPS, WebDAV and S3, passwords in the Keychain.
+- Git status badges and the branch in the status bar.
+- Compare Panes marks what differs between the two folders; Select Differences + F5 syncs.
+- Disk Usage (⌥⌘D): a treemap of what takes space.
+- "Open in OXplorer" in Finder's context menu and toolbar (Finder extension).
+
 ### Terminal
 
 - Your login shell in a panel (⌃`), following the pane's folder in Link mode.

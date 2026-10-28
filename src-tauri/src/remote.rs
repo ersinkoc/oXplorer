@@ -1,4 +1,4 @@
-//! Remote folders (SFTP, WebDAV, S3) through OpenDAL, browsed under
+//! Remote folders (SFTP, FTP, WebDAV, S3) through OpenDAL, browsed under
 //! `remote:<connection id>/<path>`. Connection settings come from the
 //! frontend; passwords and secret keys live only in the macOS Keychain.
 
@@ -22,6 +22,7 @@ const CHUNK: u64 = 4 * 1024 * 1024;
 #[serde(rename_all = "camelCase")]
 pub enum RemoteKind {
     Sftp,
+    Ftp,
     Webdav,
     S3,
 }
@@ -33,9 +34,10 @@ pub struct Connection {
     pub id: String,
     pub name: String,
     pub kind: RemoteKind,
-    /// SFTP: `host` or `host:port`. WebDAV: the server URL. S3: a custom endpoint (empty for AWS).
+    /// SFTP: `host` or `host:port`. FTP: `host[:port]`, or `ftps://…` for TLS.
+    /// WebDAV: the server URL. S3: a custom endpoint (empty for AWS).
     pub host: String,
-    /// SFTP / WebDAV user, or the S3 access key id.
+    /// SFTP / FTP / WebDAV user, or the S3 access key id.
     pub user: String,
     /// Folder on the server shown as the connection's top.
     pub root: String,
@@ -87,6 +89,22 @@ fn build(conn: &Connection, secret: Option<&str>) -> AppResult<Operator> {
             }
             Operator::new(b).map_err(fail)?
         }
+        RemoteKind::Ftp => {
+            // A bare host means plain FTP; `ftps://` is explicit TLS.
+            let endpoint = if conn.host.contains("://") {
+                conn.host.clone()
+            } else {
+                format!("ftp://{}", prefer_ipv4(&conn.host))
+            };
+            let mut b = services::Ftp::default().endpoint(&endpoint).root(root);
+            if !conn.user.is_empty() {
+                b = b.user(&conn.user);
+            }
+            if let Some(s) = secret {
+                b = b.password(s);
+            }
+            Operator::new(b).map_err(fail)?
+        }
         RemoteKind::Webdav => {
             let mut b = services::Webdav::default().endpoint(&conn.host).root(root);
             if !conn.user.is_empty() {
@@ -117,6 +135,19 @@ fn build(conn: &Connection, secret: Option<&str>) -> AppResult<Operator> {
         }
     };
     Ok(op)
+}
+
+/// The FTP client opens data connections with PASV, which fails when the
+/// control connection went over IPv6, so plain FTP connects over IPv4 when the
+/// host has an IPv4 address. (FTPS keeps the name for certificate checks.)
+fn prefer_ipv4(host: &str) -> String {
+    use std::net::ToSocketAddrs as _;
+    let with_port = if host.contains(':') { host.to_owned() } else { format!("{host}:21") };
+    with_port
+        .to_socket_addrs()
+        .ok()
+        .and_then(|mut addrs| addrs.find(std::net::SocketAddr::is_ipv4))
+        .map_or_else(|| host.to_owned(), |a| a.to_string())
 }
 
 /// `remote:<id>/<inner>` → (operator, inner path without leading slash).
@@ -572,6 +603,27 @@ mod tests {
             assert!(!server.path().join("incoming").exists());
             assert!(!server.path().join("README.md").exists());
             assert!(remote_delete(vec!["remote:t1/".into()]).await.is_err());
+        });
+    }
+
+    /// Needs the network: anonymous FTP against a public mirror.
+    #[test]
+    #[ignore = "network"]
+    fn ftp_lists_a_public_server() {
+        tauri::async_runtime::block_on(async {
+            let conn = Connection {
+                id: "ftp1".into(),
+                name: "GNU".into(),
+                kind: RemoteKind::Ftp,
+                host: "ftp.gnu.org".into(),
+                user: "anonymous".into(),
+                root: "/gnu".into(),
+                bucket: String::new(),
+                region: String::new(),
+            };
+            register_test_operator("ftp1", build(&conn, Some("anonymous@")).unwrap());
+            let top = remote_list("remote:ftp1/".into()).await.unwrap();
+            assert!(top.iter().any(|e| e.name == "bash" && e.kind == EntryKind::Dir), "{top:?}");
         });
     }
 

@@ -27,6 +27,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Select All": "Tümünü Seç",
   "Deselect All": "Seçimi Kaldır",
   "Calculate Folder Sizes": "Klasör Boyutlarını Hesapla",
+  "Start the host with ftps:// to use TLS. Plain FTP sends the password unencrypted.":
+    "TLS için sunucuyu ftps:// ile başlatın. Düz FTP parolayı şifrelemeden gönderir.",
   "Invert Selection": "Seçimi Tersine Çevir",
   "Select Matching…": "Eşleşenleri Seç…",
   "Select Matching": "Eşleşenleri seç",

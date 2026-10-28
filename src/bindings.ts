@@ -201,9 +201,12 @@ export type Connection = {
 	id: string,
 	name: string,
 	kind: RemoteKind,
-	/**  SFTP: `host` or `host:port`. WebDAV: the server URL. S3: a custom endpoint (empty for AWS). */
+	/**
+	 *  SFTP: `host` or `host:port`. FTP: `host[:port]`, or `ftps://…` for TLS.
+	 *  WebDAV: the server URL. S3: a custom endpoint (empty for AWS).
+	 */
 	host: string,
-	/**  SFTP / WebDAV user, or the S3 access key id. */
+	/**  SFTP / FTP / WebDAV user, or the S3 access key id. */
 	user: string,
 	/**  Folder on the server shown as the connection's top. */
 	root: string,
@@ -485,7 +488,7 @@ export type QuickLookState = {
 	visible: boolean,
 };
 
-export type RemoteKind = "sftp" | "webdav" | "s3";
+export type RemoteKind = "sftp" | "ftp" | "webdav" | "s3";
 
 export type RenameItem = {
 	path: string,
