@@ -3,7 +3,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { type ArchiveFormat, commands, type FinderTag } from "@/bindings";
 import { applyFsChanges, recordUndo, runJob } from "@/commands/jobs";
-import { currentFolder, selectedEntries, writableFolder } from "@/commands/navigation";
+import { currentFolder, refuseArchiveMembers, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
 import { msg, t } from "@/i18n";
@@ -33,7 +33,7 @@ function sameSet(a: readonly string[], b: readonly string[]): boolean {
 
 async function toPasteboard(cut: boolean): Promise<void> {
   const sel = paths(selectedEntries());
-  if (sel.length === 0) return;
+  if (sel.length === 0 || refuseArchiveMembers(sel)) return;
   try {
     await unwrap(commands.pasteboardWriteFiles(sel));
     useApp.getState().set({ clipboard: { paths: sel, cut } });
@@ -166,7 +166,7 @@ export function isArchive(entry: FileEntry): boolean {
 /** Compresses the selection next to itself (Finder: one item → "name.zip", several → "Archive.zip"). */
 async function compress(format: ArchiveFormat): Promise<void> {
   const sel = paths(selectedEntries());
-  if (sel.length === 0) return;
+  if (sel.length === 0 || refuseArchiveMembers(sel)) return;
   const folders = new Set(sel.map((p) => parent(p)));
   if (folders.size > 1) {
     toast(t("Items from different folders can’t go into one archive."));
@@ -177,6 +177,7 @@ async function compress(format: ArchiveFormat): Promise<void> {
 
 /** Adds a tag to every item, or removes it when they all have it already. */
 export async function toggleTag(entries: readonly FileEntry[], tag: FinderTag): Promise<void> {
+  if (refuseArchiveMembers(paths(entries))) return;
   const all = entries.every((e) => e.tags.some((t) => t.name === tag.name));
   try {
     const updated = await unwrap(commands.editTags(paths(entries), all ? [] : [tag], all ? [tag.name] : []));
@@ -240,6 +241,7 @@ export function registerFileCommands(): void {
       id: "file.rename",
       title: "Rename",
       run: () => {
+        if (refuseArchiveMembers(paths(selectedEntries()))) return;
         const sel = selectedEntries();
         const [only] = sel;
         if (sel.length === 1 && only) useApp.getState().set({ renaming: only.path });
@@ -250,6 +252,7 @@ export function registerFileCommands(): void {
       id: "file.duplicate",
       title: "Duplicate",
       run: async () => {
+        if (refuseArchiveMembers(paths(selectedEntries()))) return;
         const sources = paths(selectedEntries());
         if (sources.length > 0) await runJob({ kind: "duplicate", sources });
       },
@@ -262,6 +265,7 @@ export function registerFileCommands(): void {
         const field = focusedTextField();
         if (field) return deleteToLineStart(field);
         const sel = paths(selectedEntries());
+        if (refuseArchiveMembers(sel)) return;
         if (sel.length > 0) await runJob({ kind: "trash", paths: sel }, { select: false });
       },
     },
@@ -269,6 +273,7 @@ export function registerFileCommands(): void {
       id: "file.delete",
       title: "Delete Immediately…",
       run: async () => {
+        if (refuseArchiveMembers(paths(selectedEntries()))) return;
         const sel = paths(selectedEntries());
         if (sel.length === 0) return;
         const question =

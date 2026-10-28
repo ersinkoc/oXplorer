@@ -72,6 +72,8 @@
     "allow-git-status",
     "allow-disk-usage",
     "allow-disk-usage-cancel",
+    "allow-archive-list",
+    "allow-archive-open-member",
     "updater:default",
     "process:allow-restart"
   ]

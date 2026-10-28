@@ -11,6 +11,7 @@ import {
   type SearchEvent_Deserialize,
   type SearchEvent_Serialize,
 } from "@/bindings";
+import { isArchivePath } from "@/lib/archive-path";
 import { type AppError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
 import { isSearchPath, parseSearchPath } from "@/lib/search-path";
@@ -71,6 +72,19 @@ const loadIds = new Map<string, number>();
 const deferred = new Map<string, DirChanged[]>();
 
 export const useDirCache = create<DirCacheState>()((set, get) => {
+  /** An archive's folder: listed in one go (Rust caches the archive's directory). */
+  const listArchive = async (path: string): Promise<void> => {
+    const id = (loadIds.get(path) ?? 0) + 1;
+    loadIds.set(path, id);
+    if (!get().dirs[path]) patch(path, { status: "loading", entries: [], error: null });
+    try {
+      const entries = await unwrap(commands.archiveList(path));
+      if (loadIds.get(path) === id) patch(path, { status: "ready", entries, error: null });
+    } catch (err) {
+      if (loadIds.get(path) === id) patch(path, { status: "error", error: toAppError(err), entries: [] });
+    }
+  };
+
   /** Streams a search into `dirs[path]` like a folder listing. */
   const runSearch = async (path: string): Promise<void> => {
     get().stop(path);
@@ -136,6 +150,7 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
 
     load: async (path) => {
       if (isSearchPath(path)) return runSearch(path);
+      if (isArchivePath(path)) return listArchive(path);
       const id = (loadIds.get(path) ?? 0) + 1;
       loadIds.set(path, id);
       const current = () => loadIds.get(path) === id;

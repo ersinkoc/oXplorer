@@ -746,7 +746,7 @@ A single-pane, real-time, native-looking, secure file manager. Distributed as a 
 
 - [x] Git status badges (`gix` 0.90): modified, added and ignored files are marked in the list — gix 0.89 (0.90 was 6 days old): M/A/U/R/D/! badges, ignored items dimmed, folders show the strongest state inside, branch in the status bar; refreshed on file changes, after each terminal command and on window focus; 5 s limit for huge repos (11 ms for this repo)
 - Remote file systems: SFTP, S3, WebDAV (`opendal` 0.59) as "connections" in the sidebar
-- Browsing archives like folders (entering a zip)
+- [x] Browsing archives like folders (entering a zip) — zip / tar / tar.gz / tar.zst open as `archive:` folders (implied folders included, listing cached by mtime/size); read-only; members open or Quick Look from a temporary copy and copy out with F5 or drag and drop (an `extractMembers` job with progress and undo)
 - [x] Directory comparison and synchronization (diff between the two panes) — Window → Compare Panes marks items only in one pane, newer, older or same-date-different-size (2 s slack for FAT); Select Differences + F5 syncs one direction
 - [x] Disk usage visualization (treemap / sunburst) — View → Disk Usage (⌥⌘D): parallel scan (allocated bytes, hard links once, one volume, cancellable; 157k files in 0.64 s), squarified treemap with two levels, zoom with breadcrumb, double-click opens the folder
 - Finder Sync / Share extension (requires a Swift helper target)

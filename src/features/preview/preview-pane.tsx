@@ -7,6 +7,7 @@ import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { toggleQuickLook } from "@/features/preview/quick-look";
 import { TextPreview } from "@/features/preview/text-preview";
 import { useT } from "@/i18n";
+import { isArchivePath } from "@/lib/archive-path";
 import { entrySizeLabel, formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
 import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
@@ -52,12 +53,35 @@ export function PreviewPane({ width }: { width: number }) {
       {selected.length > 1 ? (
         <Summary entries={selected} />
       ) : focused ? (
-        <EntryPreview key={focused.path} entry={focused} />
+        isArchivePath(focused.path) && !isFolderLike(focused) ? (
+          <ArchiveMemberPreview key={focused.path} entry={focused} />
+        ) : (
+          <EntryPreview key={focused.path} entry={focused} />
+        )
       ) : (
         <FolderSummary path={tab.path} />
       )}
     </aside>
   );
+}
+
+/** A file inside an archive is previewed from a temporary copy, once the selection rests. */
+function ArchiveMemberPreview({ entry }: { entry: FileEntry }) {
+  const [real, setReal] = useState<FileEntry | null>(null);
+  useEffect(() => {
+    if (isFolderLike(entry)) return;
+    let stale = false;
+    const timer = setTimeout(() => {
+      void commands.archiveOpenMember(entry.path).then((r) => {
+        if (!stale && r.status === "ok") setReal({ ...entry, path: r.data });
+      });
+    }, SETTLE_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [entry]);
+  return <EntryPreview entry={real ?? entry} />;
 }
 
 export function EntryPreview({ entry }: { entry: FileEntry }) {

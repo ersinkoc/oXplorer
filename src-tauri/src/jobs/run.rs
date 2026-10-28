@@ -69,6 +69,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Delete { .. } => "Delete",
         JobSpec::Compress { .. } => "Compress",
         JobSpec::Extract { .. } => "Extract",
+        JobSpec::ExtractMembers { .. } => "Copy",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -98,6 +99,9 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Delete { paths } => job.delete(validate_all(&paths)?),
         JobSpec::Compress { sources, format } => job.compress(validate_all(&sources)?, format)?,
         JobSpec::Extract { archives } => job.extract(validate_all(&archives)?),
+        JobSpec::ExtractMembers { sources, dest_dir } => {
+            job.extract_members(&sources, &validate_path(&dest_dir)?)?
+        }
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
     Ok(job.finish(label))
@@ -470,6 +474,33 @@ impl Runner<'_> {
             self.done_items += 1;
             self.r.progress(self.done_bytes, self.done_items, archive);
         }
+    }
+
+    fn extract_members(&mut self, sources: &[String], dest: &Path) -> Result<(), AppError> {
+        let parsed = sources.iter().map(|s| crate::archive_fs::parse(s)).collect::<Result<Vec<_>, _>>()?;
+        let Some((archive, _)) = parsed.first() else { return Ok(()) };
+        if parsed.iter().any(|(a, _)| a != archive) {
+            return Err(AppError::InvalidPath {
+                path: sources.first().cloned().unwrap_or_default(),
+                reason: "items must come from one archive".into(),
+            });
+        }
+        let inners: Vec<String> = parsed.iter().map(|(_, i)| i.clone()).collect();
+        let total = archive::work_units(archive);
+        self.r.planned(total, u32::try_from(inners.len()).unwrap_or(u32::MAX));
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            archive::extract_members(archive, &inners, dest, &mut |n| {
+                done += n;
+                r.progress(done, 0, archive);
+                !r.cancelled()
+            })
+        };
+        if let Some(created) = self.archive_result(archive, result) {
+            self.log.extend(created.into_iter().map(Done::Created));
+        }
+        Ok(())
     }
 
     fn finish(self, label: String) -> JobOutcome {

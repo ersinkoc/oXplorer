@@ -1,6 +1,7 @@
 import type { SearchMode, SearchSpec } from "@/bindings";
 import { t } from "@/i18n";
-import { basename } from "@/lib/path";
+import { isArchivePath, parseArchivePath } from "@/lib/archive-path";
+import { basename, parent } from "@/lib/path";
 
 /**
  * Search results live in a tab like a folder, under a virtual path that
@@ -38,9 +39,18 @@ export function parseSearchPath(path: string): SearchSpec | null {
   };
 }
 
-/** The real folder behind a tab: the scope of a search, otherwise the path itself. */
+/** Search results and archive contents: shown like folders, but not on disk as such. */
+export function isVirtualPath(path: string): boolean {
+  return isSearchPath(path) || isArchivePath(path);
+}
+
+/** The real folder behind a tab: a search's scope, an archive's folder, or the path itself. */
 export function realFolder(path: string): string {
-  return parseSearchPath(path)?.scope ?? path;
+  const search = parseSearchPath(path);
+  if (search) return search.scope;
+  const archive = parseArchivePath(path);
+  if (archive) return parent(archive.archive) ?? "/";
+  return path;
 }
 
 /** Short title for tabs and the path bar. */

@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import { t } from "@/i18n";
+import { archiveParent, archivePath, isArchiveName, isArchivePath } from "@/lib/archive-path";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { normalizeUserInput, parent } from "@/lib/path";
@@ -44,6 +45,11 @@ export function goUp(): void {
     navigateTo(scope);
     return;
   }
+  const inArchive = archiveParent(path);
+  if (inArchive) {
+    navigateTo(inArchive.path, { select: inArchive.select });
+    return;
+  }
   const up = parent(path);
   if (up) navigateTo(up, { select: path });
 }
@@ -60,9 +66,20 @@ export function currentFolder(pane?: PaneId): string {
 /** New items can't be created in (or pasted into) search results. */
 export function writableFolder(pane?: PaneId): string | null {
   const { path } = getActiveTab(pane);
+  if (isArchivePath(path)) {
+    toast(t("Archives are read-only. Extract the archive to change what’s in it."));
+    return null;
+  }
   if (!isSearchPath(path)) return path;
   toast(t("Search results aren’t a folder. Open a folder to add items to it."));
   return null;
+}
+
+/** Items inside an archive can only be opened and copied out. Returns true (and says so) if any are. */
+export function refuseArchiveMembers(paths: readonly string[]): boolean {
+  if (!paths.some(isArchivePath)) return false;
+  toast(t("Archives are read-only. Copy items out with F5 or by dragging them to a folder."));
+  return true;
 }
 
 /** Entries of the active tab's directory that are currently selected, in listing order. */
@@ -79,10 +96,22 @@ export async function openEntries(entries: readonly FileEntry[]): Promise<void> 
     navigateTo(first.path);
     return;
   }
+  // Archives open like folders (Extract Here unpacks them).
+  if (
+    entries.length === 1 &&
+    first?.kind === "file" &&
+    isArchiveName(first.name) &&
+    !isArchivePath(first.path)
+  ) {
+    navigateTo(archivePath(first.path));
+    return;
+  }
   for (const e of entries) {
     if (isFolderLike(e)) continue;
     try {
-      await unwrap(commands.openPath(e.path));
+      // A file inside an archive is extracted to a temporary folder first.
+      const real = isArchivePath(e.path) ? await unwrap(commands.archiveOpenMember(e.path)) : e.path;
+      await unwrap(commands.openPath(real));
     } catch (err) {
       toast.error(err instanceof CommandError ? err.message : t("Couldn’t open “{name}”.", { name: e.name }));
     }

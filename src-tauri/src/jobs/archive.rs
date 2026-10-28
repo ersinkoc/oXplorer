@@ -275,7 +275,16 @@ fn safe_join(root: &Path, rel: &Path) -> io::Result<PathBuf> {
     Ok(out)
 }
 
-fn unzip(archive: &Path, staging: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<()> {
+/// Maps a member's path inside the archive to where it goes under the staging
+/// folder; `None` skips it.
+type Select<'a> = &'a dyn Fn(&Path) -> Option<PathBuf>;
+
+fn unzip(
+    archive: &Path,
+    staging: &Path,
+    tick: &mut dyn FnMut(u64) -> bool,
+    select: Select,
+) -> io::Result<()> {
     let mut zip = zip::ZipArchive::new(BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(io::Error::other)?;
@@ -284,6 +293,10 @@ fn unzip(archive: &Path, staging: &Path, tick: &mut dyn FnMut(u64) -> bool) -> i
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive"))?;
         // Resource forks and Finder metadata from Archive Utility.
         if rel.starts_with("__MACOSX") || rel.file_name().is_some_and(|n| n == ".DS_Store") {
+            continue;
+        }
+        let Some(rel) = select(&rel) else { continue };
+        if rel.as_os_str().is_empty() {
             continue;
         }
         let out = safe_join(staging, &rel)?;
@@ -329,7 +342,7 @@ fn zip_to_system_time(t: zip::DateTime) -> Option<SystemTime> {
     u64::try_from(secs).ok().map(|s| UNIX_EPOCH + Duration::from_secs(s))
 }
 
-fn untar<R: Read>(reader: R, staging: &Path) -> io::Result<()> {
+fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<()> {
     let mut tar = tar::Archive::new(reader);
     tar.set_preserve_permissions(true);
     tar.set_preserve_mtime(true);
@@ -338,11 +351,41 @@ fn untar<R: Read>(reader: R, staging: &Path) -> io::Result<()> {
     for entry in tar.entries()? {
         let mut entry = entry?;
         entry.set_mask(0o7000);
-        if !entry.unpack_in(staging)? {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive"));
+        let Some(select) = select else {
+            if !entry.unpack_in(staging)? {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive"));
+            }
+            continue;
+        };
+        // Picking members: hard links would point at paths that may not be extracted.
+        if entry.header().entry_type().is_hard_link() {
+            continue;
         }
+        let path = entry.path()?.into_owned();
+        let Some(rel) = select(&normalize_member(&path)?) else { continue };
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+        let out = safe_join(staging, &rel)?;
+        if let Some(parent) = out.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        entry.unpack(&out)?;
     }
     Ok(())
+}
+
+/// A member path without `./`, refusing `..` and absolute paths.
+fn normalize_member(path: &Path) -> io::Result<PathBuf> {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::Normal(p) => out.push(p),
+            Component::CurDir => {}
+            _ => return Err(io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive")),
+        }
+    }
+    Ok(out)
 }
 
 /// Extracts next to the archive like Archive Utility: a single top-level item
@@ -364,13 +407,13 @@ pub fn extract(archive: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<
 
     let result = (|| {
         match kind {
-            Kind::Zip => unzip(archive, &staging, tick)?,
+            Kind::Zip => unzip(archive, &staging, tick, &|p| Some(p.to_path_buf()))?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
-                    Kind::Tar => untar(raw, &staging)?,
-                    Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging)?,
-                    _ => untar(zstd::Decoder::new(raw)?, &staging)?,
+                    Kind::Tar => untar(raw, &staging, None)?,
+                    Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, None)?,
+                    _ => untar(zstd::Decoder::new(raw)?, &staging, None)?,
                 }
             }
         }
@@ -387,6 +430,135 @@ pub fn extract(archive: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<
             fs::rename(&staging, &target)?;
             Ok(target)
         }
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    if stopped { Err(cancelled()) } else { result }
+}
+
+// ---------------------------------------------------------------------------
+// Browsing: listing members and extracting some of them
+
+/// One file, folder or link inside an archive.
+#[derive(Debug, Clone)]
+pub struct Member {
+    /// Path inside the archive, `/`-separated, without a trailing slash.
+    pub path: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub size: u64,
+    pub modified_ms: i64,
+}
+
+pub fn is_archive(path: &Path) -> bool {
+    kind_of(path).is_some()
+}
+
+fn tar_members<R: Read>(reader: R) -> io::Result<Vec<Member>> {
+    let mut tar = tar::Archive::new(reader);
+    let mut out = Vec::new();
+    for entry in tar.entries()? {
+        let entry = entry?;
+        let header = entry.header();
+        let path = normalize_member(&entry.path()?)?;
+        let ty = header.entry_type();
+        out.push(Member {
+            path: path.to_string_lossy().into_owned(),
+            is_dir: ty.is_dir(),
+            is_symlink: ty.is_symlink(),
+            size: header.size().unwrap_or(0),
+            modified_ms: header.mtime().map_or(0, |s| i64::try_from(s).unwrap_or(0) * 1000),
+        });
+    }
+    Ok(out)
+}
+
+/// Everything in the archive (read from the zip directory, or by streaming the tar).
+pub fn members(archive: &Path) -> io::Result<Vec<Member>> {
+    let (kind, _) = kind_of(archive)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a supported archive"))?;
+    let raw = BufReader::new(File::open(archive)?);
+    match kind {
+        Kind::Zip => {
+            let mut zip = zip::ZipArchive::new(raw).map_err(io::Error::other)?;
+            let mut out = Vec::with_capacity(zip.len());
+            for i in 0..zip.len() {
+                let entry = zip.by_index_raw(i).map_err(io::Error::other)?;
+                let Some(path) = entry.enclosed_name() else { continue };
+                out.push(Member {
+                    path: path.to_string_lossy().trim_end_matches('/').to_owned(),
+                    is_dir: entry.is_dir(),
+                    is_symlink: entry.is_symlink(),
+                    size: entry.size(),
+                    modified_ms: entry
+                        .last_modified()
+                        .and_then(zip_to_system_time)
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(0)),
+                });
+            }
+            Ok(out)
+        }
+        Kind::Tar => tar_members(raw),
+        Kind::TarGz => tar_members(flate2::read::GzDecoder::new(raw)),
+        Kind::TarZst => tar_members(zstd::Decoder::new(raw)?),
+    }
+}
+
+/// Extracts the members `inners` (folders with everything inside) into `dest`,
+/// each as its own item, renamed "name 2" if taken. Returns what was created.
+pub fn extract_members(
+    archive: &Path,
+    inners: &[String],
+    dest: &Path,
+    tick: &mut dyn FnMut(u64) -> bool,
+) -> io::Result<Vec<PathBuf>> {
+    let (kind, _) = kind_of(archive)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a supported archive"))?;
+    let wanted: Vec<(PathBuf, PathBuf)> = inners
+        .iter()
+        .map(|i| {
+            let p = normalize_member(Path::new(i.trim_matches('/')))?;
+            let base = p.parent().map(Path::to_path_buf).unwrap_or_default();
+            Ok((p, base))
+        })
+        .collect::<io::Result<_>>()?;
+    let select = |rel: &Path| {
+        wanted
+            .iter()
+            .find(|(p, _)| rel == p || rel.starts_with(p))
+            .and_then(|(_, base)| rel.strip_prefix(base).ok().map(Path::to_path_buf))
+    };
+    let staging = unique(dest, ".oxextract", "");
+    fs::create_dir(&staging)?;
+    let mut stopped = false;
+    let tick = &mut |n: u64| {
+        let go = tick(n);
+        stopped |= !go;
+        go
+    };
+    let result = (|| {
+        match kind {
+            Kind::Zip => unzip(archive, &staging, tick, &select)?,
+            _ => {
+                let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
+                match kind {
+                    Kind::Tar => untar(raw, &staging, Some(&select))?,
+                    Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, Some(&select))?,
+                    _ => untar(zstd::Decoder::new(raw)?, &staging, Some(&select))?,
+                }
+            }
+        }
+        let mut created = Vec::new();
+        for child in fs::read_dir(&staging)?.filter_map(Result::ok) {
+            let name = child.file_name().to_string_lossy().into_owned();
+            let target = unique(dest, &name, "");
+            fs::rename(child.path(), &target)?;
+            created.push(target);
+        }
+        fs::remove_dir(&staging)?;
+        Ok(created)
     })();
     if result.is_err() {
         let _ = fs::remove_dir_all(&staging);
@@ -523,5 +695,41 @@ mod tests {
                 .to_string_lossy()
                 .starts_with('.'))
         );
+    }
+
+    #[test]
+    fn lists_and_extracts_single_members() {
+        for format in [ArchiveFormat::Zip, ArchiveFormat::TarGz, ArchiveFormat::TarZst] {
+            let tmp = tempfile::tempdir().unwrap();
+            let src = tree(tmp.path());
+            let dest = archive_path(std::slice::from_ref(&src), format).unwrap();
+            compress(std::slice::from_ref(&src), &dest, format, &mut |_| true).unwrap();
+
+            let list = members(&dest).unwrap();
+            let names: Vec<&str> = list.iter().map(|m| m.path.as_str()).collect();
+            assert!(names.contains(&"project/sub/b.bin"), "{format:?} {names:?}");
+            let bin = list.iter().find(|m| m.path == "project/sub/b.bin").unwrap();
+            assert_eq!(bin.size, 300_000);
+            assert!(list.iter().any(|m| m.path == "project/link" && m.is_symlink));
+
+            let out = tmp.path().join("out");
+            fs::create_dir(&out).unwrap();
+            let created =
+                extract_members(&dest, &["project/sub".into(), "project/a.txt".into()], &out, &mut |_| true)
+                    .unwrap();
+            assert_eq!(created.len(), 2, "{format:?}");
+            assert_eq!(fs::read(out.join("sub/b.bin")).unwrap().len(), 300_000);
+            assert_eq!(fs::read_to_string(out.join("a.txt")).unwrap(), "alpha");
+            // Taken names get a number, nothing temporary stays.
+            extract_members(&dest, &["project/a.txt".into()], &out, &mut |_| true).unwrap();
+            assert!(out.join("a.txt 2").exists());
+            assert!(
+                fs::read_dir(&out).unwrap().all(|e| !e
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with('.'))
+            );
+        }
     }
 }

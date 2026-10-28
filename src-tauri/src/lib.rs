@@ -1,3 +1,4 @@
+mod archive_fs;
 mod dir;
 mod error;
 mod git;
@@ -54,6 +55,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             git::git_status,
             usage::disk_usage,
             usage::disk_usage_cancel,
+            archive_fs::archive_list,
+            archive_fs::archive_open_member,
             menu::menu_items,
             menu::set_shortcuts,
             menu::set_menu_titles,

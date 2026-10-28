@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { commands, type GitState, type GitStatus } from "@/bindings";
-import { isSearchPath } from "@/lib/search-path";
+import { isVirtualPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 
 interface GitStore {
@@ -32,7 +32,7 @@ async function load(path: string): Promise<void> {
 
 /** Refreshes a folder's git status soon; bursts of file changes coalesce. */
 export function refreshGit(path: string, immediately = false): void {
-  if (isSearchPath(path) || !useApp.getState().showGitStatus) return;
+  if (isVirtualPath(path) || !useApp.getState().showGitStatus) return;
   clearTimeout(timers.get(path));
   if (immediately) void load(path);
   else

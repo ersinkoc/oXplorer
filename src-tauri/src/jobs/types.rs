@@ -36,6 +36,11 @@ pub enum JobSpec {
     Extract {
         archives: Vec<String>,
     },
+    /// Copies members out of one archive (`archive:` paths) into a folder.
+    ExtractMembers {
+        sources: Vec<String>,
+        dest_dir: String,
+    },
     /// Replays an `UndoAction` from an earlier job (undo and redo alike).
     Undo {
         action: UndoAction,

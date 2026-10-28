@@ -17,6 +17,7 @@ Tauri 2.12 · React 19 (React Compiler on) · TypeScript 7 · Vite 8 · Tailwind
 - Tabs/layout persist in `session.json` (`src/stores/session.ts`); panes list their folder when it becomes visible (`ensureListed`), `navigateTo` only changes state.
 - Preview media goes through `asset:`; call `allow_preview` first (scope starts empty). Quick Look: `src-tauri/src/mac/quicklook.rs`.
 - Terminal: `src-tauri/src/pty/` (sessions + zsh OSC 7 shim), `src/features/terminal/`. Edit-menu commands check `focusedTerminal()` before text fields and files. Machine-dependent test: `cargo test --lib pty -- --ignored` (htop).
+- Archives are virtual folders too: `archive:/x.zip!/inner` (`src/lib/archive-path.ts`, `src-tauri/src/archive_fs.rs`); `isVirtualPath()` covers both kinds.
 - Search results are a virtual folder: `search:?…` paths (`src/lib/search-path.ts`), streamed into `dir-cache-store` from `src-tauri/src/search/`. Code that needs a real folder uses `currentFolder()` / `writableFolder()`. Benchmarks: `bench_content_home` (OX_BENCH_DIR, OX_BENCH_QUERY, OX_BENCH_CANCEL_MS).
 - Settings window: `settings.html` → `src/settings-main.tsx`, capability `capabilities/settings.json` (no FS commands). It writes `settings.json`; the main window picks changes up via `watchPreferences()`. Menu commands only run in the focused window (`listenToMenu`).
 - Menu shortcuts: defaults in `src-tauri/src/menu.rs`, user overrides applied with `set_shortcuts` (validated, rebuilds the menu bar).

@@ -2,7 +2,8 @@ import { ChevronRight, HardDrive, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
 import { useT } from "@/i18n";
-import { segments, tildify } from "@/lib/path";
+import { archivePath, parseArchivePath } from "@/lib/archive-path";
+import { basename, parent, segments, tildify } from "@/lib/path";
 import { parseSearchPath, searchTitle } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 
@@ -14,7 +15,8 @@ export function PathBar({ path }: { path: string }) {
   const rootName = useApp((s) => s.volumes.find((v) => v.isRoot)?.name ?? "Macintosh HD");
 
   const search = parseSearchPath(path);
-  if (editing) return <PathInput initial={tildify(search?.scope ?? path, home)} />;
+  if (editing)
+    return <PathInput initial={tildify(search?.scope ?? parseArchivePath(path)?.archive ?? path, home)} />;
   if (search)
     return (
       <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-[13px]">
@@ -23,7 +25,21 @@ export function PathBar({ path }: { path: string }) {
       </div>
     );
 
-  const parts = segments(path);
+  // Inside an archive: the folders up to the archive, the archive, then its folders.
+  const archive = parseArchivePath(path);
+  const parts = archive
+    ? [
+        ...segments(parent(archive.archive) ?? "/"),
+        { name: basename(archive.archive), path: archivePath(archive.archive) },
+        ...archive.inner
+          .split("/")
+          .filter(Boolean)
+          .map((name, i, all) => ({
+            name,
+            path: archivePath(archive.archive, all.slice(0, i + 1).join("/")),
+          })),
+      ]
+    : segments(path);
   return (
     <div
       className="flex h-7 min-w-0 flex-1 items-center overflow-hidden rounded-md px-1"

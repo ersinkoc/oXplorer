@@ -13,7 +13,7 @@ import { statusBody } from "@/features/file-view/view-states";
 import { useT } from "@/i18n";
 import type { CompareMark } from "@/lib/compare";
 import type { FileEntry } from "@/lib/ipc";
-import { isSearchPath } from "@/lib/search-path";
+import { isVirtualPath } from "@/lib/search-path";
 import { useCompareMarks } from "@/stores/compare-store";
 import { useGitStates } from "@/stores/git-store";
 import type { PaneId } from "@/stores/workspace-store";
@@ -69,7 +69,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
         onMouseDown={view.onBackgroundMouseDown}
         onContextMenu={view.onBackgroundContextMenu}
         onScroll={view.onScroll}
-        data-drop-dir={isSearchPath(tab.path) ? undefined : tab.path}
+        data-drop-dir={isVirtualPath(tab.path) ? undefined : tab.path}
         className="relative min-h-0 flex-1 overflow-y-auto outline-none [contain:strict]"
       >
         {body ?? (

@@ -3,6 +3,7 @@ import { Pin, Plus, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { closeTab } from "@/commands/tab-commands";
 import { useT } from "@/i18n";
+import { archiveTitle, parseArchivePath } from "@/lib/archive-path";
 import { pathIconUrl } from "@/lib/icons";
 import { basename } from "@/lib/path";
 import { parseSearchPath, searchTitle } from "@/lib/search-path";
@@ -164,11 +165,18 @@ function TabButton({
 }) {
   const { t } = useT();
   const search = parseSearchPath(tab.path);
-  const name = search ? searchTitle(search) : tab.path === "/" ? "Macintosh HD" : basename(tab.path);
+  const archive = parseArchivePath(tab.path);
+  const name = search
+    ? searchTitle(search)
+    : archive
+      ? archiveTitle(tab.path)
+      : tab.path === "/"
+        ? "Macintosh HD"
+        : basename(tab.path);
   return (
     <div
       data-tab-id={tab.id}
-      data-drop-dir={search ? undefined : tab.path}
+      data-drop-dir={search || archive ? undefined : tab.path}
       role="tab"
       tabIndex={-1}
       aria-selected={active}
@@ -187,7 +195,7 @@ function TabButton({
         <Search aria-hidden className="size-3.5 shrink-0" />
       ) : (
         <img
-          src={pathIconUrl(tab.path, 32)}
+          src={pathIconUrl(archive ? archive.archive : tab.path, 32)}
           alt=""
           aria-hidden
           draggable={false}

@@ -20,6 +20,9 @@ const THUMBNAIL_EXTENSIONS = new Set(
 export function iconUrl(entry: FileEntry, px: IconPx): string {
   const ext = entry.extension?.toLowerCase();
   if (entry.kind === "file" && ext) return `${BASE}/ext/${px}/${encodeURIComponent(ext)}`;
+  // Inside an archive nothing exists on disk: a plain folder icon (that of /usr) stands in.
+  if (entry.path.startsWith("archive:"))
+    return `${BASE}/path/${px}/${encodeURIComponent(entry.kind === "dir" ? "/usr" : "/dev/null")}`;
   return `${BASE}/path/${px}/${encodeURIComponent(entry.path)}`;
 }
 
@@ -31,7 +34,8 @@ export function pathIconUrl(path: string, px: IconPx): string {
 /** Content thumbnail where QuickLook can make one, otherwise the icon. */
 export function thumbnailUrl(entry: FileEntry, px: IconPx): string {
   const ext = entry.extension?.toLowerCase();
-  if (entry.kind !== "file" || !ext || !THUMBNAIL_EXTENSIONS.has(ext)) return iconUrl(entry, px);
+  if (entry.kind !== "file" || !ext || !THUMBNAIL_EXTENSIONS.has(ext) || entry.path.startsWith("archive:"))
+    return iconUrl(entry, px);
   // The modification time busts the cache when the file changes.
   return `${BASE}/thumb/${px}/${encodeURIComponent(entry.path)}?v=${entry.modifiedMs}-${entry.size}`;
 }

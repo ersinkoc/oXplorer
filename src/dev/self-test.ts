@@ -15,6 +15,7 @@ import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
 import { terminalById } from "@/features/terminal/terminal-registry";
 import { menuTitles } from "@/i18n";
 import { MENU_LABELS } from "@/i18n/menu-labels";
+import { archivePath } from "@/lib/archive-path";
 import { highlight } from "@/lib/highlight";
 import { unwrap } from "@/lib/ipc";
 import { join } from "@/lib/path";
@@ -152,6 +153,32 @@ export async function runSelfTest(): Promise<void> {
     const inside = await commands.statPath(join(outDir, "inside.txt"));
     step("extract", outDir.endsWith("/arc 2") && inside.status === "ok", outDir);
 
+    // Browsing the zip like a folder: list, copy a member out, open one, go back up.
+    navigateTo(archivePath(zipPath));
+    const inZip = archivePath(zipPath, "arc");
+    await waitFor(() => useDirCache.getState().dirs[archivePath(zipPath)]?.status === "ready", 5000);
+    navigateTo(inZip);
+    await waitFor(() => useDirCache.getState().dirs[inZip]?.status === "ready", 5000);
+    const members = useDirCache.getState().dirs[inZip]?.entries.map((e) => e.name) ?? [];
+    const outOfZip = await unwrap(commands.createItem(dir, "from-zip", true));
+    const copied2 = await runJob(
+      { kind: "extractMembers", sources: [archivePath(zipPath, "arc/inside.txt")], destDir: outOfZip.path },
+      { history: "none", select: false },
+    );
+    const opened = await commands.archiveOpenMember(archivePath(zipPath, "arc/inside.txt"));
+    runCommand("nav.up");
+    runCommand("nav.up");
+    const backIn = getActiveTab();
+    step(
+      "browse archive",
+      members.join() === "inside.txt" &&
+        copied2?.created[0]?.path === join(outOfZip.path, "inside.txt") &&
+        opened.status === "ok" &&
+        backIn.path === dir &&
+        backIn.selection.paths.has(zipPath),
+      `${members.join()} | ${backIn.path}`,
+    );
+
     // Tags: add and remove through the xattr.
     const tagged = await unwrap(
       commands.editTags([join(arc.path, "inside.txt")], [{ name: "Red", color: 6 }], []),
@@ -269,6 +296,7 @@ export async function runSelfTest(): Promise<void> {
           sub.path,
           arc.path,
           cmpA.path,
+          outOfZip.path,
           cmpB.path,
           zipPath,
           outDir,
@@ -277,7 +305,7 @@ export async function runSelfTest(): Promise<void> {
       },
       { history: "none" },
     );
-    step("delete", gone?.removed.length === (png ? 10 : 9) && gone.failures.length === 0);
+    step("delete", gone?.removed.length === (png ? 11 : 10) && gone.failures.length === 0);
   } catch (err) {
     step("exception", false, String(err));
   }

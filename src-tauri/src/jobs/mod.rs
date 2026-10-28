@@ -1,7 +1,7 @@
 //! Long-running file operations: one thread per job, progress over a Channel,
 //! cooperative cancellation, and conflict prompts answered by the frontend.
 
-mod archive;
+pub(crate) mod archive;
 mod fsops;
 mod names;
 mod rename;

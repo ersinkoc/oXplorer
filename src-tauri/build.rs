@@ -49,6 +49,8 @@ const COMMANDS: &[&str] = &[
     "git_status",
     "disk_usage",
     "disk_usage_cancel",
+    "archive_list",
+    "archive_open_member",
 ];
 
 fn main() {

@@ -29,6 +29,7 @@ const LABELS: Record<JobSpec["kind"], string> = {
   delete: msg("Deleting"),
   compress: msg("Compressing"),
   extract: msg("Extracting"),
+  extractMembers: msg("Copying"),
   undo: msg("Undoing"),
 };
 
@@ -110,6 +111,7 @@ const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
   delete: msg("Delete"),
   compress: msg("Compress"),
   extract: msg("Extract"),
+  extractMembers: msg("Copy"),
 };
 
 /** Jobs that ran this long get a system notification when OXplorer isn't in front. */

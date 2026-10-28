@@ -5,6 +5,7 @@ import { SearchHeader } from "@/features/search/search-header";
 import { StatusBar } from "@/features/status/status-bar";
 import { TabBar } from "@/features/workspace/tab-bar";
 import { useT } from "@/i18n";
+import { isArchivePath } from "@/lib/archive-path";
 import { isSearchPath } from "@/lib/search-path";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { refreshGit } from "@/stores/git-store";
@@ -21,6 +22,7 @@ export function Pane({ pane, style }: { pane: PaneId; style?: React.CSSPropertie
   // A folder is (re)listed whenever a pane starts showing it: watches only cover
   // visible folders, so a cached listing may be stale.
   useEffect(() => {
+    if (isArchivePath(path)) return ensureListed(path);
     if (!isSearchPath(path)) {
       recordVisit(path);
       refreshGit(path, true);

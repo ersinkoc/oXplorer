@@ -1,5 +1,6 @@
 import { commands, events } from "@/bindings";
 import { paneLayout } from "@/features/file-view/visible-order";
+import { isArchivePath } from "@/lib/archive-path";
 import { move } from "@/lib/selection";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
@@ -20,7 +21,18 @@ export function toggleQuickLook(): void {
     return;
   }
   const { paths, index } = currentItems();
-  if (paths.length > 0) void commands.quickLook(paths, index, true);
+  if (paths.length > 0) void realPaths(paths).then((real) => commands.quickLook(real, index, true));
+}
+
+/** Items inside an archive are extracted to a temporary folder for Quick Look. */
+async function realPaths(paths: readonly string[]): Promise<string[]> {
+  return Promise.all(
+    paths.map(async (p) => {
+      if (!isArchivePath(p)) return p;
+      const r = await commands.archiveOpenMember(p);
+      return r.status === "ok" ? r.data : p;
+    }),
+  );
 }
 
 /**
@@ -33,7 +45,7 @@ export function installQuickLook(): () => void {
     const pane = s.activePane;
     if (s.panes[pane] === prev.panes[pane] && pane === prev.activePane) return;
     const { paths, index } = currentItems();
-    if (paths.length > 0) void commands.quickLook(paths, index, false);
+    if (paths.length > 0) void realPaths(paths).then((real) => commands.quickLook(real, index, false));
   });
   const unlistenState = events.quickLookState.listen((e) => {
     visible = e.payload.visible;

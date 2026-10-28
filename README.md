@@ -16,6 +16,7 @@ A modern, open-source, dual-pane file manager for macOS — Finder's look and fe
 - **Archives, tags, renaming:** compress to zip / tar.gz / tar.zst and extract (with progress, cancel and undo), add and remove Finder tags, rename many items at once with a live preview.
 - **Settings:** a separate Settings window (⌘,) for appearance, tabs, terminal and fully customizable menu shortcuts.
 - **Compare panes:** mark what's missing or newer on each side, select the differences and copy them across.
+- **Archives as folders:** double-click a zip or tarball to browse it; open, preview or copy items out without extracting everything.
 - **Disk usage:** a treemap of what takes space under a folder (⌥⌘D), zoomable.
 - **Git:** status badges for changed, new and ignored files, and the current branch in the status bar.
 - **Native feel:** native icons and thumbnails, macOS menu bar, sidebar vibrancy, dark mode, system accent color.

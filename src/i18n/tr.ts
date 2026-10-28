@@ -380,6 +380,10 @@ export const tr: Readonly<Record<string, string>> = {
   "Custom shortcuts weren’t applied: {reason}": "Özel kestirmeler uygulanamadı: {reason}",
   Language: "Dil",
   "Compare Panes": "Panelleri Karşılaştır",
+  "Archives are read-only. Extract the archive to change what’s in it.":
+    "Arşivler salt okunurdur. İçeriğini değiştirmek için arşivi açın.",
+  "Archives are read-only. Copy items out with F5 or by dragging them to a folder.":
+    "Arşivler salt okunurdur. Öğeleri F5 ile ya da bir klasöre sürükleyerek dışarı kopyalayın.",
   "Disk Usage…": "Disk Kullanımı…",
   "{files} files, {size}": "{files} dosya, {size}",
   "Click a folder to look inside; double-click to open it in the pane.":

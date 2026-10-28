@@ -77,6 +77,13 @@ export const commands = {
 	/**  Scans `path`; progress and the result (`Done`) arrive through `on_event`. */
 	diskUsage: (id: string, path: string, onEvent: Channel<UsageEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("disk_usage", { id, path, onEvent })),
 	diskUsageCancel: (id: string) => __TAURI_INVOKE<void>("disk_usage_cancel", { id }),
+	/**  Lists a folder inside an archive. */
+	archiveList: (path: string) => typedError<FileEntry_Serialize[], AppError_Serialize>(__TAURI_INVOKE("archive_list", { path })),
+	/**
+	 *  Extracts one member to a private temporary folder (to open it or Quick Look
+	 *  it) and returns the real path.
+	 */
+	archiveOpenMember: (path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("archive_open_member", { path })),
 	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
 	/**  Rebuilds the menu bar with the user's shortcuts. */
 	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),
@@ -372,6 +379,8 @@ export type JobSpec = { kind: "copy"; sources: string[]; destDir: string } | { k
 { kind: "compress"; sources: string[]; format: ArchiveFormat } | 
 /**  Extracts each archive next to itself. */
 { kind: "extract"; archives: string[] } | 
+/**  Copies members out of one archive (`archive:` paths) into a folder. */
+{ kind: "extractMembers"; sources: string[]; destDir: string } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
