@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { globMatcher } from "@/lib/glob";
 import { locationTitle } from "@/lib/location-title";
+import { moveToGap } from "@/lib/reorder";
 import { EMPTY_SELECTION, invert, selectOne, selectWhere } from "@/lib/selection";
 
 describe("globMatcher", () => {
@@ -52,5 +53,15 @@ describe("locationTitle", () => {
     expect(locationTitle("/Users/me/Work", conns)).toBe("Work");
     expect(locationTitle("/", conns)).toBe("Macintosh HD");
     expect(locationTitle("remote:c1/", conns)).toBe("NAS");
+  });
+});
+
+describe("moveToGap", () => {
+  it("moves items into gaps", () => {
+    expect(moveToGap(["a", "b", "c"], 0, 3)).toEqual(["b", "c", "a"]);
+    expect(moveToGap(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
+    expect(moveToGap(["a", "b", "c"], 1, 1)).toEqual(["a", "b", "c"]);
+    expect(moveToGap(["a", "b", "c"], 1, 2)).toEqual(["a", "b", "c"]);
+    expect(moveToGap(["a", "b", "c"], 5, 0)).toEqual(["a", "b", "c"]);
   });
 });

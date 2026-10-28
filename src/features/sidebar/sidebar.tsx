@@ -13,7 +13,7 @@ import {
   Server,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { commands, type FinderTag, type VolumeInfo } from "@/bindings";
 import { navigateTo } from "@/commands/navigation";
@@ -23,6 +23,7 @@ import { TAG_COLORS } from "@/lib/icons";
 import { describeError } from "@/lib/ipc";
 import { locationTitle } from "@/lib/location-title";
 import { isRemotePath, remotePath } from "@/lib/remote-path";
+import { moveToGap } from "@/lib/reorder";
 import { isSearchPath, isVirtualPath, searchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, useActiveTab } from "@/stores/workspace-store";
@@ -53,6 +54,35 @@ export function Sidebar() {
   const connections = useApp((s) => s.connections);
   const favorites = useApp((s) => s.favorites);
   const current = useActiveTab().path;
+  // Dragging a favorite: its index and the gap it would drop into.
+  const [drag, setDrag] = useState<{ from: number; gap: number | null } | null>(null);
+  const suppressClick = useRef(false);
+
+  const startFavoriteDrag = (e: React.MouseEvent, from: number) => {
+    if (e.button !== 0) return;
+    const startY = e.clientY;
+    let gap: number | null = null;
+    const move = (ev: MouseEvent) => {
+      if (gap === null && Math.abs(ev.clientY - startY) < DRAG_THRESHOLD) return;
+      gap = favoriteGapAt(ev.clientY);
+      setDrag({ from, gap });
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move, true);
+      window.removeEventListener("mouseup", up, true);
+      setDrag(null);
+      if (gap === null) return;
+      // The click that may follow this mouseup isn't a navigation.
+      suppressClick.current = true;
+      setTimeout(() => {
+        suppressClick.current = false;
+      });
+      const { favorites: list, setPreference } = useApp.getState();
+      setPreference("favorites", moveToGap(list, from, gap));
+    };
+    window.addEventListener("mousemove", move, true);
+    window.addEventListener("mouseup", up, true);
+  };
   const [tags, setTags] = useState<FinderTag[]>([]);
   useEffect(() => {
     void commands.favoriteTags().then(setTags);
@@ -74,17 +104,29 @@ export function Sidebar() {
               onClick={() => navigateTo(l.path)}
             />
           ))}
-          {favorites.map((path) => {
+          {favorites.map((path, index) => {
             const label = locationTitle(path, connections);
             return (
               <Item
                 key={path}
+                favoriteIndex={index}
+                dragging={drag?.from === index && drag.gap !== null}
+                dropLine={
+                  drag?.gap === index
+                    ? "before"
+                    : drag?.gap === index + 1 && index === favorites.length - 1
+                      ? "after"
+                      : undefined
+                }
+                onMouseDown={(e) => startFavoriteDrag(e, index)}
                 icon={isSearchPath(path) ? Search : isRemotePath(path) ? Server : Folder}
                 label={label}
                 title={path}
                 active={current === path}
                 dropDir={isVirtualPath(path) ? undefined : path}
-                onClick={() => navigateTo(path)}
+                onClick={() => {
+                  if (!suppressClick.current) navigateTo(path);
+                }}
                 action={{
                   label: t("Remove “{name}” from the sidebar", { name: label }),
                   icon: X,
@@ -173,6 +215,18 @@ function TagDot({ color }: { color: number }) {
   );
 }
 
+const DRAG_THRESHOLD = 4;
+
+/** The gap between favorites nearest to `y` (0 = before the first). */
+function favoriteGapAt(y: number): number {
+  const items = [...document.querySelectorAll<HTMLElement>("[data-favorite-index]")];
+  const index = items.findIndex((el) => {
+    const r = el.getBoundingClientRect();
+    return y < r.top + r.height / 2;
+  });
+  return index < 0 ? items.length : index;
+}
+
 function removeFavorite(path: string): void {
   const { favorites, setPreference } = useApp.getState();
   setPreference(
@@ -210,6 +264,10 @@ function Item({
   dropDir,
   onClick,
   action,
+  favoriteIndex,
+  dragging,
+  dropLine,
+  onMouseDown,
 }: {
   icon?: LucideIcon;
   /** Replaces the icon (tag color dots). */
@@ -222,13 +280,28 @@ function Item({
   onClick: () => void;
   /** `onHover`: only shown while the pointer is over the item. */
   action?: { label: string; icon: LucideIcon; run: () => void; onHover?: boolean };
+  /** User favorites can be dragged to reorder them. */
+  favoriteIndex?: number;
+  dragging?: boolean;
+  dropLine?: "before" | "after";
+  onMouseDown?: (e: React.MouseEvent) => void;
 }) {
   const isDropTarget = useDrag((s) => !!dropDir && s.target === dropDir);
   return (
-    <li className="group relative">
+    <li
+      data-favorite-index={favoriteIndex}
+      className={`group relative ${dragging ? "opacity-50" : ""} ${
+        dropLine === "before"
+          ? "before:absolute before:inset-x-1 before:-top-px before:h-0.5 before:bg-accent before:content-['']"
+          : dropLine === "after"
+            ? "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:bg-accent after:content-['']"
+            : ""
+      }`}
+    >
       <button
         type="button"
         data-drop-dir={dropDir}
+        onMouseDown={onMouseDown}
         title={title}
         onClick={onClick}
         aria-current={active ? "page" : undefined}
