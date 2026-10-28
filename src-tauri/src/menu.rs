@@ -53,6 +53,9 @@ const WINDOW: &[Item] = &[
     SEP,
     ("pane.switch", "Switch to Other Pane", None),
     ("pane.swap", "Swap Panes", None),
+    SEP,
+    ("pane.compare", "Compare Panes", None),
+    ("pane.selectDifferences", "Select Differences", None),
 ];
 
 /// Text fields get these too: the frontend forwards them when an input has focus.

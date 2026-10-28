@@ -5,6 +5,7 @@ import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { useT } from "@/i18n";
 import { formatSize, isFolderLike } from "@/lib/format";
 import { useApp } from "@/stores/app-store";
+import { useCompareMarks } from "@/stores/compare-store";
 import { useGit } from "@/stores/git-store";
 import type { PaneId } from "@/stores/workspace-store";
 
@@ -13,6 +14,7 @@ export function StatusBar({ pane }: { pane: PaneId }) {
   const { tab, entries, dir } = useVisibleEntries(pane);
   const [available, setAvailable] = useState<number | null>(null);
   const showGit = useApp((s) => s.showGitStatus);
+  const compare = useCompareMarks(pane);
   const branch = useGit((s) => (showGit ? s.statuses[tab.path]?.branch : null));
 
   useEffect(() => {
@@ -45,7 +47,16 @@ export function StatusBar({ pane }: { pane: PaneId }) {
         : tn(count, "{count} item", "{count} items"),
     );
   }
-  if (available !== null) parts.push(t("{size} available", { size: formatSize(available) }));
+  if (compare) {
+    const count = (m: string) => [...compare.values()].filter((v) => v === m).length;
+    parts.push(
+      t("comparing: {only} only here, {newer} newer, {different} different", {
+        only: count("only"),
+        newer: count("newer"),
+        different: count("different"),
+      }),
+    );
+  } else if (available !== null) parts.push(t("{size} available", { size: formatSize(available) }));
 
   return (
     <footer className="relative flex h-[24px] shrink-0 items-center justify-center border-t border-border bg-toolbar px-3 text-[11px] text-fg-muted">

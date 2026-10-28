@@ -15,6 +15,7 @@ A modern, open-source, dual-pane file manager for macOS — Finder's look and fe
 - **Search:** ⌘F filters a folder; ⇧⌘F searches names, file contents (ripgrep's engine, `.gitignore`-aware) or Spotlight, with results in a tab that works like a folder; Finder tags in the sidebar; ⌘K command palette with frequently used folders.
 - **Archives, tags, renaming:** compress to zip / tar.gz / tar.zst and extract (with progress, cancel and undo), add and remove Finder tags, rename many items at once with a live preview.
 - **Settings:** a separate Settings window (⌘,) for appearance, tabs, terminal and fully customizable menu shortcuts.
+- **Compare panes:** mark what's missing or newer on each side, select the differences and copy them across.
 - **Git:** status badges for changed, new and ignored files, and the current branch in the status bar.
 - **Native feel:** native icons and thumbnails, macOS menu bar, sidebar vibrancy, dark mode, system accent color.
 - **Views:** list, icon and column views (⌘1 / ⌘2 / ⌘3), keyboard-first with Finder shortcuts, type-ahead and natural sorting.

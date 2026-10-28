@@ -4,6 +4,7 @@ import { info, error as logError } from "@tauri-apps/plugin-log";
 import { commands, type MeasureEvent } from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { navigateTo } from "@/commands/navigation";
+import { runCommand } from "@/commands/registry";
 import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
 import { terminalById } from "@/features/terminal/terminal-registry";
 import { menuTitles } from "@/i18n";
@@ -17,7 +18,7 @@ import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { useSearchInfo } from "@/stores/search-store";
 import { useTerminals } from "@/stores/terminal-store";
-import { getActiveTab } from "@/stores/workspace-store";
+import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
 /**
  * Dev-only end-to-end check of the file-operation IPC path (start with
@@ -199,6 +200,33 @@ export async function runSelfTest(): Promise<void> {
     await commands.setMenuTitles(menuTitles(before, [...MENU_LABELS, ...items.map((i) => i.title)]));
     step("turkish ui + menu", turkishUi && menu.status === "ok");
 
+    // Compare panes: only the item missing on the right is selected as a difference.
+    const cmpA = await unwrap(commands.createItem(dir, "cmp-a", true));
+    const cmpB = await unwrap(commands.createItem(dir, "cmp-b", true));
+    await unwrap(commands.createItem(cmpA.path, "only-left.txt", false));
+    const ws = useWorkspace.getState();
+    ws.setDualPane(true);
+    navigateTo(cmpA.path, { pane: "left" });
+    navigateTo(cmpB.path, { pane: "right" });
+    await waitFor(
+      () =>
+        useDirCache.getState().dirs[cmpA.path]?.status === "ready" &&
+        useDirCache.getState().dirs[cmpB.path]?.status === "ready",
+      5000,
+    );
+    runCommand("pane.compare");
+    useWorkspace.getState().setActivePane("left");
+    runCommand("pane.selectDifferences");
+    const picked = [...getActiveTab("left").selection.paths];
+    step(
+      "compare panes",
+      picked.length === 1 && picked[0] === join(cmpA.path, "only-left.txt"),
+      picked.join(),
+    );
+    runCommand("pane.compare");
+    useWorkspace.getState().setDualPane(false);
+    navigateTo(dir, { pane: "left" });
+
     // Git: a folder outside any repository has no status (and doesn't fail).
     const git = await commands.gitStatus(dir);
     step("git status outside a repo", git.status === "ok" && git.data === null);
@@ -220,6 +248,8 @@ export async function runSelfTest(): Promise<void> {
           join(dir, "note copy.txt"),
           sub.path,
           arc.path,
+          cmpA.path,
+          cmpB.path,
           zipPath,
           outDir,
           ...(png ? [png] : []),
@@ -227,7 +257,7 @@ export async function runSelfTest(): Promise<void> {
       },
       { history: "none" },
     );
-    step("delete", gone?.removed.length === (png ? 8 : 7) && gone.failures.length === 0);
+    step("delete", gone?.removed.length === (png ? 10 : 9) && gone.failures.length === 0);
   } catch (err) {
     step("exception", false, String(err));
   }

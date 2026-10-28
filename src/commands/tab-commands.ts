@@ -5,7 +5,12 @@ import { navigateTo, selectedEntries, writableFolder } from "@/commands/navigati
 import { defineCommands } from "@/commands/registry";
 import { toggleQuickLook } from "@/features/preview/quick-look";
 import { t } from "@/i18n";
+import { compareEntries, differences } from "@/lib/compare";
+import { isSearchPath } from "@/lib/search-path";
+import { filterEntries } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
+import { useCompare } from "@/stores/compare-store";
+import { useDirCache } from "@/stores/dir-cache-store";
 import { getActiveTab, otherPane, type PaneId, useWorkspace } from "@/stores/workspace-store";
 
 function closeWindow(): void {
@@ -109,6 +114,40 @@ export function registerTabCommands(): void {
       },
     },
     { id: "pane.swap", title: "Swap Panes", run: () => useWorkspace.getState().swapPanes() },
+    {
+      id: "pane.compare",
+      title: "Compare Panes",
+      run: () => {
+        const ws = useWorkspace.getState();
+        if (useCompare.getState().pair) return useCompare.setState({ pair: null });
+        if (!ws.dualPane) {
+          toast(t("Open the second pane first (⌘U)."));
+          return;
+        }
+        const left = getActiveTab("left").path;
+        const right = getActiveTab("right").path;
+        if (isSearchPath(left) || isSearchPath(right)) return;
+        useCompare.setState({ pair: { left, right } });
+      },
+    },
+    {
+      id: "pane.selectDifferences",
+      title: "Select Differences",
+      run: () => {
+        const ws = useWorkspace.getState();
+        const pair = useCompare.getState().pair;
+        if (!pair || !ws.dualPane) return;
+        const cache = useDirCache.getState().dirs;
+        const { showHidden } = useApp.getState();
+        const list = (p: string) => filterEntries(cache[p]?.entries ?? [], { showHidden, filter: "" });
+        const marks = compareEntries(list(pair.left), list(pair.right))[ws.activePane];
+        const names = differences(marks);
+        const paths = (cache[getActiveTab().path]?.entries ?? [])
+          .filter((e) => names.has(e.name))
+          .map((e) => e.path);
+        ws.setSelection({ paths: new Set(paths), anchor: paths[0] ?? null, focus: paths[0] ?? null });
+      },
+    },
     {
       id: "pane.openInOther",
       title: "Open in Other Pane",

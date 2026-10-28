@@ -3,6 +3,7 @@ import { memo } from "react";
 import type { GitState } from "@/bindings";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirFor } from "@/features/dnd/drop-target";
+import { CompareStripe } from "@/features/file-view/compare-stripe";
 import { FileIcon } from "@/features/file-view/file-icon";
 import { GitBadge } from "@/features/file-view/git-badge";
 import { gridTemplate, ListHeader } from "@/features/file-view/list-header";
@@ -11,11 +12,13 @@ import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
 import { useT } from "@/i18n";
+import type { CompareMark } from "@/lib/compare";
 import { entrySizeLabel, formatDate, kindLabel } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
 import { parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
+import { useCompareMarks } from "@/stores/compare-store";
 import { useGitStates } from "@/stores/git-store";
 import { useSearchInfo } from "@/stores/search-store";
 import { type PaneId, useWorkspace } from "@/stores/workspace-store";
@@ -43,6 +46,7 @@ export function FileList({ pane }: { pane: PaneId }) {
   const home = useApp((s) => s.home);
   const matches = useSearchInfo((s) => s.searches[tab.path]?.matches);
   const git = useGitStates(tab.path);
+  const compare = useCompareMarks(pane);
   const detail = (entry: FileEntry): string | undefined => {
     if (!search) return undefined;
     const m = matches?.get(entry.path);
@@ -92,6 +96,7 @@ export function FileList({ pane }: { pane: PaneId }) {
                   dropTarget={dropTarget === entry.path}
                   detail={detail(entry)}
                   git={git?.get(entry.name)}
+                  compare={compare?.get(entry.name)}
                   onMouseDown={view.onItemMouseDown}
                   onDoubleClick={view.onItemDoubleClick}
                   onContextMenu={view.onItemContextMenu}
@@ -119,6 +124,7 @@ const Row = memo(function Row({
   dropTarget,
   detail,
   git,
+  compare,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
@@ -127,6 +133,7 @@ const Row = memo(function Row({
   /** Replaces the kind column (search results). */
   detail?: string;
   git?: GitState;
+  compare?: CompareMark;
   entry: FileEntry;
   index: number;
   top: number;
@@ -155,7 +162,8 @@ const Row = memo(function Row({
       } ${entry.isHidden || git === "ignored" ? "opacity-60" : ""} ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
       style={{ top, height: ROW_HEIGHT, gridTemplateColumns: "var(--grid)" }}
     >
-      <div role="gridcell" className="flex min-w-0 items-center gap-1.5 px-2.5">
+      <div role="gridcell" className="relative flex min-w-0 items-center gap-1.5 px-2.5">
+        <CompareStripe mark={compare} />
         <FileIcon entry={entry} size={16} className="shrink-0" />
         {renaming ? (
           <RenameInput entry={entry} className="h-5 flex-1 text-[13px]" />

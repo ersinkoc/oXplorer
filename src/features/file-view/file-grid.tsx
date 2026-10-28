@@ -3,6 +3,7 @@ import { memo, useEffect, useState } from "react";
 import type { GitState } from "@/bindings";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirFor } from "@/features/dnd/drop-target";
+import { CompareStripe } from "@/features/file-view/compare-stripe";
 import { FileIcon } from "@/features/file-view/file-icon";
 import { GitBadge } from "@/features/file-view/git-badge";
 import { RenameInput } from "@/features/file-view/rename-input";
@@ -10,8 +11,10 @@ import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
 import { statusBody } from "@/features/file-view/view-states";
 import { useT } from "@/i18n";
+import type { CompareMark } from "@/lib/compare";
 import type { FileEntry } from "@/lib/ipc";
 import { isSearchPath } from "@/lib/search-path";
+import { useCompareMarks } from "@/stores/compare-store";
 import { useGitStates } from "@/stores/git-store";
 import type { PaneId } from "@/stores/workspace-store";
 
@@ -30,6 +33,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
   );
   const { tab, dir, entries, selection, scrollRef, focusIndex, renaming } = view;
   const git = useGitStates(tab.path);
+  const compare = useCompareMarks(pane);
   const dropTarget = useDrag((s) => s.target);
   const rows = Math.ceil(entries.length / columns);
 
@@ -88,6 +92,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
                       renaming={renaming === entry.path}
                       dropTarget={dropTarget === entry.path}
                       git={git?.get(entry.name)}
+                      compare={compare?.get(entry.name)}
                       onMouseDown={view.onItemMouseDown}
                       onDoubleClick={view.onItemDoubleClick}
                       onContextMenu={view.onItemContextMenu}
@@ -114,6 +119,7 @@ const Cell = memo(function Cell({
   renaming,
   dropTarget,
   git,
+  compare,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
@@ -124,6 +130,7 @@ const Cell = memo(function Cell({
   renaming: boolean;
   dropTarget: boolean;
   git?: GitState;
+  compare?: CompareMark;
   onMouseDown: (e: React.MouseEvent, entry: FileEntry) => void;
   onDoubleClick: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
@@ -138,11 +145,12 @@ const Cell = memo(function Cell({
       onMouseDown={(e) => onMouseDown(e, entry)}
       onDoubleClick={() => onDoubleClick(entry)}
       onContextMenu={(e) => onContextMenu(e, entry)}
-      className={`grid-cell flex flex-col items-center gap-1 rounded-md px-1 pt-2 ${
+      className={`grid-cell relative flex flex-col items-center gap-1 rounded-md px-1 pt-2 ${
         entry.isHidden || git === "ignored" ? "opacity-60" : ""
       } ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
       style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
     >
+      <CompareStripe mark={compare} />
       <div className="grid-cell-icon flex items-center justify-center rounded-md p-1">
         <FileIcon entry={entry} size={ICON} thumbnail />
       </div>
