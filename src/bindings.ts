@@ -40,6 +40,8 @@ export const commands = {
 	makeSymlink: (target: string, name: string) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("make_symlink", { target, name })),
 	/**  SHA-256 of a file as lowercase hex (Get Info). Cancel with `cancel_job(id)`. */
 	checksum: (id: string, path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("checksum", { id, path })),
+	/**  Get Info → Permissions: sets the rwx bits (the 9 low bits; special bits are kept). */
+	setPermissions: (path: string, mode: number) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("set_permissions", { path, mode })),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */

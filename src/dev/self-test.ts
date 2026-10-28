@@ -410,6 +410,14 @@ export async function runSelfTest(): Promise<void> {
       `paused=${!!paused} ${merged.map((r) => r.status).join(",")}`,
     );
 
+    // Get Info → Permissions.
+    const chmod = await commands.setPermissions(nf1.path, 0o600);
+    step(
+      "set permissions",
+      chmod.status === "ok" && (chmod.data.mode & 0o777) === 0o600,
+      chmod.status === "ok" ? chmod.data.mode.toString(8) : JSON.stringify(chmod.error),
+    );
+
     // SHA-256 (Get Info) of an empty file.
     const sum = await commands.checksum(crypto.randomUUID(), nf1.path);
     step(

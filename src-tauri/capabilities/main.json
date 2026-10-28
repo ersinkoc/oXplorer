@@ -35,6 +35,7 @@
     "allow-create-item",
     "allow-make-symlink",
     "allow-checksum",
+    "allow-set-permissions",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-apps-for-path",

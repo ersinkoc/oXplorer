@@ -1,12 +1,13 @@
 import { Channel } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { commands, type MeasureEvent, type SizeInfo } from "@/bindings";
 import { FileIcon } from "@/features/file-view/file-icon";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
-import { useT } from "@/i18n";
+import { msg, useT } from "@/i18n";
 import { formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
-import type { FileEntry } from "@/lib/ipc";
+import { describeError, type FileEntry, toAppError } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
 
@@ -78,6 +79,62 @@ function Checksum({ path }: { path: string }) {
   return <span className="font-mono text-[11px] break-all">{state.hash}</span>;
 }
 
+const WHO = [
+  [msg("Owner"), 6],
+  [msg("Group"), 3],
+  [msg("Everyone"), 0],
+] as const;
+const BITS = [
+  [msg("Read"), 4],
+  [msg("Write"), 2],
+  [msg("Execute"), 1],
+] as const;
+
+/** Read / write / execute for owner, group and everyone; each change is applied right away. */
+function PermissionsEditor({ path, initial }: { path: string; initial: number }) {
+  const { t } = useT();
+  const [mode, setMode] = useState(initial & 0o777);
+  const toggle = async (bit: number) => {
+    const r = await commands.setPermissions(path, mode ^ bit);
+    if (r.status === "ok") setMode(r.data.mode & 0o777);
+    else toast.error(describeError(toAppError(r.error)));
+  };
+  return (
+    <div className="flex flex-col gap-0.5">
+      <table className="border-collapse text-[11px]">
+        <thead>
+          <tr className="text-fg-muted">
+            <th />
+            {BITS.map(([label]) => (
+              <th key={label} className="px-1.5 font-normal">
+                {t(label)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {WHO.map(([who, shift]) => (
+            <tr key={who}>
+              <td className="pr-2 text-fg-muted">{t(who)}</td>
+              {BITS.map(([label, bit]) => (
+                <td key={label} className="text-center">
+                  <input
+                    type="checkbox"
+                    aria-label={`${t(who)} ${t(label)}`}
+                    checked={(mode & (bit << shift)) !== 0}
+                    onChange={() => void toggle(bit << shift)}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <span className="font-mono text-[11px] text-fg-muted">{permissions(mode)}</span>
+    </div>
+  );
+}
+
 function permissions(mode: number): string {
   const bits = "rwxrwxrwx";
   let out = "";
@@ -117,9 +174,13 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
           [t("Modified"), formatDate(single.modifiedMs)],
           [
             t("Permissions"),
-            <span key="perm" className="font-mono text-[11px]">
-              {permissions(single.mode)}
-            </span>,
+            single.symlink ? (
+              <span key="perm" className="font-mono text-[11px]">
+                {permissions(single.mode)}
+              </span>
+            ) : (
+              <PermissionsEditor key="perm" path={single.path} initial={single.mode} />
+            ),
           ],
           ...(single.symlink
             ? ([[t("Original"), single.symlink.target]] as [string, React.ReactNode][])

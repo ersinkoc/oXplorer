@@ -197,6 +197,31 @@ pub async fn measure(
     Ok(())
 }
 
+/// Get Info → Permissions: sets the rwx bits (the 9 low bits; special bits are kept).
+#[tauri::command]
+#[specta::specta]
+pub async fn set_permissions(path: String, mode: u32) -> AppResult<FileEntry> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let p = validate_path(&path)?;
+    if mode > 0o777 {
+        return Err(AppError::InvalidPath { path, reason: format!("bad permissions {mode:o}") });
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let meta = fs::symlink_metadata(&p).map_err(|e| AppError::from_io(&e, &p))?;
+        if meta.file_type().is_symlink() {
+            return Err(AppError::InvalidPath {
+                path: p.to_string_lossy().into_owned(),
+                reason: "a symbolic link has no permissions of its own".into(),
+            });
+        }
+        let next = (meta.permissions().mode() & !0o777) | mode;
+        fs::set_permissions(&p, fs::Permissions::from_mode(next)).map_err(|e| AppError::from_io(&e, &p))?;
+        build_entry_for(&p).ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
 /// SHA-256 of a file as lowercase hex (Get Info). Cancel with `cancel_job(id)`.
 #[tauri::command]
 #[specta::specta]
@@ -316,6 +341,19 @@ pub async fn make_symlink(target: String, name: String) -> AppResult<FileEntry> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn set_permissions_changes_rwx_only() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("run.sh");
+        fs::write(&file, b"").unwrap();
+        let path = file.to_string_lossy().into_owned();
+        let entry = tauri::async_runtime::block_on(set_permissions(path.clone(), 0o750)).unwrap();
+        assert_eq!(entry.mode & 0o777, 0o750);
+        assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o750);
+        assert!(tauri::async_runtime::block_on(set_permissions(path, 0o4755)).is_err());
+    }
 
     #[test]
     fn sha256_of_a_file_and_cancel() {

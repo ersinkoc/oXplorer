@@ -12,6 +12,7 @@ const COMMANDS: &[&str] = &[
     "create_item",
     "make_symlink",
     "checksum",
+    "set_permissions",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",
