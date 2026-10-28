@@ -51,6 +51,7 @@ grep-regex = "0.1"
 grep-matcher = "0.1"
 globset = "0.4"
 unicode-normalization = "0.1"
+sha2 = "0.10"
 zip = { version = "9.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 tar = "0.4"
 flate2 = "1.1"

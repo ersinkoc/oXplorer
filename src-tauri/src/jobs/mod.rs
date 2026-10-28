@@ -197,6 +197,39 @@ pub async fn measure(
     Ok(())
 }
 
+/// SHA-256 of a file as lowercase hex (Get Info). Cancel with `cancel_job(id)`.
+#[tauri::command]
+#[specta::specta]
+pub async fn checksum(jobs: State<'_, Arc<JobManager>>, id: String, path: String) -> AppResult<String> {
+    let p = validate_path(&path)?;
+    let (cancel, _) = jobs.register(&id)?;
+    let manager = Arc::clone(&jobs);
+    let result = tauri::async_runtime::spawn_blocking(move || sha256_hex(&p, &cancel))
+        .await
+        .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() });
+    manager.unregister(&id);
+    result?
+}
+
+fn sha256_hex(path: &Path, cancel: &AtomicBool) -> AppResult<String> {
+    use sha2::{Digest as _, Sha256};
+    use std::io::Read as _;
+    let mut file = fs::File::open(path).map_err(|e| AppError::from_io(&e, path))?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(AppError::Cancelled);
+        }
+        let n = file.read(&mut buf).map_err(|e| AppError::from_io(&e, path))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
 /// Renames in place. Case-only renames (`a.txt` → `A.txt`) work on case-insensitive volumes.
 #[tauri::command]
 #[specta::specta]
@@ -283,6 +316,19 @@ pub async fn make_symlink(target: String, name: String) -> AppResult<FileEntry> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sha256_of_a_file_and_cancel() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("abc.txt");
+        fs::write(&file, b"abc").unwrap();
+        assert_eq!(
+            sha256_hex(&file, &AtomicBool::new(false)).unwrap(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert!(matches!(sha256_hex(&file, &AtomicBool::new(true)), Err(AppError::Cancelled)));
+        assert!(sha256_hex(tmp.path(), &AtomicBool::new(false)).is_err());
+    }
 
     #[test]
     fn a_cancel_before_register_still_cancels() {

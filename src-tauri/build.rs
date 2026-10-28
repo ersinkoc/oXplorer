@@ -11,6 +11,7 @@ const COMMANDS: &[&str] = &[
     "rename_path",
     "create_item",
     "make_symlink",
+    "checksum",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",

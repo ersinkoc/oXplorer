@@ -385,6 +385,14 @@ export async function runSelfTest(): Promise<void> {
       `kind=${alias?.kind} target=${alias?.symlink?.target} undone=${!!unaliased}`,
     );
 
+    // SHA-256 (Get Info) of an empty file.
+    const sum = await commands.checksum(crypto.randomUUID(), nf1.path);
+    step(
+      "checksum",
+      sum.status === "ok" && sum.data === "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      sum.status === "ok" ? sum.data : JSON.stringify(sum.error),
+    );
+
     // Synchronized browsing: the right pane follows the left into "sub" and back up.
     const syncA = await unwrap(commands.createItem(folder.path, "sync a", true));
     const syncB = await unwrap(commands.createItem(folder.path, "sync b", true));

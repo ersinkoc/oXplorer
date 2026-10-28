@@ -35,6 +35,7 @@ The first public build of OXplorer.
 
 - Preview pane (⇧⌘P) with syntax-highlighted code, Markdown, images, audio and video.
 - Quick Look (Space).
+- SHA-256 checksum of a file in Get Info (⌘I).
 
 ### Beyond Finder
 

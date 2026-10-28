@@ -34,6 +34,7 @@
     "allow-rename-path",
     "allow-create-item",
     "allow-make-symlink",
+    "allow-checksum",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-apps-for-path",

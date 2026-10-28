@@ -24,6 +24,8 @@ export const tr: Readonly<Record<string, string>> = {
   Open: "Aç",
   "Show in Finder": "Finder’da Göster",
   "Show in Enclosing Folder": "Bulunduğu Klasörde Göster",
+  Calculate: "Hesapla",
+  "Couldn’t read the file.": "Dosya okunamadı.",
   "Copy Path": "Yolu Kopyala",
   "Select All": "Tümünü Seç",
   "Deselect All": "Seçimi Kaldır",

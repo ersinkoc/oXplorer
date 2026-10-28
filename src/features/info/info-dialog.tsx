@@ -50,6 +50,34 @@ function useMeasure(paths: readonly string[], needed: boolean): { size: SizeInfo
   return state;
 }
 
+/** SHA-256 on request (big files take a while); cancelled when the panel closes. */
+function Checksum({ path }: { path: string }) {
+  const { t } = useT();
+  const [state, setState] = useState<"idle" | "running" | "failed" | { hash: string }>("idle");
+  useEffect(() => {
+    if (state !== "running") return;
+    const id = crypto.randomUUID();
+    let live = true;
+    void commands.checksum(id, path).then((r) => {
+      if (live) setState(r.status === "ok" ? { hash: r.data } : "failed");
+    });
+    return () => {
+      live = false;
+      void commands.cancelJob(id);
+    };
+  }, [state, path]);
+
+  if (state === "idle")
+    return (
+      <button type="button" onClick={() => setState("running")} className="text-accent hover:underline">
+        {t("Calculate")}
+      </button>
+    );
+  if (state === "failed") return <span className="text-fg-muted">{t("Couldn’t read the file.")}</span>;
+  if (state === "running") return <span className="text-fg-muted">{t("Calculating…")}</span>;
+  return <span className="font-mono text-[11px] break-all">{state.hash}</span>;
+}
+
 function permissions(mode: number): string {
   const bits = "rwxrwxrwx";
   let out = "";
@@ -95,6 +123,9 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
           ],
           ...(single.symlink
             ? ([[t("Original"), single.symlink.target]] as [string, React.ReactNode][])
+            : []),
+          ...(single.kind === "file"
+            ? ([["SHA-256", <Checksum key="sha" path={single.path} />]] as [string, React.ReactNode][])
             : []),
           ...(single.tags.length > 0
             ? ([
