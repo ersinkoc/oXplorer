@@ -59,7 +59,7 @@ muda = { version = "0.20", default-features = false }
 tauri-plugin-notification = "2"
 tauri-plugin-updater = "~2.13"
 tauri-plugin-process = "2"
-gix = { version = "=0.89.0", default-features = false, features = ["status", "max-performance-safe", "sha1"] }
+gix = { version = "=0.90.0", default-features = false, features = ["status", "max-performance", "sha1"] }
 opendal = { version = "=0.59.3", default-features = false, features = ["services-sftp", "services-webdav", "services-s3", "services-fs", "http-transport-reqwest", "reqwest-rustls-tls", "executors-tokio"] }
 
 [dev-dependencies]
