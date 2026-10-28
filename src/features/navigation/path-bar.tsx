@@ -124,6 +124,8 @@ function PathInput({ initial }: { initial: string }) {
     const parts = splitTyped(value, home);
     if (!parts) return;
     const r = await commands.completePath(parts.dir, parts.prefix);
+    // Typing went on while the folder was read; don't overwrite it.
+    if (ref.current?.value !== value) return;
     const names = r.status === "ok" ? r.data : [];
     const [only] = names;
     if (names.length === 1 && only) {

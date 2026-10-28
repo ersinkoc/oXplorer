@@ -62,14 +62,20 @@ pub async fn complete_path(dir: String, prefix: String) -> AppResult<Vec<String>
     .map_err(|e| AppError::Io { path: Some(dir), message: e.to_string() })?
 }
 
+/// Case- and normalization-insensitive form (names on disk may be decomposed, NFD).
+fn fold(s: &str) -> String {
+    use unicode_normalization::UnicodeNormalization as _;
+    s.nfc().collect::<String>().to_lowercase()
+}
+
 fn completions(paths: impl Iterator<Item = std::path::PathBuf>, prefix: &str) -> Vec<String> {
-    let want = prefix.to_lowercase();
+    let want = fold(prefix);
     let mut names: Vec<String> = paths
         .filter(|p| p.is_dir())
         .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-        .filter(|n| (!n.starts_with('.') || want.starts_with('.')) && n.to_lowercase().starts_with(&want))
+        .filter(|n| (!n.starts_with('.') || want.starts_with('.')) && fold(n).starts_with(&want))
         .collect();
-    names.sort_by_key(|n| n.to_lowercase());
+    names.sort_by_key(|n| fold(n));
     names.truncate(COMPLETIONS);
     names
 }
@@ -103,5 +109,8 @@ mod tests {
         assert_eq!(list("do"), vec!["docs", "Documents"]);
         assert_eq!(list(""), vec!["Desktop", "docs", "Documents"]);
         assert_eq!(list("."), vec![".dotfiles"]);
+        // A decomposed (NFD) name matches what the user typed (NFC).
+        std::fs::create_dir(tmp.path().join("Go\u{308}rseller")).unwrap();
+        assert_eq!(list("gö"), vec!["Go\u{308}rseller"]);
     }
 }

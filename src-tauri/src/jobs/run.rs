@@ -375,6 +375,8 @@ impl Runner<'_> {
 
     fn undo(&mut self, steps: Vec<UndoStep>) -> Result<(), AppError> {
         self.r.planned(0, u32::try_from(steps.len()).unwrap_or(u32::MAX));
+        // Items a failed move-back left where they were; their folder must not go to the Trash.
+        let mut stranded: Vec<PathBuf> = Vec::new();
         for step in steps {
             if self.should_stop() {
                 break;
@@ -382,6 +384,10 @@ impl Runner<'_> {
             match step {
                 UndoStep::Trash { path } => {
                     let p = validate_path(&path)?;
+                    if stranded.iter().any(|s| s.starts_with(&p)) {
+                        self.tick(0, 1, &p);
+                        continue;
+                    }
                     match fsops::trash(&p) {
                         Ok(to) => {
                             self.log.push(Done::Trashed { from: p.clone(), to });
@@ -405,6 +411,7 @@ impl Runner<'_> {
                     if to.symlink_metadata().is_ok() {
                         // Something new took the old place; don't clobber it.
                         self.failures.push(err(&to, &io::Error::from(io::ErrorKind::AlreadyExists)));
+                        stranded.push(from);
                         continue;
                     }
                     let parent = to.parent().unwrap_or(Path::new("/")).to_path_buf();
@@ -419,7 +426,10 @@ impl Runner<'_> {
                             self.log.push(Done::Moved { from: from.clone(), to });
                             self.removed.push(from);
                         }
-                        Err(e) => self.failures.push(err(&from, &e)),
+                        Err(e) => {
+                            self.failures.push(err(&from, &e));
+                            stranded.push(from);
+                        }
                     }
                     self.tick(0, 1, &parent);
                 }
@@ -670,6 +680,26 @@ mod tests {
         fs::write(root.join("src/sub/b.txt"), "bb").unwrap();
         std::os::unix::fs::symlink("a.txt", root.join("src/link")).unwrap();
         fs::create_dir(root.join("dest")).unwrap();
+    }
+
+    #[test]
+    fn undo_keeps_a_folder_whose_items_could_not_move_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir(root.join("box")).unwrap();
+        fs::write(root.join("box/a.txt"), b"old").unwrap();
+        // A new a.txt took the old place, so the move back fails.
+        fs::write(root.join("a.txt"), b"new").unwrap();
+        let action = UndoAction {
+            label: "New Folder with Selection".into(),
+            steps: vec![
+                UndoStep::Move { from: s(&root.join("box/a.txt")), to: s(&root.join("a.txt")) },
+                UndoStep::Trash { path: s(&root.join("box")) },
+            ],
+        };
+        let out = run(JobSpec::Undo { action }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
+        assert_eq!(out.failures.len(), 1);
+        assert_eq!(fs::read(root.join("box/a.txt")).unwrap(), b"old");
     }
 
     #[test]

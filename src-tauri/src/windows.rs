@@ -24,10 +24,26 @@ fn failed(e: impl std::fmt::Display) -> AppError {
 #[specta::specta]
 pub async fn open_window(app: AppHandle, path: String) -> AppResult<()> {
     let path = validate_path(&path)?;
-    let label = (2..)
-        .map(|n| format!("window-{n}"))
-        .find(|l| app.get_webview_window(l).is_none())
-        .ok_or_else(|| failed("no free label"))?;
+    // Picked and reserved under one lock, so two quick ⌘Ns get different labels.
+    let label = {
+        let mut starts = START_PATHS.lock().map_err(failed)?;
+        let label = (2..)
+            .map(|n| format!("window-{n}"))
+            .find(|l| app.get_webview_window(l).is_none() && !starts.contains_key(l))
+            .ok_or_else(|| failed("no free label"))?;
+        starts.insert(label.clone(), path.to_string_lossy().into_owned());
+        label
+    };
+    let built = build(&app, &label);
+    if built.is_err()
+        && let Ok(mut m) = START_PATHS.lock()
+    {
+        m.remove(&label);
+    }
+    built
+}
+
+fn build(app: &AppHandle, label: &str) -> AppResult<()> {
     let mut config = app
         .config()
         .app
@@ -36,7 +52,7 @@ pub async fn open_window(app: AppHandle, path: String) -> AppResult<()> {
         .find(|w| w.label == "main")
         .cloned()
         .ok_or_else(|| failed("no window config"))?;
-    config.label.clone_from(&label);
+    label.clone_into(&mut config.label);
     // Below and to the right of the focused window; the window-state plugin
     // restores the size and place of a label used before.
     let from = app.webview_windows().into_values().find(|w| w.is_focused().unwrap_or(false));
@@ -47,10 +63,7 @@ pub async fn open_window(app: AppHandle, path: String) -> AppResult<()> {
         config.x = Some(pos.x + CASCADE);
         config.y = Some(pos.y + CASCADE);
     }
-    if let Ok(mut m) = START_PATHS.lock() {
-        m.insert(label.clone(), path.to_string_lossy().into_owned());
-    }
-    WebviewWindowBuilder::from_config(&app, &config).and_then(WebviewWindowBuilder::build).map_err(failed)?;
+    WebviewWindowBuilder::from_config(app, &config).and_then(WebviewWindowBuilder::build).map_err(failed)?;
     Ok(())
 }
 

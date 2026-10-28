@@ -49,7 +49,15 @@ function useDiff(left: FileEntry, right: FileEntry): Result {
           setResult({ status: "binary" });
           return;
         }
-        const lines = diffLines(a.text.split(/\r?\n/), b.text.split(/\r?\n/));
+        // A cut-off file ends mid-way (last line partial): compare both up to the same line,
+        // or everything past the cut would show as removed or added.
+        const left = a.text.split(/\r?\n/);
+        const right = b.text.split(/\r?\n/);
+        const cut = Math.min(
+          a.truncated ? left.length - 1 : Number.POSITIVE_INFINITY,
+          b.truncated ? right.length - 1 : Number.POSITIVE_INFINITY,
+        );
+        const lines = diffLines(left.slice(0, cut), right.slice(0, cut));
         setResult(
           lines
             ? { status: "done", lines, truncated: a.truncated || b.truncated }

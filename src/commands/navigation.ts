@@ -23,23 +23,26 @@ export function navigateTo(
   const from = getActiveTab(pane).path;
   ws.setPath(path, opts);
   if (useApp.getState().syncBrowse && ws.dualPane && pane === ws.activePane)
-    followInOtherPane(pane, from, path);
+    followInOtherPane(pane, from, path, opts.history ?? "push");
 }
 
 /** Synchronized browsing: the other pane makes the same move when it can. */
-function followInOtherPane(pane: PaneId, from: string, to: string): void {
+function followInOtherPane(pane: PaneId, from: string, to: string, mode: HistoryMode): void {
   if (isVirtualPath(from) || isVirtualPath(to)) return;
   const other = pane === "left" ? "right" : "left";
-  const otherPath = getActiveTab(other).path;
+  const { path: otherPath, history } = getActiveTab(other);
   if (isVirtualPath(otherPath)) return;
   const target = mirrorMove(from, to, otherPath);
   if (!target) return;
   // Into a subfolder only if the other pane has one by that name.
   const listed = useDirCache.getState().dirs[otherPath]?.entries;
-  if (target !== parent(otherPath) && listed && !listed.some((e) => e.path === target && isFolderLike(e)))
-    return;
+  if (target !== parent(otherPath) && !listed?.some((e) => e.path === target && isFolderLike(e))) return;
+  // Back/Forward walk the other pane's history too when it leads to the same place.
+  const step = mode === "back" ? -1 : mode === "forward" ? 1 : 0;
+  const walks = step !== 0 && history.stack[history.index + step] === target;
   useWorkspace.getState().setPath(target, {
     pane: other,
+    history: walks ? mode : "push",
     select: target === parent(otherPath) ? otherPath : undefined,
   });
 }

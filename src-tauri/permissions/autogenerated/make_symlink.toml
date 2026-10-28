@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-make-symlink"
+description = "Enables the make_symlink command without any pre-configured scope."
+commands.allow = ["make_symlink"]
+
+[[permission]]
+identifier = "deny-make-symlink"
+description = "Denies the make_symlink command without any pre-configured scope."
+commands.deny = ["make_symlink"]

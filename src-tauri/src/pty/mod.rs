@@ -171,6 +171,8 @@ pub fn pty_open(
         .spawn(move || {
             let mut buf = vec![0u8; READ_CHUNK];
             let mut pending = Vec::new();
+            // The page is gone (window closed): the shell is still running.
+            let mut orphaned = false;
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
@@ -178,12 +180,24 @@ pub fn pty_open(
                         pending.extend_from_slice(&buf[..n]);
                         let data = decode_utf8(&mut pending);
                         if !data.is_empty() && on_event.send(PtyEvent::Output { data }).is_err() {
+                            orphaned = true;
                             break;
                         }
                     }
                 }
             }
-            let code = session.lock().ok().and_then(|mut s| s.child.wait().ok()).map(|s| s.exit_code());
+            // Waiting holds the session lock, so a live shell must end first or
+            // `pty_close` / `close_window` would block on it forever.
+            let code = session
+                .lock()
+                .ok()
+                .and_then(|mut s| {
+                    if orphaned {
+                        let _ = s.child.kill();
+                    }
+                    s.child.wait().ok()
+                })
+                .map(|s| s.exit_code());
             manager.remove_if_same(&id, &session);
             let _ = on_event.send(PtyEvent::Exit { code });
         })

@@ -16,7 +16,7 @@ export const useFolderSizes = create<{ sizes: Record<string, FolderSize> }>()(()
 
 const queue: string[] = [];
 /** The measurement in flight; `stop` cancels it and settles its promise. */
-let current: { id: string; stop: () => void } | null = null;
+let current: { path: string; stop: () => void } | null = null;
 
 function measureOne(path: string): Promise<void> {
   return new Promise((resolve) => {
@@ -29,7 +29,7 @@ function measureOne(path: string): Promise<void> {
       resolve();
     };
     current = {
-      id,
+      path,
       stop: () => {
         void commands.cancelJob(id);
         finish();
@@ -56,12 +56,14 @@ export async function measureFolders(paths: readonly string[]): Promise<void> {
   for (let next = queue.shift(); next; next = queue.shift()) await measureOne(next);
 }
 
-/** Forgets sizes inside `folder` and stops measuring. */
+/** Forgets sizes inside `folder` and stops measuring there (other folders keep going). */
 export function clearFolderSizes(folder: string): void {
-  queue.length = 0;
-  current?.stop();
   const prefix = folder.endsWith("/") ? folder : `${folder}/`;
+  const inside = (p: string) => p.startsWith(prefix);
+  const keep = queue.filter((p) => !inside(p));
+  queue.splice(0, queue.length, ...keep);
+  if (current && inside(current.path)) current.stop();
   useFolderSizes.setState((s) => ({
-    sizes: Object.fromEntries(Object.entries(s.sizes).filter(([p]) => !p.startsWith(prefix))),
+    sizes: Object.fromEntries(Object.entries(s.sizes).filter(([p]) => !inside(p))),
   }));
 }
