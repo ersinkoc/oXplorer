@@ -88,6 +88,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
         ...(entries.some((e) => e.kind === "dir")
           ? [{ text: t("Calculate Folder Sizes"), command: "view.calculateSizes" }]
           : []),
+        ...(entries.length === 2 && entries.every((e) => e.kind === "file")
+          ? [{ text: t("Compare Files"), command: "file.compareFiles" }]
+          : []),
         {
           text: one ? t("Rename") : t("Rename {count} Items…", { count: entries.length.toLocaleString() }),
           command: "file.rename",

@@ -63,6 +63,8 @@ interface AppState extends Preferences {
   batchRename: FileEntry[] | null;
   /** "Select Matching…" dialog: whether it adds to or removes from the selection. */
   selectMatching: "select" | "deselect" | null;
+  /** Files in the Compare Files window (old, new). */
+  compareFiles: [FileEntry, FileEntry] | null;
   /** Synchronized browsing: the other pane follows into subfolders and up. */
   syncBrowse: boolean;
 
@@ -108,6 +110,7 @@ export const useApp = create<AppState>()((set) => ({
   batchRename: null,
   selectMatching: null,
   syncBrowse: false,
+  compareFiles: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {

@@ -87,6 +87,31 @@ export function registerTabCommands(): void {
     },
     { id: "window.close", title: "Close Window", run: closeWindow },
     {
+      id: "file.compareFiles",
+      title: "Compare Files",
+      run: () => {
+        // Two files selected in this pane, or one in each pane.
+        const { dualPane, activePane } = useWorkspace.getState();
+        const isFile = (e: { kind: string }) => e.kind === "file";
+        const here = selectedEntries().filter(isFile);
+        const there = dualPane ? selectedEntries(otherPane(activePane)).filter(isFile) : [];
+        const pair =
+          here.length === 2
+            ? [here[0], here[1]]
+            : here.length === 1 && there.length === 1
+              ? activePane === "left"
+                ? [here[0], there[0]]
+                : [there[0], here[0]]
+              : null;
+        const [a, b] = pair ?? [];
+        if (!a || !b) {
+          toast(t("Select two files, or one file in each pane."));
+          return;
+        }
+        useApp.getState().set({ compareFiles: [a, b] });
+      },
+    },
+    {
       id: "pane.syncBrowse",
       title: "Synchronized Browsing",
       run: () => {

@@ -59,6 +59,7 @@ const WINDOW: &[Item] = &[
     SEP,
     ("pane.compare", "Compare Panes", None),
     ("pane.selectDifferences", "Select Differences", None),
+    ("file.compareFiles", "Compare Files", None),
 ];
 
 /// Text fields get these too: the frontend forwards them when an input has focus.

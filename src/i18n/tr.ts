@@ -33,6 +33,18 @@ export const tr: Readonly<Record<string, string>> = {
   "Synchronized browsing is on": "Eşzamanlı gezinme açık",
   "Synchronized browsing is off": "Eşzamanlı gezinme kapalı",
   Synced: "Eşzamanlı",
+  "Compare Files": "Dosyaları Karşılaştır",
+  "The files are identical.": "Dosyalar aynı.",
+  "1 line removed": "1 satır silindi",
+  "{count} lines removed": "{count} satır silindi",
+  "1 line added": "1 satır eklendi",
+  "{count} lines added": "{count} satır eklendi",
+  "Comparing…": "Karşılaştırılıyor…",
+  "One of the files isn’t text.": "Dosyalardan biri metin değil.",
+  "The files are too different to compare line by line.":
+    "Dosyalar satır satır karşılaştırılamayacak kadar farklı.",
+  "Only the first part of the files is compared.": "Dosyaların yalnızca ilk kısmı karşılaştırıldı.",
+  "Select two files, or one file in each pane.": "İki dosya ya da her panelde birer dosya seçin.",
   "Added to the sidebar": "Kenar çubuğuna eklendi",
   "Remove “{name}” from the sidebar": "“{name}” öğesini kenar çubuğundan kaldır",
   "Start the host with ftps:// to use TLS. Plain FTP sends the password unencrypted.":

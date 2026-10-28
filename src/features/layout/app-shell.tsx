@@ -1,3 +1,4 @@
+import { CompareFilesDialog } from "@/features/compare/compare-files-dialog";
 import { DragGhost } from "@/features/dnd/drag-ghost";
 import { useExternalDrop } from "@/features/dnd/use-external-drop";
 import { WhatsNewDialog } from "@/features/help/whats-new";
@@ -41,6 +42,7 @@ export function AppShell() {
       <CommandPalette />
       <BatchRenameDialog />
       <SelectMatchingDialog />
+      <CompareFilesDialog />
       <WhatsNewDialog />
       <DiskUsageDialog />
     </div>
