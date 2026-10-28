@@ -1,13 +1,17 @@
 import { ChevronDown, FolderInput, Link2, Plus, SquareTerminal, X } from "lucide-react";
-import { useRef } from "react";
+import { lazy, Suspense, useRef } from "react";
 import { runCommand } from "@/commands/registry";
 import { closeTerminal } from "@/commands/terminal-commands";
-import { TerminalView } from "@/features/terminal/terminal-view";
 import { Splitter } from "@/features/workspace/splitter";
 import { useT } from "@/i18n";
 import { basename } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
 import { useTerminals } from "@/stores/terminal-store";
+
+// xterm and its renderer load with the first terminal, not at startup.
+const TerminalView = lazy(() =>
+  import("@/features/terminal/terminal-view").then((m) => ({ default: m.TerminalView })),
+);
 
 export const TERMINAL_LIMITS = { min: 120, default: 260 } as const;
 
@@ -94,7 +98,9 @@ export function TerminalPanel() {
         </PanelButton>
       </div>
       {sessions.map((s) => (
-        <TerminalView key={s.id} session={s} active={visible && s.id === activeId} />
+        <Suspense key={s.id} fallback={null}>
+          <TerminalView session={s} active={visible && s.id === activeId} />
+        </Suspense>
       ))}
     </div>
   );

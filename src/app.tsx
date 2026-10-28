@@ -121,7 +121,9 @@ export function App() {
         if (disposed) return;
         setReady(true);
         // Epoch ms, so startup can be measured from outside (time from `open` to this line).
-        requestAnimationFrame(() => void info(`ui ready at ${Date.now()}`));
+        requestAnimationFrame(
+          () => void info(`ui ready at ${Date.now()} (${Math.round(performance.now())} ms after page start)`),
+        );
       });
     return () => {
       disposed = true;
