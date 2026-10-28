@@ -380,6 +380,14 @@ export const tr: Readonly<Record<string, string>> = {
   "Custom shortcuts weren’t applied: {reason}": "Özel kestirmeler uygulanamadı: {reason}",
   Language: "Dil",
   "Compare Panes": "Panelleri Karşılaştır",
+  "Disk Usage…": "Disk Kullanımı…",
+  "{files} files, {size}": "{files} dosya, {size}",
+  "Click a folder to look inside; double-click to open it in the pane.":
+    "İçine bakmak için bir klasöre tıklayın; panelde açmak için çift tıklayın.",
+  "Disk usage treemap": "Disk kullanımı haritası",
+  "{count} more items": "{count} öğe daha",
+  "Other items": "Diğer öğeler",
+  "{files} files": "{files} dosya",
   "comparing: {only} only here, {newer} newer, {different} different":
     "karşılaştırılıyor: {only} yalnızca burada, {newer} daha yeni, {different} farklı",
   "Select Differences": "Farkları Seç",

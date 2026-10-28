@@ -70,6 +70,8 @@
     "allow-log-file",
     "allow-updates-enabled",
     "allow-git-status",
+    "allow-disk-usage",
+    "allow-disk-usage-cancel",
     "updater:default",
     "process:allow-restart"
   ]

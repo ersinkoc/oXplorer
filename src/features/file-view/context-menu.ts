@@ -143,6 +143,7 @@ export async function showBackgroundMenu(): Promise<void> {
       "-",
       { text: t("Get Info"), command: "file.getInfo" },
       { text: t("New Terminal at Folder"), command: "terminal.new" },
+      { text: t("Disk Usage…"), command: "view.diskUsage" },
       { text: showHidden ? t("Hide Hidden Files") : t("Show Hidden Files"), command: "view.toggleHidden" },
       { text: t("Show in Finder"), command: "file.revealInFinder" },
     ]),

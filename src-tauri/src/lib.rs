@@ -12,6 +12,7 @@ mod search;
 mod security;
 mod system;
 mod uri_scheme;
+mod usage;
 
 use tauri::Manager as _;
 use tauri_specta::{collect_commands, collect_events};
@@ -51,6 +52,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             system::log_file,
             system::updates_enabled,
             git::git_status,
+            usage::disk_usage,
+            usage::disk_usage_cancel,
             menu::menu_items,
             menu::set_shortcuts,
             menu::set_menu_titles,
@@ -145,6 +148,7 @@ pub fn run() {
             app.manage(std::sync::Arc::new(jobs::JobManager::default()));
             app.manage(std::sync::Arc::new(pty::PtyManager::default()));
             app.manage(std::sync::Arc::new(search::SearchManager::default()));
+            app.manage(std::sync::Arc::new(usage::UsageScans::default()));
             Ok(())
         })
         .build(tauri::generate_context!())

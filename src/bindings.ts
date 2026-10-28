@@ -74,6 +74,9 @@ export const commands = {
 	updatesEnabled: () => __TAURI_INVOKE<boolean>("updates_enabled"),
 	/**  Git state of a folder's children, or `None` outside a repository. */
 	gitStatus: (path: string) => typedError<GitStatus_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("git_status", { path })),
+	/**  Scans `path`; progress and the result (`Done`) arrive through `on_event`. */
+	diskUsage: (id: string, path: string, onEvent: Channel<UsageEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("disk_usage", { id, path, onEvent })),
+	diskUsageCancel: (id: string) => __TAURI_INVOKE<void>("disk_usage_cancel", { id }),
 	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
 	/**  Rebuilds the menu bar with the user's shortcuts. */
 	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),
@@ -516,6 +519,26 @@ export type UndoStep =
 { kind: "trash"; path: string } | 
 /**  Move an item back (reverses a move, rename, or trashing). */
 { kind: "move"; from: string; to: string };
+
+export type UsageEvent = UsageEvent_Serialize | UsageEvent_Deserialize;
+
+export type UsageEvent_Deserialize = { type: "progress"; bytes: number; files: number } | { type: "done"; root?: UsageNode | null; cancelled: boolean };
+
+export type UsageEvent_Serialize = { type: "progress"; bytes: number; files: number } | { type: "done"; root: UsageNode | null; cancelled: boolean };
+
+export type UsageNode = {
+	name: string,
+	/**  Allocated bytes on disk (what deleting it would free). */
+	size: number,
+	files: number,
+	isDir: boolean,
+	/**  Several small items summed up; not a real file or folder. */
+	isOther: boolean,
+	/**  Empty for files, "other" nodes, and folders below the depth sent. */
+	children: UsageNode[],
+	/**  A folder whose children weren't sent (below the depth limit). */
+	truncated: boolean,
+};
 
 export type VolumeInfo = {
 	name: string,

@@ -53,6 +53,8 @@ interface AppState extends Preferences {
   /** The resolved UI language (see `languagePref`). */
   language: "en" | "tr";
   whatsNewOpen: boolean;
+  /** Folder shown in the Disk Usage window. */
+  diskUsagePath: string | null;
   /** Items in the "Rename N Items" dialog. */
   batchRename: FileEntry[] | null;
 
@@ -92,6 +94,7 @@ export const useApp = create<AppState>()((set) => ({
   paletteOpen: false,
   language: "en",
   whatsNewOpen: false,
+  diskUsagePath: null,
   batchRename: null,
 
   set: (patch) => set(patch),

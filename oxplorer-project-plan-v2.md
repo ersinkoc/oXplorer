@@ -748,7 +748,7 @@ A single-pane, real-time, native-looking, secure file manager. Distributed as a 
 - Remote file systems: SFTP, S3, WebDAV (`opendal` 0.59) as "connections" in the sidebar
 - Browsing archives like folders (entering a zip)
 - [x] Directory comparison and synchronization (diff between the two panes) — Window → Compare Panes marks items only in one pane, newer, older or same-date-different-size (2 s slack for FAT); Select Differences + F5 syncs one direction
-- Disk usage visualization (treemap / sunburst)
+- [x] Disk usage visualization (treemap / sunburst) — View → Disk Usage (⌥⌘D): parallel scan (allocated bytes, hard links once, one volume, cancellable; 157k files in 0.64 s), squarified treemap with two levels, zoom with breadcrumb, double-click opens the folder
 - Finder Sync / Share extension (requires a Swift helper target)
 
 ---

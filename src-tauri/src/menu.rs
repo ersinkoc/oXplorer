@@ -87,6 +87,7 @@ const VIEW: &[Item] = &[
     ("view.toggleHidden", "Show Hidden Files", Some("Shift+CmdOrCtrl+Period")),
     ("view.toggleSidebar", "Toggle Sidebar", Some("Ctrl+CmdOrCtrl+S")),
     ("view.reload", "Reload", Some("CmdOrCtrl+R")),
+    ("view.diskUsage", "Disk Usage…", Some("Alt+CmdOrCtrl+D")),
 ];
 
 const GO: &[Item] = &[

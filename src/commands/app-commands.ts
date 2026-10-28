@@ -106,6 +106,15 @@ export function registerAppCommands(): void {
     },
     { id: "view.reload", title: "Reload", run: reload },
     {
+      id: "view.diskUsage",
+      title: "Disk Usage…",
+      run: () => {
+        const [first] = selectedEntries();
+        const folder = first && first.kind === "dir" ? first.path : currentFolder();
+        useApp.getState().set({ diskUsagePath: folder });
+      },
+    },
+    {
       id: "app.settings",
       title: "Settings…",
       run: async () => {

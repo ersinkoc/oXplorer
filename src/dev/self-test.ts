@@ -1,7 +1,13 @@
 import { Channel, convertFileSrc } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { info, error as logError } from "@tauri-apps/plugin-log";
-import { commands, type MeasureEvent } from "@/bindings";
+import {
+  commands,
+  type MeasureEvent,
+  type UsageEvent_Deserialize,
+  type UsageEvent_Serialize,
+  type UsageNode,
+} from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { navigateTo } from "@/commands/navigation";
 import { runCommand } from "@/commands/registry";
@@ -226,6 +232,20 @@ export async function runSelfTest(): Promise<void> {
     runCommand("pane.compare");
     useWorkspace.getState().setDualPane(false);
     navigateTo(dir, { pane: "left" });
+
+    // Disk usage: the scan counts the files, and the window draws a treemap.
+    const usage = await new Promise<UsageNode | null>((resolve) => {
+      const ch = new Channel<UsageEvent_Deserialize>();
+      ch.onmessage = (raw) => {
+        const ev = raw as UsageEvent_Serialize;
+        if (ev.type === "done") resolve(ev.root);
+      };
+      void commands.diskUsage(crypto.randomUUID(), dir, ch);
+    });
+    useApp.getState().set({ diskUsagePath: dir });
+    const drawn = await waitFor(() => !!document.querySelector("svg[role='img'] rect"), 5000);
+    useApp.getState().set({ diskUsagePath: null });
+    step("disk usage", !!usage && usage.files > 0 && drawn, `${usage?.files} files, drawn=${drawn}`);
 
     // Git: a folder outside any repository has no status (and doesn't fail).
     const git = await commands.gitStatus(dir);

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disk-usage-cancel"
+description = "Enables the disk_usage_cancel command without any pre-configured scope."
+commands.allow = ["disk_usage_cancel"]
+
+[[permission]]
+identifier = "deny-disk-usage-cancel"
+description = "Denies the disk_usage_cancel command without any pre-configured scope."
+commands.deny = ["disk_usage_cancel"]
