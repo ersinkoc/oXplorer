@@ -103,7 +103,12 @@ const GO: &[Item] = &[
     ("nav.back", "Back", Some("CmdOrCtrl+BracketLeft")),
     ("nav.forward", "Forward", Some("CmdOrCtrl+BracketRight")),
     ("nav.up", "Enclosing Folder", Some("CmdOrCtrl+Up")),
+    ("nav.documents", "Documents", Some("Shift+CmdOrCtrl+O")),
+    ("nav.desktop", "Desktop", Some("Shift+CmdOrCtrl+D")),
+    ("nav.downloads", "Downloads", Some("Alt+CmdOrCtrl+L")),
     ("nav.home", "Home", Some("Shift+CmdOrCtrl+H")),
+    ("nav.applications", "Applications", Some("Shift+CmdOrCtrl+A")),
+    ("nav.utilities", "Utilities", Some("Shift+CmdOrCtrl+U")),
     ("nav.goToFolder", "Go to Folder…", Some("Shift+CmdOrCtrl+G")),
     ("palette.open", "Command Palette…", Some("CmdOrCtrl+K")),
 ];

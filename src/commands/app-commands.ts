@@ -23,6 +23,12 @@ import { useDirCache } from "@/stores/dir-cache-store";
 import { measureFolders } from "@/stores/folder-size-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
+/** Go menu: a standard folder, if this Mac has it. */
+function goToLocation(id: string): void {
+  const location = useApp.getState().locations.find((l) => l.id === id);
+  if (location) navigateTo(location.path);
+}
+
 function isTextInput(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 }
@@ -33,6 +39,11 @@ export function registerAppCommands(): void {
     { id: "nav.forward", title: "Forward", run: goForward },
     { id: "nav.up", title: "Enclosing Folder", run: goUp },
     { id: "nav.home", title: "Home", run: () => navigateTo(useApp.getState().home) },
+    { id: "nav.documents", title: "Documents", run: () => goToLocation("documents") },
+    { id: "nav.desktop", title: "Desktop", run: () => goToLocation("desktop") },
+    { id: "nav.downloads", title: "Downloads", run: () => goToLocation("downloads") },
+    { id: "nav.applications", title: "Applications", run: () => goToLocation("applications") },
+    { id: "nav.utilities", title: "Utilities", run: () => navigateTo("/Applications/Utilities") },
     { id: "nav.goToFolder", title: "Go to Folder…", run: () => useApp.getState().set({ editingPath: true }) },
 
     {

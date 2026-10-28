@@ -392,6 +392,7 @@ export const tr: Readonly<Record<string, string>> = {
   Documents: "Belgeler",
   Downloads: "İndirilenler",
   Applications: "Uygulamalar",
+  Utilities: "İzlenceler",
   Pictures: "Resimler",
   "{selected} of {total} selected": "{total} öğeden {selected} tanesi seçili",
   "{count} items…": "{count} öğe…",
