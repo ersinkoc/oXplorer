@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remote-register-test-folder"
+description = "Enables the remote_register_test_folder command without any pre-configured scope."
+commands.allow = ["remote_register_test_folder"]
+
+[[permission]]
+identifier = "deny-remote-register-test-folder"
+description = "Denies the remote_register_test_folder command without any pre-configured scope."
+commands.deny = ["remote_register_test_folder"]

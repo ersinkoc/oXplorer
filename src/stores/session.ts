@@ -92,7 +92,13 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 function restoreTab(raw: unknown): TabState | null {
   if (!isRecord(raw) || typeof raw.path !== "string") return null;
-  if (!raw.path.startsWith("/") && !parseSearchPath(raw.path) && !parseArchivePath(raw.path)) return null;
+  if (
+    !raw.path.startsWith("/") &&
+    !parseSearchPath(raw.path) &&
+    !parseArchivePath(raw.path) &&
+    !raw.path.startsWith("remote:")
+  )
+    return null;
   const path = raw.path;
   const h = isRecord(raw.history) ? raw.history : {};
   const stack = Array.isArray(h.stack) ? h.stack.filter((p): p is string => typeof p === "string") : [];

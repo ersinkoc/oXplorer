@@ -19,6 +19,7 @@ import { archivePath } from "@/lib/archive-path";
 import { highlight } from "@/lib/highlight";
 import { unwrap } from "@/lib/ipc";
 import { join } from "@/lib/path";
+import { remotePath } from "@/lib/remote-path";
 import { searchPath } from "@/lib/search-path";
 import { shellQuote } from "@/lib/shell";
 import { useApp } from "@/stores/app-store";
@@ -179,6 +180,44 @@ export async function runSelfTest(): Promise<void> {
       `${members.join()} | ${backIn.path}`,
     );
 
+    // A "server" (a local folder through OpenDAL): list, upload, download, rename, delete.
+    const serverRoot = await unwrap(commands.createItem(dir, "fake-server", true));
+    await unwrap(commands.createItem(serverRoot.path, "remote.txt", false));
+    await unwrap(commands.remoteRegisterTestFolder("selftest", serverRoot.path));
+    const top = remotePath("selftest");
+    navigateTo(top);
+    await waitFor(() => useDirCache.getState().dirs[top]?.status === "ready", 5000);
+    const listed =
+      useDirCache
+        .getState()
+        .dirs[top]?.entries.map((e) => e.name)
+        .join() ?? "";
+    const uploadSrc = await unwrap(commands.createItem(dir, "to-upload.txt", false));
+    await runJob(
+      { kind: "upload", sources: [uploadSrc.path], destDir: top },
+      { history: "none", select: false },
+    );
+    const afterUpload = await unwrap(commands.remoteList(top));
+    const downloadDest = await unwrap(commands.createItem(dir, "downloads", true));
+    const down = await runJob(
+      { kind: "download", sources: [remotePath("selftest", "remote.txt")], destDir: downloadDest.path },
+      { history: "none", select: false },
+    );
+    const renamedRemote = await unwrap(
+      commands.remoteRename(remotePath("selftest", "to-upload.txt"), "up.txt"),
+    );
+    await unwrap(commands.remoteDelete([renamedRemote]));
+    const finalList = await unwrap(commands.remoteList(top));
+    navigateTo(dir);
+    step(
+      "remote folder",
+      listed === "remote.txt" &&
+        afterUpload.some((e) => e.name === "to-upload.txt") &&
+        down?.created[0]?.path === join(downloadDest.path, "remote.txt") &&
+        finalList.map((e) => e.name).join() === "remote.txt",
+      `${listed} | ${finalList.map((e) => e.name).join()}`,
+    );
+
     // Tags: add and remove through the xattr.
     const tagged = await unwrap(
       commands.editTags([join(arc.path, "inside.txt")], [{ name: "Red", color: 6 }], []),
@@ -297,6 +336,9 @@ export async function runSelfTest(): Promise<void> {
           arc.path,
           cmpA.path,
           outOfZip.path,
+          serverRoot.path,
+          uploadSrc.path,
+          downloadDest.path,
           cmpB.path,
           zipPath,
           outDir,
@@ -305,7 +347,7 @@ export async function runSelfTest(): Promise<void> {
       },
       { history: "none" },
     );
-    step("delete", gone?.removed.length === (png ? 11 : 10) && gone.failures.length === 0);
+    step("delete", gone?.removed.length === (png ? 14 : 13) && gone.failures.length === 0);
   } catch (err) {
     step("exception", false, String(err));
   }

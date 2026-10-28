@@ -36,6 +36,16 @@ pub enum JobSpec {
     Extract {
         archives: Vec<String>,
     },
+    /// Downloads remote items (`remote:` paths) into a local folder.
+    Download {
+        sources: Vec<String>,
+        dest_dir: String,
+    },
+    /// Uploads local items into a remote folder (`remote:` path).
+    Upload {
+        sources: Vec<String>,
+        dest_dir: String,
+    },
     /// Copies members out of one archive (`archive:` paths) into a folder.
     ExtractMembers {
         sources: Vec<String>,

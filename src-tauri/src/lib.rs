@@ -9,6 +9,7 @@ mod menu;
 mod model;
 mod preview;
 mod pty;
+mod remote;
 mod search;
 mod security;
 mod system;
@@ -57,6 +58,16 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             usage::disk_usage_cancel,
             archive_fs::archive_list,
             archive_fs::archive_open_member,
+            remote::remote_set_connections,
+            remote::remote_save_secret,
+            remote::remote_has_secret,
+            remote::remote_test,
+            remote::remote_list,
+            remote::remote_create_dir,
+            remote::remote_rename,
+            remote::remote_delete,
+            remote::remote_open_member,
+            remote::remote_register_test_folder,
             menu::menu_items,
             menu::set_shortcuts,
             menu::set_menu_titles,

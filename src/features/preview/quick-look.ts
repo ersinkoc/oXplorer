@@ -1,6 +1,6 @@
 import { commands, events } from "@/bindings";
+import { materialize } from "@/commands/locations";
 import { paneLayout } from "@/features/file-view/visible-order";
-import { isArchivePath } from "@/lib/archive-path";
 import { move } from "@/lib/selection";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
@@ -24,15 +24,9 @@ export function toggleQuickLook(): void {
   if (paths.length > 0) void realPaths(paths).then((real) => commands.quickLook(real, index, true));
 }
 
-/** Items inside an archive are extracted to a temporary folder for Quick Look. */
+/** Items inside an archive or on a server are copied to a temporary folder for Quick Look. */
 async function realPaths(paths: readonly string[]): Promise<string[]> {
-  return Promise.all(
-    paths.map(async (p) => {
-      if (!isArchivePath(p)) return p;
-      const r = await commands.archiveOpenMember(p);
-      return r.status === "ok" ? r.data : p;
-    }),
-  );
+  return Promise.all(paths.map((p) => materialize(p).catch(() => p)));
 }
 
 /**

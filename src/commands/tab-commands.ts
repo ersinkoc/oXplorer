@@ -1,11 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
 import { runJob } from "@/commands/jobs";
+import { transferSpec } from "@/commands/locations";
 import { navigateTo, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { toggleQuickLook } from "@/features/preview/quick-look";
 import { t } from "@/i18n";
-import { isArchivePath } from "@/lib/archive-path";
 import { compareEntries, differences } from "@/lib/compare";
 import { isSearchPath } from "@/lib/search-path";
 import { filterEntries } from "@/lib/sort";
@@ -42,9 +42,8 @@ async function transferToOtherPane(kind: "copy" | "move"): Promise<void> {
   if (sources.length === 0) return;
   const destDir = writableFolder(otherPane(activePane));
   if (!destDir) return;
-  // Out of an archive: copy (extract) only; the archive itself stays untouched.
-  if (sources.some(isArchivePath)) await runJob({ kind: "extractMembers", sources, destDir });
-  else await runJob({ kind, sources, destDir });
+  const spec = transferSpec(sources, destDir, kind);
+  if (spec) await runJob(spec);
 }
 
 export function registerTabCommands(): void {

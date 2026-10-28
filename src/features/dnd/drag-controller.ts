@@ -1,10 +1,12 @@
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import { commands } from "@/bindings";
 import { runJob } from "@/commands/jobs";
+import { transferSpec } from "@/commands/locations";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirAt, dropMode, isValidDrop, terminalAt } from "@/features/dnd/drop-target";
 import { pasteInto } from "@/features/terminal/terminal-registry";
 import { isArchivePath } from "@/lib/archive-path";
+import { isRemotePath } from "@/lib/remote-path";
 import { shellArgs } from "@/lib/shell";
 
 const THRESHOLD = 5;
@@ -49,7 +51,7 @@ export function beginPotentialDrag(
       ev.clientX < 0 || ev.clientY < 0 || ev.clientX > window.innerWidth || ev.clientY > window.innerHeight;
     if (outside) {
       cleanup();
-      if (paths.some(isArchivePath)) return;
+      if (paths.some((p) => isArchivePath(p) || isRemotePath(p))) return;
       void preview.then((icon) => {
         if (icon) void startDrag({ item: paths, icon, mode: ev.altKey ? "copy" : "move" });
       });
@@ -77,17 +79,12 @@ export function beginPotentialDrag(
     // Dropped on a terminal: type the quoted paths, like Terminal.app.
     const terminal = terminalAt(ev.clientX, ev.clientY);
     if (terminal) {
-      if (!paths.some(isArchivePath)) pasteInto(terminal, shellArgs(paths));
+      if (!paths.some((p) => isArchivePath(p) || isRemotePath(p))) pasteInto(terminal, shellArgs(paths));
       return;
     }
     if (target) {
-      // Items dragged out of an archive are extracted there; the archive stays as it is.
-      if (paths.some(isArchivePath)) {
-        void runJob({ kind: "extractMembers", sources: paths, destDir: target }, { select: false });
-        return;
-      }
-      const kind = dropMode(paths, target, ev.altKey);
-      void runJob({ kind, sources: paths, destDir: target }, { select: false });
+      const spec = transferSpec(paths, target, dropMode(paths, target, ev.altKey));
+      if (spec) void runJob(spec, { select: false });
     }
   };
 

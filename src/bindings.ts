@@ -84,6 +84,27 @@ export const commands = {
 	 *  it) and returns the real path.
 	 */
 	archiveOpenMember: (path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("archive_open_member", { path })),
+	/**  The connection list from the frontend (replaces the previous one). */
+	remoteSetConnections: (connections: Connection[]) => __TAURI_INVOKE<void>("remote_set_connections", { connections }),
+	/**  Stores a connection's password / secret key in the Keychain (empty removes it). */
+	remoteSaveSecret: (id: string, secret: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("remote_save_secret", { id, secret })),
+	/**  Whether a password / secret key is stored for the connection. */
+	remoteHasSecret: (id: string) => __TAURI_INVOKE<boolean>("remote_has_secret", { id }),
+	/**  Tries to list the top of a connection (with an unsaved secret, if given). */
+	remoteTest: (connection: Connection, secretOverride: string | null) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("remote_test", { connection, secretOverride })),
+	/**  Lists a remote folder. */
+	remoteList: (path: string) => typedError<FileEntry_Serialize[], AppError_Serialize>(__TAURI_INVOKE("remote_list", { path })),
+	remoteCreateDir: (parent: string, name: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("remote_create_dir", { parent, name })),
+	remoteRename: (path: string, newName: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("remote_rename", { path, newName })),
+	/**  Deletes remote items permanently (servers have no Trash). */
+	remoteDelete: (paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("remote_delete", { paths })),
+	/**  Downloads one remote file to a private temporary folder (to open or preview it). */
+	remoteOpenMember: (path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("remote_open_member", { path })),
+	/**
+	 *  Dev builds only: serves a local folder as connection `id`, so the in-app
+	 *  self-test can exercise remote browsing without a server.
+	 */
+	remoteRegisterTestFolder: (id: string, root: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("remote_register_test_folder", { id, root })),
 	menuItems: () => __TAURI_INVOKE<MenuEntry_Serialize[]>("menu_items"),
 	/**  Rebuilds the menu bar with the user's shortcuts. */
 	setShortcuts: (shortcuts: { [key in string]: string | null }) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_shortcuts", { shortcuts })),
@@ -173,6 +194,23 @@ export type ConflictResolution = {
 	choice: ConflictChoice,
 	/**  Use the same choice for every later conflict in this job. */
 	applyToAll: boolean,
+};
+
+/**  A saved connection (no secrets: see `remote_save_secret`). */
+export type Connection = {
+	id: string,
+	name: string,
+	kind: RemoteKind,
+	/**  SFTP: `host` or `host:port`. WebDAV: the server URL. S3: a custom endpoint (empty for AWS). */
+	host: string,
+	/**  SFTP / WebDAV user, or the S3 access key id. */
+	user: string,
+	/**  Folder on the server shown as the connection's top. */
+	root: string,
+	/**  S3 only. */
+	bucket: string,
+	/**  S3 only (e.g. `eu-central-1`). */
+	region: string,
 };
 
 export type ContentMatch = {
@@ -379,6 +417,10 @@ export type JobSpec = { kind: "copy"; sources: string[]; destDir: string } | { k
 { kind: "compress"; sources: string[]; format: ArchiveFormat } | 
 /**  Extracts each archive next to itself. */
 { kind: "extract"; archives: string[] } | 
+/**  Downloads remote items (`remote:` paths) into a local folder. */
+{ kind: "download"; sources: string[]; destDir: string } | 
+/**  Uploads local items into a remote folder (`remote:` path). */
+{ kind: "upload"; sources: string[]; destDir: string } | 
 /**  Copies members out of one archive (`archive:` paths) into a folder. */
 { kind: "extractMembers"; sources: string[]; destDir: string } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
@@ -442,6 +484,8 @@ export type QuickLookKey = {
 export type QuickLookState = {
 	visible: boolean,
 };
+
+export type RemoteKind = "sftp" | "webdav" | "s3";
 
 export type RenameItem = {
 	path: string,

@@ -2,6 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { commands } from "@/bindings";
+import { materialize } from "@/commands/locations";
 import { openEntries } from "@/commands/navigation";
 import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { toggleQuickLook } from "@/features/preview/quick-look";
@@ -11,6 +12,7 @@ import { isArchivePath } from "@/lib/archive-path";
 import { entrySizeLabel, formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
 import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
+import { isRemotePath } from "@/lib/remote-path";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { useWorkspace } from "@/stores/workspace-store";
 
@@ -53,7 +55,7 @@ export function PreviewPane({ width }: { width: number }) {
       {selected.length > 1 ? (
         <Summary entries={selected} />
       ) : focused ? (
-        isArchivePath(focused.path) && !isFolderLike(focused) ? (
+        (isArchivePath(focused.path) || isRemotePath(focused.path)) && !isFolderLike(focused) ? (
           <ArchiveMemberPreview key={focused.path} entry={focused} />
         ) : (
           <EntryPreview key={focused.path} entry={focused} />
@@ -65,16 +67,16 @@ export function PreviewPane({ width }: { width: number }) {
   );
 }
 
-/** A file inside an archive is previewed from a temporary copy, once the selection rests. */
+/** A file inside an archive or on a server is previewed from a temporary copy, once the selection rests. */
 function ArchiveMemberPreview({ entry }: { entry: FileEntry }) {
   const [real, setReal] = useState<FileEntry | null>(null);
   useEffect(() => {
     if (isFolderLike(entry)) return;
     let stale = false;
     const timer = setTimeout(() => {
-      void commands.archiveOpenMember(entry.path).then((r) => {
-        if (!stale && r.status === "ok") setReal({ ...entry, path: r.data });
-      });
+      void materialize(entry.path)
+        .then((path) => !stale && setReal({ ...entry, path }))
+        .catch(() => {});
     }, SETTLE_MS);
     return () => {
       stale = true;

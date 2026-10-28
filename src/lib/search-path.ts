@@ -2,6 +2,8 @@ import type { SearchMode, SearchSpec } from "@/bindings";
 import { t } from "@/i18n";
 import { isArchivePath, parseArchivePath } from "@/lib/archive-path";
 import { basename, parent } from "@/lib/path";
+import { isRemotePath } from "@/lib/remote-path";
+import { useApp } from "@/stores/app-store";
 
 /**
  * Search results live in a tab like a folder, under a virtual path that
@@ -41,15 +43,19 @@ export function parseSearchPath(path: string): SearchSpec | null {
 
 /** Search results and archive contents: shown like folders, but not on disk as such. */
 export function isVirtualPath(path: string): boolean {
-  return isSearchPath(path) || isArchivePath(path);
+  return isSearchPath(path) || isArchivePath(path) || isRemotePath(path);
 }
 
-/** The real folder behind a tab: a search's scope, an archive's folder, or the path itself. */
+/**
+ * The real folder behind a tab: a search's scope, an archive's folder, the path
+ * itself — or, for a server, nothing local (Home stands in, e.g. for a terminal).
+ */
 export function realFolder(path: string): string {
   const search = parseSearchPath(path);
   if (search) return search.scope;
   const archive = parseArchivePath(path);
   if (archive) return parent(archive.archive) ?? "/";
+  if (isRemotePath(path)) return useApp.getState().home;
   return path;
 }
 

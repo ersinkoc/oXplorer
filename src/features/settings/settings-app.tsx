@@ -1,9 +1,10 @@
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LazyStore } from "@tauri-apps/plugin-store";
-import { Keyboard, Palette, Settings2, SquareTerminal, Wrench } from "lucide-react";
+import { Keyboard, Palette, Server, Settings2, SquareTerminal, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { events } from "@/bindings";
+import { ConnectionsSection } from "@/features/settings/connections-section";
 import { ShortcutsSection } from "@/features/settings/shortcuts-section";
 import { applyLanguage, applyTheme } from "@/features/settings/use-preference-effects";
 import { msg, useT } from "@/i18n";
@@ -35,6 +36,7 @@ const SECTIONS = [
   { id: "general", label: msg("General"), icon: Settings2 },
   { id: "appearance", label: msg("Appearance"), icon: Palette },
   { id: "terminal", label: msg("Terminal"), icon: SquareTerminal },
+  { id: "connections", label: msg("Connections"), icon: Server },
   { id: "shortcuts", label: msg("Shortcuts"), icon: Keyboard },
   { id: "advanced", label: msg("Advanced"), icon: Wrench },
 ] as const;
@@ -108,6 +110,7 @@ export function SettingsApp() {
         {section === "appearance" && <AppearanceSection />}
         {section === "terminal" && <TerminalSection />}
         {section === "shortcuts" && <ShortcutsSection usePref={usePref} />}
+        {section === "connections" && <ConnectionsSection usePref={usePref} />}
         {section === "advanced" && <AdvancedSection />}
       </main>
     </div>

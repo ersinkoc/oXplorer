@@ -14,6 +14,7 @@ import {
 import { isArchivePath } from "@/lib/archive-path";
 import { type AppError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
+import { isRemotePath } from "@/lib/remote-path";
 import { isSearchPath, parseSearchPath } from "@/lib/search-path";
 import { EMPTY_SEARCH, useSearchInfo } from "@/stores/search-store";
 
@@ -72,13 +73,16 @@ const loadIds = new Map<string, number>();
 const deferred = new Map<string, DirChanged[]>();
 
 export const useDirCache = create<DirCacheState>()((set, get) => {
-  /** An archive's folder: listed in one go (Rust caches the archive's directory). */
-  const listArchive = async (path: string): Promise<void> => {
+  /** An archive's or a server's folder: listed in one go. */
+  const listVirtual = async (
+    path: string,
+    list: () => Promise<{ status: "ok"; data: FileEntry[] } | { status: "error"; error: AppError }>,
+  ): Promise<void> => {
     const id = (loadIds.get(path) ?? 0) + 1;
     loadIds.set(path, id);
     if (!get().dirs[path]) patch(path, { status: "loading", entries: [], error: null });
     try {
-      const entries = await unwrap(commands.archiveList(path));
+      const entries = await unwrap(list());
       if (loadIds.get(path) === id) patch(path, { status: "ready", entries, error: null });
     } catch (err) {
       if (loadIds.get(path) === id) patch(path, { status: "error", error: toAppError(err), entries: [] });
@@ -150,7 +154,8 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
 
     load: async (path) => {
       if (isSearchPath(path)) return runSearch(path);
-      if (isArchivePath(path)) return listArchive(path);
+      if (isArchivePath(path)) return listVirtual(path, () => commands.archiveList(path));
+      if (isRemotePath(path)) return listVirtual(path, () => commands.remoteList(path));
       const id = (loadIds.get(path) ?? 0) + 1;
       loadIds.set(path, id);
       const current = () => loadIds.get(path) === id;

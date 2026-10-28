@@ -1,12 +1,14 @@
 import { Menu } from "@tauri-apps/api/menu";
-import { Pin, Plus, Search, X } from "lucide-react";
+import { Pin, Plus, Search, Server, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { closeTab } from "@/commands/tab-commands";
 import { useT } from "@/i18n";
 import { archiveTitle, parseArchivePath } from "@/lib/archive-path";
 import { pathIconUrl } from "@/lib/icons";
 import { basename } from "@/lib/path";
+import { isRemotePath, remoteTitle } from "@/lib/remote-path";
 import { parseSearchPath, searchTitle } from "@/lib/search-path";
+import { useApp } from "@/stores/app-store";
 import { otherPane, type PaneId, type TabState, useWorkspace } from "@/stores/workspace-store";
 
 const DRAG_THRESHOLD = 4;
@@ -166,13 +168,17 @@ function TabButton({
   const { t } = useT();
   const search = parseSearchPath(tab.path);
   const archive = parseArchivePath(tab.path);
+  const remote = isRemotePath(tab.path);
+  const connections = useApp((s) => s.connections);
   const name = search
     ? searchTitle(search)
     : archive
       ? archiveTitle(tab.path)
-      : tab.path === "/"
-        ? "Macintosh HD"
-        : basename(tab.path);
+      : remote
+        ? remoteTitle(tab.path, connections)
+        : tab.path === "/"
+          ? "Macintosh HD"
+          : basename(tab.path);
   return (
     <div
       data-tab-id={tab.id}
@@ -193,6 +199,8 @@ function TabButton({
     >
       {search ? (
         <Search aria-hidden className="size-3.5 shrink-0" />
+      ) : remote ? (
+        <Server aria-hidden className="size-3.5 shrink-0" />
       ) : (
         <img
           src={pathIconUrl(archive ? archive.archive : tab.path, 32)}

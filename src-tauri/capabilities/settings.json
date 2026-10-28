@@ -13,6 +13,9 @@
     "log:default",
     "os:allow-locale",
     "allow-menu-items",
-    "allow-set-shortcuts"
+    "allow-set-shortcuts",
+    "allow-remote-save-secret",
+    "allow-remote-has-secret",
+    "allow-remote-test"
   ]
 }

@@ -69,7 +69,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Delete { .. } => "Delete",
         JobSpec::Compress { .. } => "Compress",
         JobSpec::Extract { .. } => "Extract",
-        JobSpec::ExtractMembers { .. } => "Copy",
+        JobSpec::ExtractMembers { .. } | JobSpec::Download { .. } | JobSpec::Upload { .. } => "Copy",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -99,6 +99,8 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Delete { paths } => job.delete(validate_all(&paths)?),
         JobSpec::Compress { sources, format } => job.compress(validate_all(&sources)?, format)?,
         JobSpec::Extract { archives } => job.extract(validate_all(&archives)?),
+        JobSpec::Download { sources, dest_dir } => job.download(&sources, &validate_path(&dest_dir)?),
+        JobSpec::Upload { sources, dest_dir } => job.upload(&validate_all(&sources)?, &dest_dir),
         JobSpec::ExtractMembers { sources, dest_dir } => {
             job.extract_members(&sources, &validate_path(&dest_dir)?)?
         }
@@ -474,6 +476,59 @@ impl Runner<'_> {
             self.done_items += 1;
             self.r.progress(self.done_bytes, self.done_items, archive);
         }
+    }
+
+    fn transfer_result<T>(
+        &mut self,
+        path: &str,
+        result: Result<T, crate::remote::TransferError>,
+    ) -> Option<T> {
+        match result {
+            Ok(v) => Some(v),
+            Err(crate::remote::TransferError::Cancelled) => {
+                self.stopped = true;
+                None
+            }
+            Err(e) => {
+                self.failures.push(JobFailure { path: path.to_owned(), error: e.into_app(path) });
+                None
+            }
+        }
+    }
+
+    fn download(&mut self, sources: &[String], dest: &Path) {
+        let total = tauri::async_runtime::block_on(crate::remote::remote_size(sources));
+        self.r.planned(total, u32::try_from(sources.len()).unwrap_or(u32::MAX));
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            tauri::async_runtime::block_on(crate::remote::download(sources, dest, &mut |n| {
+                done += n;
+                r.progress(done, 0, dest);
+                !r.cancelled()
+            }))
+        };
+        let first = sources.first().cloned().unwrap_or_default();
+        if let Some(created) = self.transfer_result(&first, result) {
+            self.log.extend(created.into_iter().map(Done::Created));
+        }
+    }
+
+    /// Servers have no Trash, so uploads can't be undone; the pane re-lists the folder.
+    fn upload(&mut self, sources: &[PathBuf], dest: &str) {
+        let sizes: Vec<(u64, u32)> = sources.iter().map(|s| tree_size(s)).collect();
+        self.r.planned(sizes.iter().map(|s| s.0).sum(), sizes.iter().map(|s| s.1).sum());
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            let here = PathBuf::from(dest);
+            tauri::async_runtime::block_on(crate::remote::upload(sources, dest, &mut |n| {
+                done += n;
+                r.progress(done, 0, &here);
+                !r.cancelled()
+            }))
+        };
+        let _ = self.transfer_result(dest, result);
     }
 
     fn extract_members(&mut self, sources: &[String], dest: &Path) -> Result<(), AppError> {

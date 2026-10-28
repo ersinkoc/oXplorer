@@ -207,6 +207,12 @@ pub async fn rename_path(path: String, new_name: String) -> AppResult<FileEntry>
     .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
 }
 
+/// A single name the user typed (no `/`, not `..`), as an `AppError` when invalid.
+pub fn check_name(name: &str) -> AppResult<()> {
+    names::validate_name(name)
+        .map_err(|reason| AppError::InvalidPath { path: name.to_owned(), reason: reason.into() })
+}
+
 /// Renames several items at once; all or nothing.
 #[tauri::command]
 #[specta::specta]

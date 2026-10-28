@@ -1,6 +1,6 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { create } from "zustand";
-import type { FullDiskAccess, StandardLocation, VolumeInfo } from "@/bindings";
+import type { Connection, FullDiskAccess, StandardLocation, VolumeInfo } from "@/bindings";
 import type { FileEntry } from "@/lib/ipc";
 
 export interface ColumnWidths {
@@ -31,6 +31,8 @@ export interface Preferences {
   terminalFontSize: number;
   /** Where new terminals start. */
   terminalStartIn: "pane" | "home";
+  /** Saved server connections (secrets are in the Keychain, not here). */
+  connections: Connection[];
   /** Menu shortcut overrides by command id; null removes the shortcut. */
   shortcuts: Record<string, string | null>;
 }
@@ -76,6 +78,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   terminalFontSize: 12,
   terminalStartIn: "pane",
   shortcuts: {},
+  connections: [],
 };
 
 const store = new LazyStore("settings.json");

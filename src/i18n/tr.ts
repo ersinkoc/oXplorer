@@ -420,4 +420,44 @@ export const tr: Readonly<Record<string, string>> = {
   "Couldn’t check for updates: {reason}": "Güncellemeler denetlenemedi: {reason}",
   "System uses Turkish when macOS is set to Turkish, otherwise English.":
     "Sistem: macOS Türkçe ise Türkçe, değilse İngilizce kullanılır.",
+  "New files can’t be created on a server. Upload one instead.":
+    "Sunucuda yeni dosya oluşturulamaz. Bunun yerine bir dosya yükleyin.",
+  "these {count} items": "bu {count} öğeyi",
+  "Delete {what} from the server? This can’t be undone.":
+    "{what} sunucudan silinsin mi? Bu işlem geri alınamaz.",
+  "Delete from Server": "Sunucudan Sil",
+  "Couldn’t delete the items.": "Öğeler silinemedi.",
+  "This isn’t available for items on a server.": "Bu, sunucudaki öğeler için kullanılamaz.",
+  Downloading: "İndiriliyor",
+  Uploading: "Yükleniyor",
+  Download: "İndir",
+  Upload: "Yükle",
+  "Items can’t be added here. Open a folder or a server to put them in.":
+    "Buraya öğe eklenemez. Öğeleri koymak için bir klasör ya da sunucu açın.",
+  "Copy the items to a folder on this Mac first, then to the server.":
+    "Öğeleri önce bu Mac’teki bir klasöre, sonra sunucuya kopyalayın.",
+  Connections: "Bağlantılar",
+  "Servers appear in the sidebar and open like folders. Passwords are kept in your Keychain.":
+    "Sunucular kenar çubuğunda görünür ve klasör gibi açılır. Parolalar Anahtar Zinciri’nde saklanır.",
+  "No connections yet.": "Henüz bağlantı yok.",
+  "Add Connection": "Bağlantı Ekle",
+  "Connected.": "Bağlanıldı.",
+  Type: "Tür",
+  "My server": "Sunucum",
+  Host: "Sunucu",
+  User: "Kullanıcı",
+  "Signs in with your SSH keys, agent and ~/.ssh/config, like the ssh command.":
+    "ssh komutu gibi SSH anahtarlarınız, ajanınız ve ~/.ssh/config ile oturum açar.",
+  "Server URL": "Sunucu URL’si",
+  Bucket: "Kova (bucket)",
+  Region: "Bölge",
+  Endpoint: "Uç nokta",
+  "Empty for AWS": "AWS için boş bırakın",
+  "Access key ID": "Erişim anahtarı kimliği",
+  "Secret access key": "Gizli erişim anahtarı",
+  Password: "Parola",
+  "Saved in Keychain — type to replace": "Anahtar Zinciri’nde kayıtlı — değiştirmek için yazın",
+  Remove: "Kaldır",
+  "Test Connection": "Bağlantıyı Sına",
+  Save: "Kaydet",
 };

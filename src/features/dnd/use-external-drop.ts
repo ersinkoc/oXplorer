@@ -1,6 +1,7 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect } from "react";
 import { runJob } from "@/commands/jobs";
+import { transferSpec } from "@/commands/locations";
 import { useDrag } from "@/features/dnd/drag-store";
 import { dropDirAt, dropMode, isValidDrop, terminalAt } from "@/features/dnd/drop-target";
 import { pasteInto } from "@/features/terminal/terminal-registry";
@@ -37,7 +38,8 @@ export function useExternalDrop(): void {
           }
           const dir = targetAt(payload.position);
           if (payload.paths.length > 0 && isValidDrop(payload.paths, dir)) {
-            void runJob({ kind: dropMode(payload.paths, dir, false), sources: payload.paths, destDir: dir });
+            const spec = transferSpec(payload.paths, dir, dropMode(payload.paths, dir, false));
+            if (spec) void runJob(spec);
           }
           break;
         }

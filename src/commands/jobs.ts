@@ -30,6 +30,8 @@ const LABELS: Record<JobSpec["kind"], string> = {
   compress: msg("Compressing"),
   extract: msg("Extracting"),
   extractMembers: msg("Copying"),
+  download: msg("Downloading"),
+  upload: msg("Uploading"),
   undo: msg("Undoing"),
 };
 
@@ -94,6 +96,8 @@ export async function runJob(
     return null;
   }
   const outcome = await finished;
+  // Servers aren't watched: show what was uploaded.
+  if (spec.kind === "upload") void useDirCache.getState().load(spec.destDir);
   const elapsed = performance.now() - (useJobs.getState().jobs[id]?.startedAt ?? performance.now());
   useJobs.getState().remove(id);
   applyOutcome(outcome, opts);
@@ -112,6 +116,8 @@ const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
   compress: msg("Compress"),
   extract: msg("Extract"),
   extractMembers: msg("Copy"),
+  download: msg("Download"),
+  upload: msg("Upload"),
 };
 
 /** Jobs that ran this long get a system notification when OXplorer isn't in front. */

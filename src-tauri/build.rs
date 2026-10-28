@@ -51,6 +51,16 @@ const COMMANDS: &[&str] = &[
     "disk_usage_cancel",
     "archive_list",
     "archive_open_member",
+    "remote_set_connections",
+    "remote_save_secret",
+    "remote_has_secret",
+    "remote_test",
+    "remote_list",
+    "remote_create_dir",
+    "remote_rename",
+    "remote_delete",
+    "remote_open_member",
+    "remote_register_test_folder",
 ];
 
 fn main() {

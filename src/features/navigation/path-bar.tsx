@@ -1,9 +1,10 @@
-import { ChevronRight, HardDrive, Search } from "lucide-react";
+import { ChevronRight, HardDrive, Search, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
 import { useT } from "@/i18n";
 import { archivePath, parseArchivePath } from "@/lib/archive-path";
 import { basename, parent, segments, tildify } from "@/lib/path";
+import { parseRemotePath, remotePath } from "@/lib/remote-path";
 import { parseSearchPath, searchTitle } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 
@@ -12,6 +13,7 @@ export function PathBar({ path }: { path: string }) {
   useT();
   const editing = useApp((s) => s.editingPath);
   const home = useApp((s) => s.home);
+  const connections = useApp((s) => s.connections);
   const rootName = useApp((s) => s.volumes.find((v) => v.isRoot)?.name ?? "Macintosh HD");
 
   const search = parseSearchPath(path);
@@ -27,19 +29,28 @@ export function PathBar({ path }: { path: string }) {
 
   // Inside an archive: the folders up to the archive, the archive, then its folders.
   const archive = parseArchivePath(path);
-  const parts = archive
+  const remote = parseRemotePath(path);
+  const parts = remote
     ? [
-        ...segments(parent(archive.archive) ?? "/"),
-        { name: basename(archive.archive), path: archivePath(archive.archive) },
-        ...archive.inner
+        { name: connections.find((c) => c.id === remote.id)?.name ?? remote.id, path: remotePath(remote.id) },
+        ...remote.inner
           .split("/")
           .filter(Boolean)
-          .map((name, i, all) => ({
-            name,
-            path: archivePath(archive.archive, all.slice(0, i + 1).join("/")),
-          })),
+          .map((name, i, all) => ({ name, path: remotePath(remote.id, all.slice(0, i + 1).join("/")) })),
       ]
-    : segments(path);
+    : archive
+      ? [
+          ...segments(parent(archive.archive) ?? "/"),
+          { name: basename(archive.archive), path: archivePath(archive.archive) },
+          ...archive.inner
+            .split("/")
+            .filter(Boolean)
+            .map((name, i, all) => ({
+              name,
+              path: archivePath(archive.archive, all.slice(0, i + 1).join("/")),
+            })),
+        ]
+      : segments(path);
   return (
     <div
       className="flex h-7 min-w-0 flex-1 items-center overflow-hidden rounded-md px-1"
@@ -59,8 +70,13 @@ export function PathBar({ path }: { path: string }) {
                 last ? "font-semibold" : "text-fg-muted hover:bg-hover hover:text-fg"
               }`}
             >
-              {i === 0 && <HardDrive className="size-3.5 shrink-0" />}
-              <span className="truncate">{i === 0 ? rootName : seg.name}</span>
+              {i === 0 &&
+                (remote ? (
+                  <Server className="size-3.5 shrink-0" />
+                ) : (
+                  <HardDrive className="size-3.5 shrink-0" />
+                ))}
+              <span className="truncate">{i === 0 && !remote ? rootName : seg.name}</span>
             </button>
           </div>
         );

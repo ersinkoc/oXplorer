@@ -19,6 +19,7 @@ import { useDrag } from "@/features/dnd/drag-store";
 import { msg, t, useT } from "@/i18n";
 import { TAG_COLORS } from "@/lib/icons";
 import { describeError } from "@/lib/ipc";
+import { remotePath } from "@/lib/remote-path";
 import { searchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, useActiveTab } from "@/stores/workspace-store";
@@ -46,6 +47,7 @@ export function Sidebar() {
   const { t } = useT();
   const locations = useApp((s) => s.locations);
   const volumes = useApp((s) => s.volumes);
+  const connections = useApp((s) => s.connections);
   const current = useActiveTab().path;
   const [tags, setTags] = useState<FinderTag[]>([]);
   useEffect(() => {
@@ -86,6 +88,23 @@ export function Sidebar() {
             />
           ))}
         </Section>
+        {connections.length > 0 && (
+          <Section title={t("Connections")}>
+            {connections.map((c) => {
+              const path = remotePath(c.id);
+              return (
+                <Item
+                  key={c.id}
+                  icon={Server}
+                  label={c.name || c.host}
+                  active={current.startsWith(path)}
+                  dropDir={path}
+                  onClick={() => navigateTo(path)}
+                />
+              );
+            })}
+          </Section>
+        )}
         {tags.length > 0 && (
           <Section title={t("Tags")}>
             {tags.map((tag) => {

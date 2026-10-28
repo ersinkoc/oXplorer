@@ -1,10 +1,12 @@
 import { toast } from "sonner";
 import { commands } from "@/bindings";
+import { materialize } from "@/commands/locations";
 import { t } from "@/i18n";
 import { archiveParent, archivePath, isArchiveName, isArchivePath } from "@/lib/archive-path";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { normalizeUserInput, parent } from "@/lib/path";
+import { isRemotePath, remoteParent } from "@/lib/remote-path";
 import { isSearchPath, parseSearchPath, realFolder } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
@@ -50,6 +52,12 @@ export function goUp(): void {
     navigateTo(inArchive.path, { select: inArchive.select });
     return;
   }
+  const onServer = remoteParent(path);
+  if (onServer) {
+    navigateTo(onServer.path, { select: onServer.select });
+    return;
+  }
+  if (isRemotePath(path)) return;
   const up = parent(path);
   if (up) navigateTo(up, { select: path });
 }
@@ -109,8 +117,8 @@ export async function openEntries(entries: readonly FileEntry[]): Promise<void> 
   for (const e of entries) {
     if (isFolderLike(e)) continue;
     try {
-      // A file inside an archive is extracted to a temporary folder first.
-      const real = isArchivePath(e.path) ? await unwrap(commands.archiveOpenMember(e.path)) : e.path;
+      // A file inside an archive or on a server is copied to a temporary folder first.
+      const real = await materialize(e.path);
       await unwrap(commands.openPath(real));
     } catch (err) {
       toast.error(err instanceof CommandError ? err.message : t("Couldn’t open “{name}”.", { name: e.name }));

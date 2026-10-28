@@ -29,6 +29,9 @@ export function usePreferenceEffects(): void {
   const theme = useApp((s) => s.theme);
   const shortcuts = useApp((s) => s.shortcuts);
   const languagePref = useApp((s) => s.languagePref);
+  const connections = useApp((s) => s.connections);
+
+  useEffect(() => void commands.remoteSetConnections(connections), [connections]);
 
   // The native menu bar is labelled by Rust; it gets the translations.
   useEffect(() => {

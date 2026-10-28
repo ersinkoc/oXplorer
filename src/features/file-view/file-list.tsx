@@ -16,6 +16,7 @@ import type { CompareMark } from "@/lib/compare";
 import { entrySizeLabel, formatDate, kindLabel } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
+import { isRemotePath } from "@/lib/remote-path";
 import { isVirtualPath, parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useCompareMarks } from "@/stores/compare-store";
@@ -76,7 +77,7 @@ export function FileList({ pane }: { pane: PaneId }) {
         onMouseDown={view.onBackgroundMouseDown}
         onContextMenu={view.onBackgroundContextMenu}
         onScroll={view.onScroll}
-        data-drop-dir={isVirtualPath(tab.path) ? undefined : tab.path}
+        data-drop-dir={isVirtualPath(tab.path) && !isRemotePath(tab.path) ? undefined : tab.path}
         className="relative min-h-0 flex-1 overflow-y-auto outline-none [contain:strict]"
       >
         {body ?? (

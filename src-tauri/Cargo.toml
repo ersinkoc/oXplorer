@@ -60,6 +60,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-updater = "~2.13"
 tauri-plugin-process = "2"
 gix = { version = "=0.89.0", default-features = false, features = ["status", "max-performance-safe", "sha1"] }
+opendal = { version = "=0.59.3", default-features = false, features = ["services-sftp", "services-webdav", "services-s3", "services-fs", "http-transport-reqwest", "reqwest-rustls-tls", "executors-tokio"] }
 
 [dev-dependencies]
 tempfile = "3.27"
@@ -81,3 +82,4 @@ objc2-foundation = "0.3"
 objc2-quick-look-thumbnailing = "0.3"
 objc2-quick-look-ui = "0.3"
 objc2-uniform-type-identifiers = "0.3"
+security-framework = "3.7"

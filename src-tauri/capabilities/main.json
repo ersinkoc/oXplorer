@@ -74,6 +74,16 @@
     "allow-disk-usage-cancel",
     "allow-archive-list",
     "allow-archive-open-member",
+    "allow-remote-set-connections",
+    "allow-remote-save-secret",
+    "allow-remote-has-secret",
+    "allow-remote-test",
+    "allow-remote-list",
+    "allow-remote-create-dir",
+    "allow-remote-rename",
+    "allow-remote-delete",
+    "allow-remote-open-member",
+    "allow-remote-register-test-folder",
     "updater:default",
     "process:allow-restart"
   ]

@@ -3,17 +3,20 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { type ArchiveFormat, commands, type FinderTag } from "@/bindings";
 import { applyFsChanges, recordUndo, runJob } from "@/commands/jobs";
+import { transferSpec } from "@/commands/locations";
 import { currentFolder, refuseArchiveMembers, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
 import { msg, t } from "@/i18n";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
 import { basename, parent } from "@/lib/path";
+import { isRemotePath, remoteDirOf } from "@/lib/remote-path";
 import { isSearchPath } from "@/lib/search-path";
 import { selectOne } from "@/lib/selection";
 import { shellArgs } from "@/lib/shell";
 import { copyText, cutText, deleteToLineStart, focusedTextField, pasteText, undoText } from "@/lib/text-edit";
 import { useApp } from "@/stores/app-store";
+import { useDirCache } from "@/stores/dir-cache-store";
 import { useHistory } from "@/stores/history-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
@@ -50,6 +53,11 @@ export async function pasteFiles(forceMove: boolean): Promise<void> {
   const wasCut = !!clipboard?.cut && sameSet(clipboard.paths, sources);
   const destDir = writableFolder();
   if (!destDir) return;
+  if (isRemotePath(destDir)) {
+    const spec = transferSpec(sources, destDir, "copy");
+    if (spec) await runJob(spec);
+    return;
+  }
   if (forceMove || wasCut) {
     await runJob({ kind: "move", sources, destDir });
     if (wasCut) useApp.getState().set({ clipboard: null });
@@ -62,6 +70,7 @@ export async function pasteFiles(forceMove: boolean): Promise<void> {
 export async function createItem(folder: boolean): Promise<void> {
   const dir = writableFolder();
   if (!dir) return;
+  if (isRemotePath(dir)) return createRemoteFolder(dir, folder);
   try {
     const entry = await unwrap(commands.createItem(dir, folder ? "untitled folder" : "untitled.txt", folder));
     applyFsChanges([entry], []);
@@ -76,10 +85,70 @@ export async function createItem(folder: boolean): Promise<void> {
   }
 }
 
+/** On a server only folders can be created (files are uploaded). */
+async function createRemoteFolder(dir: string, folder: boolean): Promise<void> {
+  if (!folder) {
+    toast(t("New files can’t be created on a server. Upload one instead."));
+    return;
+  }
+  const taken = new Set(useDirCache.getState().dirs[dir]?.entries.map((e) => e.name) ?? []);
+  const name = ["untitled folder", ...Array.from({ length: 50 }, (_, i) => `untitled folder ${i + 2}`)].find(
+    (n) => !taken.has(n),
+  );
+  try {
+    const path = await unwrap(commands.remoteCreateDir(dir, name ?? "untitled folder"));
+    await useDirCache.getState().load(dir);
+    useWorkspace.getState().setSelection(selectOne(path));
+    useApp.getState().set({ renaming: path });
+  } catch (err) {
+    report(err, t("Couldn’t create the folder."));
+  }
+}
+
+/** Server items: rename in place (no undo — servers keep no history). */
+async function renameRemote(entry: FileEntry, name: string): Promise<boolean> {
+  try {
+    const renamed = await unwrap(commands.remoteRename(entry.path, name));
+    await useDirCache.getState().load(remoteDirOf(entry.path));
+    useWorkspace.getState().setSelection(selectOne(renamed));
+    return true;
+  } catch (err) {
+    report(err, t("Couldn’t rename “{name}”.", { name: entry.name }));
+    return false;
+  }
+}
+
+/** Servers have no Trash: deleting there is permanent, so it's always confirmed. */
+async function deleteRemote(sel: string[]): Promise<void> {
+  const what =
+    sel.length === 1 ? `“${basename(sel[0] ?? "")}”` : t("these {count} items", { count: sel.length });
+  const ok = await ask(t("Delete {what} from the server? This can’t be undone.", { what }), {
+    title: t("Delete from Server"),
+    kind: "warning",
+    okLabel: t("Delete"),
+    cancelLabel: t("Cancel"),
+  });
+  if (!ok) return;
+  try {
+    await unwrap(commands.remoteDelete(sel));
+  } catch (err) {
+    report(err, t("Couldn’t delete the items."));
+  }
+  for (const dir of new Set(sel.map(remoteDirOf))) void useDirCache.getState().load(dir);
+}
+
+/** Things a server can't do here (duplicate, compress, tags, …). */
+function refuseRemote(paths: readonly string[]): boolean {
+  if (!paths.some(isRemotePath)) return false;
+  toast(t("This isn’t available for items on a server."));
+  return true;
+}
+
 /** Commits an inline rename. Returns false to keep the editor open. */
 export async function commitRename(entry: FileEntry, newName: string): Promise<boolean> {
   const name = newName.trim();
   if (!name || name === entry.name) return true;
+  if (isRemotePath(entry.path)) return renameRemote(entry, name);
   try {
     const renamed = await unwrap(commands.renamePath(entry.path, name));
     applyFsChanges([renamed], [entry.path]);
@@ -166,7 +235,7 @@ export function isArchive(entry: FileEntry): boolean {
 /** Compresses the selection next to itself (Finder: one item → "name.zip", several → "Archive.zip"). */
 async function compress(format: ArchiveFormat): Promise<void> {
   const sel = paths(selectedEntries());
-  if (sel.length === 0 || refuseArchiveMembers(sel)) return;
+  if (sel.length === 0 || refuseArchiveMembers(sel) || refuseRemote(sel)) return;
   const folders = new Set(sel.map((p) => parent(p)));
   if (folders.size > 1) {
     toast(t("Items from different folders can’t go into one archive."));
@@ -177,7 +246,7 @@ async function compress(format: ArchiveFormat): Promise<void> {
 
 /** Adds a tag to every item, or removes it when they all have it already. */
 export async function toggleTag(entries: readonly FileEntry[], tag: FinderTag): Promise<void> {
-  if (refuseArchiveMembers(paths(entries))) return;
+  if (refuseArchiveMembers(paths(entries)) || refuseRemote(paths(entries))) return;
   const all = entries.every((e) => e.tags.some((t) => t.name === tag.name));
   try {
     const updated = await unwrap(commands.editTags(paths(entries), all ? [] : [tag], all ? [tag.name] : []));
@@ -245,6 +314,7 @@ export function registerFileCommands(): void {
         const sel = selectedEntries();
         const [only] = sel;
         if (sel.length === 1 && only) useApp.getState().set({ renaming: only.path });
+        else if (sel.length > 1 && refuseRemote(paths(sel))) return;
         else if (sel.length > 1) useApp.getState().set({ batchRename: sel });
       },
     },
@@ -252,7 +322,7 @@ export function registerFileCommands(): void {
       id: "file.duplicate",
       title: "Duplicate",
       run: async () => {
-        if (refuseArchiveMembers(paths(selectedEntries()))) return;
+        if (refuseArchiveMembers(paths(selectedEntries())) || refuseRemote(paths(selectedEntries()))) return;
         const sources = paths(selectedEntries());
         if (sources.length > 0) await runJob({ kind: "duplicate", sources });
       },
@@ -266,6 +336,7 @@ export function registerFileCommands(): void {
         if (field) return deleteToLineStart(field);
         const sel = paths(selectedEntries());
         if (refuseArchiveMembers(sel)) return;
+        if (sel.some(isRemotePath)) return deleteRemote(sel);
         if (sel.length > 0) await runJob({ kind: "trash", paths: sel }, { select: false });
       },
     },
@@ -275,6 +346,7 @@ export function registerFileCommands(): void {
       run: async () => {
         if (refuseArchiveMembers(paths(selectedEntries()))) return;
         const sel = paths(selectedEntries());
+        if (sel.some(isRemotePath)) return deleteRemote(sel);
         if (sel.length === 0) return;
         const question =
           sel.length === 1
