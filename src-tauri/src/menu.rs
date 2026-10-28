@@ -21,6 +21,7 @@ const SEP: Item = ("-", "", None);
 const FILE: &[Item] = &[
     ("window.new", "New Window", Some("CmdOrCtrl+N")),
     ("file.newFolder", "New Folder", Some("Shift+CmdOrCtrl+N")),
+    ("file.newFolderWithSelection", "New Folder with Selection", Some("Ctrl+CmdOrCtrl+N")),
     ("file.newFile", "New File", Some("Alt+CmdOrCtrl+N")),
     ("tab.new", "New Tab", Some("CmdOrCtrl+T")),
     SEP,

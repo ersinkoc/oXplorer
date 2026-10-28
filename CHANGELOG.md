@@ -17,6 +17,7 @@ The first public build of OXplorer.
 - Shared clipboard and drag and drop with Finder; F5 / F6 copy or move to the other pane.
 - Compress to zip, tar.gz or tar.zst and extract archives.
 - Rename many items at once, edit Finder tags.
+- New Folder with Selection (⌃⌘N), undone in one step.
 - Select by pattern (Select Matching…, `*.jpg; *.png`), Invert Selection, Deselect All (⌥⌘A).
 - Calculate Folder Sizes (⌥⌘S) shows folder totals in the list and sorts by them.
 

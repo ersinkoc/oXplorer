@@ -85,6 +85,31 @@ export async function createItem(folder: boolean): Promise<void> {
   }
 }
 
+/** File → New Folder with Selection (⌃⌘N): moves the selection into a new folder, one undo step. */
+async function newFolderWithSelection(): Promise<void> {
+  const dir = writableFolder();
+  const sources = paths(selectedEntries());
+  if (!dir || sources.length === 0) return;
+  if (isRemotePath(dir) || refuseRemote(sources)) return;
+  if (sources.some((p) => parent(p) !== dir)) {
+    toast(t("Select items in this folder to put them in a new folder."));
+    return;
+  }
+  try {
+    const folder = await unwrap(commands.createItem(dir, t("New Folder With Items"), true));
+    applyFsChanges([folder], []);
+    const moved = await runJob({ kind: "move", sources, destDir: folder.path }, { history: "none" });
+    recordUndo({
+      label: msg("New Folder with Selection"),
+      steps: [...(moved?.undo?.steps ?? []), { kind: "trash", path: folder.path }],
+    });
+    useWorkspace.getState().setSelection(selectOne(folder.path));
+    useApp.getState().set({ renaming: folder.path });
+  } catch (err) {
+    report(err, t("Couldn’t create the folder."));
+  }
+}
+
 /** On a server only folders can be created (files are uploaded). */
 async function createRemoteFolder(dir: string, folder: boolean): Promise<void> {
   if (!folder) {
@@ -307,6 +332,7 @@ export function registerFileCommands(): void {
 
     { id: "file.newFolder", title: "New Folder", run: () => createItem(true) },
     { id: "file.newFile", title: "New File", run: () => createItem(false) },
+    { id: "file.newFolderWithSelection", title: "New Folder with Selection", run: newFolderWithSelection },
     {
       id: "file.rename",
       title: "Rename",

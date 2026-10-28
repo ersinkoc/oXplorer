@@ -327,6 +327,41 @@ export async function runSelfTest(): Promise<void> {
     await sleep(400);
     step("quick look panel", shown && !(await commands.quickLookVisible()), `shown=${shown}`);
 
+    // New Folder with Selection, then undo puts everything back.
+    const nfDir = await unwrap(commands.createItem(folder.path, "nf", true));
+    const nf1 = await unwrap(commands.createItem(nfDir.path, "one.txt", false));
+    const nf2 = await unwrap(commands.createItem(nfDir.path, "two.txt", false));
+    useWorkspace.getState().setActivePane("left");
+    navigateTo(nfDir.path, { pane: "left" });
+    void useDirCache.getState().load(nfDir.path);
+    await waitFor(() => (useDirCache.getState().dirs[nfDir.path]?.entries.length ?? 0) === 2, 3000);
+    useWorkspace
+      .getState()
+      .setSelection({ paths: new Set([nf1.path, nf2.path]), anchor: null, focus: null }, "left");
+    runCommand("file.newFolderWithSelection");
+    const groupedPath = join(join(nfDir.path, "New Folder With Items"), "one.txt");
+    const grouped = await waitForAsync(async () => {
+      const r = await commands.statPath(groupedPath);
+      return r.status === "ok" ? r.data : null;
+    }, 5000);
+    useApp.getState().set({ renaming: null });
+    // Let the rename field go away, or ⌘Z would undo its text instead.
+    await sleep(300);
+    // Undo the whole step: items back, the folder in the Trash.
+    runCommand("edit.undo");
+    const ungrouped = await waitForAsync(async () => {
+      const [one, box] = await Promise.all([
+        commands.statPath(nf1.path),
+        commands.statPath(join(nfDir.path, "New Folder With Items")),
+      ]);
+      return one.status === "ok" && box.status === "error" ? true : null;
+    }, 5000);
+    step(
+      "new folder with selection + undo",
+      !!grouped && !!ungrouped,
+      `grouped=${!!grouped} undone=${!!ungrouped}`,
+    );
+
     // Synchronized browsing: the right pane follows the left into "sub" and back up.
     const syncA = await unwrap(commands.createItem(folder.path, "sync a", true));
     const syncB = await unwrap(commands.createItem(folder.path, "sync b", true));

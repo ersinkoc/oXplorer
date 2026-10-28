@@ -29,6 +29,11 @@ export const tr: Readonly<Record<string, string>> = {
   "Calculate Folder Sizes": "Klasör Boyutlarını Hesapla",
   "Add to Sidebar": "Kenar Çubuğuna Ekle",
   "New Window": "Yeni Pencere",
+  "New Folder with Selection": "Seçimle Yeni Klasör",
+  "New Folder with Selection ({count} Items)": "Seçimle Yeni Klasör ({count} Öğe)",
+  "New Folder With Items": "Öğeleri İçeren Yeni Klasör",
+  "Select items in this folder to put them in a new folder.":
+    "Yeni klasöre koymak için bu klasördeki öğeleri seçin.",
   "Synchronized Browsing": "Eşzamanlı Gezinme",
   "Synchronized browsing is on": "Eşzamanlı gezinme açık",
   "Synchronized browsing is off": "Eşzamanlı gezinme kapalı",

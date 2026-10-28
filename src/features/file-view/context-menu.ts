@@ -96,6 +96,16 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           command: "file.rename",
         },
         { text: t("Duplicate"), command: "file.duplicate" },
+        ...(entries.length > 1
+          ? [
+              {
+                text: t("New Folder with Selection ({count} Items)", {
+                  count: entries.length.toLocaleString(),
+                }),
+                command: "file.newFolderWithSelection",
+              },
+            ]
+          : []),
       ]),
       compress,
       ...build([
