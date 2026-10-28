@@ -6,6 +6,7 @@ import { useT } from "@/i18n";
 import { formatSize, isFolderLike } from "@/lib/format";
 import { useApp } from "@/stores/app-store";
 import { useCompareMarks } from "@/stores/compare-store";
+import { useFolderSizes } from "@/stores/folder-size-store";
 import { useGit } from "@/stores/git-store";
 import { type PaneId, useWorkspace } from "@/stores/workspace-store";
 
@@ -18,6 +19,7 @@ export function StatusBar({ pane }: { pane: PaneId }) {
   const syncBrowse = useApp((s) => s.syncBrowse);
   const dualPane = useWorkspace((s) => s.dualPane);
   const synced = syncBrowse && dualPane;
+  const sizes = useFolderSizes((s) => s.sizes);
   const branch = useGit((s) => (showGit ? s.statuses[tab.path]?.branch : null));
 
   useEffect(() => {
@@ -31,7 +33,11 @@ export function StatusBar({ pane }: { pane: PaneId }) {
   }, [tab.path]);
 
   const selected = entries.filter((e) => tab.selection.paths.has(e.path));
-  const selectedBytes = selected.reduce((sum, e) => sum + (isFolderLike(e) ? 0 : e.size), 0);
+  // Folders count once View → Calculate Folder Sizes measured them.
+  const selectedBytes = selected.reduce(
+    (sum, e) => sum + (isFolderLike(e) ? (sizes[e.path]?.bytes ?? 0) : e.size),
+    0,
+  );
   const count = entries.length;
 
   const parts: string[] = [];
