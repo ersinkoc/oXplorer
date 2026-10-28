@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OXplorer — a dual-pane file manager for macOS</title>
+  <meta name="description" content="Finder's look with Total Commander's efficiency: tabs, dual pane, search, preview, an integrated terminal, archives and servers. Open source, Tauri + Rust.">
+  <style>
+    :root {
+      --bg: #fbfbfd; --fg: #1d1d1f; --muted: #6e6e73; --line: rgb(0 0 0 / .1);
+      --card: #fff; --accent: #0a63d6; --sidebar: #ececef; --sel: #0a63d6; --sel-fg: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #161617; --fg: #f5f5f7; --muted: #a1a1a6; --line: rgb(255 255 255 / .12);
+        --card: #1e1e1f; --accent: #4aa3f5; --sidebar: #262628; --sel: #2f6fd1; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 0 20px 64px; }
+    header { padding: 72px 0 32px; text-align: center; }
+    h1 { font-size: clamp(40px, 7vw, 64px); margin: 0; letter-spacing: -.03em; }
+    .tag { font-size: clamp(18px, 2.4vw, 22px); color: var(--muted); max-width: 640px; margin: 12px auto 28px; }
+    .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .btn { display: inline-block; padding: 10px 18px; border-radius: 10px; text-decoration: none; font-weight: 600; }
+    .btn.primary { background: var(--accent); color: #fff; }
+    .btn.secondary { border: 1px solid var(--line); color: var(--fg); }
+    .window { margin: 40px auto 56px; max-width: 920px; border: 1px solid var(--line); border-radius: 12px;
+      overflow: hidden; background: var(--card); box-shadow: 0 30px 80px rgb(0 0 0 / .18); }
+    .window svg { display: block; width: 100%; height: auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+    .card h3 { margin: 0 0 6px; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    h2 { font-size: 28px; margin: 56px 0 16px; letter-spacing: -.02em; }
+    pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 14px; }
+    footer { text-align: center; color: var(--muted); font-size: 14px; padding: 32px 0; border-top: 1px solid var(--line); margin-top: 56px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>OXplorer</h1>
+    <p class="tag">A dual-pane file manager for macOS — Finder’s look and feel with Total Commander’s efficiency. Open source.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/ersinkoc/oXplorer/releases">Download</a>
+      <a class="btn secondary" href="https://github.com/ersinkoc/oXplorer">Source on GitHub</a>
+    </div>
+  </header>
+
+  <!-- A drawing of the window (stands in for screenshots). -->
+  <div class="window" role="img" aria-label="OXplorer window with a sidebar, two panes with tabs, and a terminal panel">
+    <svg viewBox="0 0 920 520" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, sans-serif" font-size="12">
+      <rect width="920" height="520" fill="var(--card)"/>
+      <rect width="180" height="520" fill="var(--sidebar)"/>
+      <circle cx="20" cy="20" r="6" fill="#ff5f57"/><circle cx="40" cy="20" r="6" fill="#febc2e"/><circle cx="60" cy="20" r="6" fill="#28c840"/>
+      <g fill="var(--muted)" font-size="11" font-weight="600"><text x="16" y="62">Favorites</text><text x="16" y="172">Locations</text><text x="16" y="244">Connections</text><text x="16" y="300">Tags</text></g>
+      <g fill="var(--fg)"><text x="30" y="86">Home</text><text x="30" y="108">Desktop</text><text x="30" y="130">Documents</text><text x="30" y="152">Downloads</text>
+        <text x="30" y="196">Macintosh HD</text><text x="30" y="218">USB Drive</text><text x="30" y="268">Build server</text>
+        <text x="40" y="324">Red</text><text x="40" y="346">Blue</text></g>
+      <circle cx="30" cy="320" r="5" fill="#ff3b30"/><circle cx="30" cy="342" r="5" fill="#007aff"/>
+      <rect x="180" width="740" height="44" fill="var(--sidebar)" opacity=".55"/>
+      <text x="200" y="27" fill="var(--fg)" font-weight="600">Projects › oxplorer › src</text>
+      <rect x="180" y="44" width="370" height="26" fill="var(--sidebar)" opacity=".35"/><rect x="551" y="44" width="369" height="26" fill="var(--sidebar)" opacity=".35"/>
+      <rect x="180" y="44" width="120" height="26" fill="var(--card)"/><text x="192" y="61" fill="var(--fg)">src</text><text x="312" y="61" fill="var(--muted)">docs</text>
+      <rect x="551" y="44" width="120" height="26" fill="var(--card)"/><text x="563" y="61" fill="var(--fg)">Downloads</text>
+      <rect x="180" y="44" width="370" height="2" fill="var(--accent)"/>
+      <line x1="550.5" y1="44" x2="550.5" y2="372" stroke="var(--line)"/>
+      <g fill="var(--fg)">
+        <text x="196" y="96">📁 commands</text><text x="196" y="120">📁 features</text>
+        <rect x="186" y="128" width="358" height="22" rx="5" fill="var(--sel)"/><text x="196" y="144" fill="var(--sel-fg)">📄 app.tsx</text>
+        <text x="196" y="168">📄 bindings.ts</text><text x="196" y="192">📄 main.tsx</text><text x="196" y="216">📄 settings-main.tsx</text>
+        <text x="526" y="144" fill="var(--sel-fg)" font-size="10" font-weight="700">M</text>
+        <text x="567" y="96">📦 release.zip</text><text x="567" y="120">🖼 photo.heic</text><text x="567" y="144">📄 report.pdf</text><text x="567" y="168">📄 notes.md</text>
+      </g>
+      <g fill="var(--muted)"><text x="440" y="96">Today</text><text x="440" y="120">Today</text><text x="440" y="168">Yesterday</text><text x="440" y="192">Yesterday</text><text x="440" y="216">Oct 2</text>
+        <text x="820" y="96">12 MB</text><text x="820" y="120">3.4 MB</text><text x="820" y="144">2.1 MB</text><text x="820" y="168">4 KB</text></g>
+      <text x="200" y="364" fill="var(--muted)" font-size="11">⎇ main · 6 items, 1 selected</text><text x="570" y="364" fill="var(--muted)" font-size="11">4 items · 412 GB available</text>
+      <rect x="180" y="372" width="740" height="148" fill="#1e1e1e"/>
+      <rect x="180" y="372" width="740" height="24" fill="var(--sidebar)" opacity=".6"/><text x="194" y="388" fill="var(--fg)" font-size="11">▣ src</text>
+      <g font-family="SF Mono, Menlo, monospace" font-size="12"><text x="194" y="420" fill="#31e722">~/Projects/oxplorer/src</text><text x="372" y="420" fill="#e8e8ea">$ git status --short</text>
+        <text x="194" y="442" fill="#adad27"> M app.tsx</text><text x="194" y="464" fill="#31e722">~/Projects/oxplorer/src</text><text x="372" y="464" fill="#e8e8ea">$ ▍</text></g>
+    </svg>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h3>Fast</h3><p>100,000 files list in about a second, first rows in ~20 ms, live updates as things change.</p></div>
+    <div class="card"><h3>Tabs and dual pane</h3><p>Tabs in each pane, F5/F6 to copy or move across, compare panes, and your layout comes back.</p></div>
+    <div class="card"><h3>Finder-friendly</h3><p>Native icons and menus, Quick Look, Finder tags, a shared clipboard and drag and drop both ways.</p></div>
+    <div class="card"><h3>Search</h3><p>Names, file contents (ripgrep’s engine) or Spotlight, with results you can work with like a folder. ⌘K for everything.</p></div>
+    <div class="card"><h3>Preview</h3><p>Code with syntax highlighting, Markdown, images, audio and video right next to your files.</p></div>
+    <div class="card"><h3>Terminal</h3><p>Your shell in a panel that can follow the folder you’re in — and the folder can follow your <code>cd</code>.</p></div>
+    <div class="card"><h3>Archives and servers</h3><p>Browse zip and tar files like folders; SFTP, WebDAV and S3 in the sidebar.</p></div>
+    <div class="card"><h3>And more</h3><p>Git status badges, a disk usage map, batch rename, undo for everything that can be undone, Turkish and English.</p></div>
+  </div>
+
+  <h2>Install</h2>
+  <p>Signed builds will be on <a href="https://github.com/ersinkoc/oXplorer/releases">GitHub Releases</a> and in a Homebrew tap with the first release; until then, build it from source:</p>
+  <pre>git clone https://github.com/ersinkoc/oXplorer
+cd oXplorer && pnpm install && pnpm tauri build</pre>
+  <p>macOS 14 or later. Released versions update themselves.</p>
+
+  <footer>MIT licensed · © ECOSTACK TECHNOLOGY OÜ · <a href="https://github.com/ersinkoc/oXplorer">github.com/ersinkoc/oXplorer</a></footer>
+</main>
+</body>
+</html>
