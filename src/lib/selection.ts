@@ -59,6 +59,31 @@ export function selectAll(order: readonly string[]): Selection {
   return { paths: new Set(order), anchor: order[0] ?? null, focus: order.at(-1) ?? null };
 }
 
+/** Every visible item that isn't selected, and none that is. */
+export function invert(sel: Selection, order: readonly string[]): Selection {
+  const paths = order.filter((p) => !sel.paths.has(p));
+  return { paths: new Set(paths), anchor: paths[0] ?? null, focus: paths[0] ?? null };
+}
+
+/** Adds (or with `add` false, removes) the visible items whose path passes `match`. */
+export function selectWhere(
+  sel: Selection,
+  order: readonly string[],
+  match: (path: string) => boolean,
+  add: boolean,
+): Selection {
+  const paths = new Set(sel.paths);
+  let first: string | null = null;
+  for (const p of order) {
+    if (!match(p)) continue;
+    if (add) paths.add(p);
+    else paths.delete(p);
+    first ??= p;
+  }
+  const focus = add ? (first ?? sel.focus) : sel.focus && paths.has(sel.focus) ? sel.focus : null;
+  return { paths, anchor: focus, focus };
+}
+
 /** Drops paths that are no longer visible (filtered, deleted, hidden toggled). */
 export function prune(sel: Selection, visible: ReadonlySet<string>): Selection {
   let changed = false;

@@ -7,6 +7,7 @@ import { FdaBanner } from "@/features/layout/fda-banner";
 import { Toolbar } from "@/features/navigation/toolbar";
 import { CommandPalette } from "@/features/palette/command-palette";
 import { BatchRenameDialog } from "@/features/rename/batch-rename-dialog";
+import { SelectMatchingDialog } from "@/features/selection/select-matching-dialog";
 import { usePreferenceEffects } from "@/features/settings/use-preference-effects";
 import { Sidebar } from "@/features/sidebar/sidebar";
 import { TerminalPanel } from "@/features/terminal/terminal-panel";
@@ -39,6 +40,7 @@ export function AppShell() {
       <InfoDialog />
       <CommandPalette />
       <BatchRenameDialog />
+      <SelectMatchingDialog />
       <WhatsNewDialog />
       <DiskUsageDialog />
     </div>

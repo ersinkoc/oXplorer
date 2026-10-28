@@ -17,7 +17,7 @@ import { focusedTerminal } from "@/features/terminal/terminal-registry";
 import { t, tn } from "@/i18n";
 import { CommandError, describeError, unwrap } from "@/lib/ipc";
 import { isSearchPath, searchPath } from "@/lib/search-path";
-import { selectAll } from "@/lib/selection";
+import { EMPTY_SELECTION, invert, selectAll } from "@/lib/selection";
 import { useApp } from "@/stores/app-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 
@@ -75,6 +75,25 @@ export function registerAppCommands(): void {
             .getState()
             .setSelection(selectAll(paneLayout(useWorkspace.getState().activePane).order));
       },
+    },
+
+    {
+      id: "edit.deselectAll",
+      title: "Deselect All",
+      run: () => useWorkspace.getState().setSelection(EMPTY_SELECTION),
+    },
+    {
+      id: "edit.invertSelection",
+      title: "Invert Selection",
+      run: () => {
+        const { activePane, setSelection } = useWorkspace.getState();
+        setSelection(invert(getActiveTab(activePane).selection, paneLayout(activePane).order));
+      },
+    },
+    {
+      id: "edit.selectMatching",
+      title: "Select Matching…",
+      run: () => useApp.getState().set({ selectMatching: "select" }),
     },
 
     { id: "view.asList", title: "as List", run: () => useWorkspace.getState().updateView({ mode: "list" }) },

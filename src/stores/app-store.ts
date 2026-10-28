@@ -59,6 +59,8 @@ interface AppState extends Preferences {
   diskUsagePath: string | null;
   /** Items in the "Rename N Items" dialog. */
   batchRename: FileEntry[] | null;
+  /** "Select Matching…" dialog: whether it adds to or removes from the selection. */
+  selectMatching: "select" | "deselect" | null;
 
   set: (patch: Partial<AppState>) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -99,6 +101,7 @@ export const useApp = create<AppState>()((set) => ({
   whatsNewOpen: false,
   diskUsagePath: null,
   batchRename: null,
+  selectMatching: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {
