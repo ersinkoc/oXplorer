@@ -110,6 +110,8 @@ function PathInput({ initial }: { initial: string }) {
   const home = useApp((s) => s.home);
   const [value, setValue] = useState(initial);
   const [suggestions, setSuggestions] = useState<{ typedDir: string; names: string[] } | null>(null);
+  /** Suggestion picked with the arrow keys; -1 for none. */
+  const [active, setActive] = useState(-1);
   const ref = useRef<HTMLInputElement>(null);
   const close = () => useApp.getState().set({ editingPath: false });
 
@@ -131,7 +133,19 @@ function PathInput({ initial }: { initial: string }) {
       const shared = commonPrefix(names);
       if (shared.length > parts.prefix.length) setValue(parts.typedDir + shared);
       setSuggestions({ typedDir: parts.typedDir, names });
+      setActive(-1);
     } else setSuggestions(null);
+  };
+
+  const pick = (typedDir: string, name: string) => {
+    setValue(`${typedDir}${name}/`);
+    setSuggestions(null);
+  };
+
+  const step = (delta: number) => {
+    if (!suggestions) return;
+    const n = suggestions.names.length;
+    setActive((i) => (i < 0 ? (delta > 0 ? 0 : n - 1) : (i + delta + n) % n));
   };
 
   return (
@@ -140,6 +154,8 @@ function PathInput({ initial }: { initial: string }) {
         ref={ref}
         aria-label={t("Go to folder")}
         aria-autocomplete="list"
+        aria-controls={suggestions ? "path-suggestions" : undefined}
+        aria-activedescendant={suggestions && active >= 0 ? `path-suggestion-${active}` : undefined}
         value={value}
         onChange={(e) => {
           setValue(e.target.value);
@@ -151,8 +167,16 @@ function PathInput({ initial }: { initial: string }) {
             e.preventDefault();
             if (suggestions) setSuggestions(null);
             else close();
+          } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && suggestions) {
+            e.preventDefault();
+            step(e.key === "ArrowDown" ? 1 : -1);
           } else if (e.key === "Enter") {
             e.preventDefault();
+            const chosen = active >= 0 ? suggestions?.names[active] : undefined;
+            if (suggestions && chosen !== undefined) {
+              pick(suggestions.typedDir, chosen);
+              return;
+            }
             void goToTypedPath(value).then((ok) => ok && close());
           } else if (e.key === "Tab" && !e.shiftKey) {
             e.preventDefault();
@@ -165,28 +189,30 @@ function PathInput({ initial }: { initial: string }) {
         className="h-7 min-w-0 flex-1 rounded-md border border-border bg-bg px-2 font-mono text-[12px] outline-none ring-2 ring-accent/40"
       />
       {suggestions && (
-        <ul
+        <div
+          id="path-suggestions"
+          role="listbox"
           aria-label={t("Folders")}
           className="absolute top-8 left-0 z-50 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-bg py-1 font-mono text-[12px] shadow-lg"
         >
-          {suggestions.names.map((name) => (
-            <li key={name}>
-              <button
-                type="button"
-                // Keeps focus in the field (a blur would close it).
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setValue(`${suggestions.typedDir}${name}/`);
-                  setSuggestions(null);
-                  ref.current?.focus();
-                }}
-                className="w-full truncate px-2 py-0.5 text-left hover:bg-hover"
-              >
-                {name}
-              </button>
-            </li>
+          {suggestions.names.map((name, i) => (
+            <div
+              key={name}
+              tabIndex={-1}
+              id={`path-suggestion-${i}`}
+              role="option"
+              aria-selected={i === active}
+              ref={i === active ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+              // Keeps focus in the field (a blur would close it).
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(suggestions.typedDir, name)}
+              onKeyDown={() => {}}
+              className={`truncate px-2 py-0.5 ${i === active ? "bg-accent text-white" : "hover:bg-hover"}`}
+            >
+              {name}
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
