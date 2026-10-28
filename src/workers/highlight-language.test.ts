@@ -1,33 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { languageFor } from "@/workers/highlight-language";
-
-const KNOWN = new Set([
-  "typescript",
-  "ts",
-  "tsx",
-  "rs",
-  "xml",
-  "c",
-  "dockerfile",
-  "ignore",
-  "json",
-  "toml",
-  "md",
-]);
+import { LANGUAGES, languageFor } from "@/workers/highlight-language";
 
 describe("languageFor", () => {
   it("maps extensions, aliases and well-known file names", () => {
-    expect(languageFor("app.ts", KNOWN)).toBe("ts");
-    expect(languageFor("Main.RS", KNOWN)).toBe("rs");
-    expect(languageFor("Info.plist", KNOWN)).toBe("xml");
-    expect(languageFor("util.h", KNOWN)).toBe("c");
-    expect(languageFor("Dockerfile", KNOWN)).toBe("dockerfile");
-    expect(languageFor(".gitignore", KNOWN)).toBe("ignore");
-    expect(languageFor("Cargo.lock", KNOWN)).toBe("toml");
+    expect(languageFor("app.ts")).toBe("typescript");
+    expect(languageFor("Main.RS")).toBe("rust");
+    expect(languageFor("Info.plist")).toBe("xml");
+    expect(languageFor("util.h")).toBe("c");
+    expect(languageFor("Dockerfile")).toBe("dockerfile");
+    expect(languageFor("Cargo.lock")).toBe("toml");
+    expect(languageFor("script.zsh")).toBe("shellscript");
+    expect(languageFor("main.go")).toBe("go");
   });
 
-  it("leaves unknown or extensionless files plain", () => {
-    expect(languageFor("notes", KNOWN)).toBeNull();
-    expect(languageFor("data.xyz", KNOWN)).toBeNull();
+  it("leaves unknown, unbundled or extensionless files plain", () => {
+    expect(languageFor("notes")).toBeNull();
+    expect(languageFor("data.xyz")).toBeNull();
+    expect(languageFor(".gitignore")).toBeNull();
+    expect(languageFor("prog.cobol")).toBeNull();
+  });
+
+  it("only maps to bundled languages", () => {
+    const bundled = new Set<string>(LANGUAGES);
+    for (const f of ["a.ts", "a.py", "a.m", "a.mm", "a.patch", "a.env", "a.conf", "Gemfile", ".zshrc"]) {
+      const lang = languageFor(f);
+      if (lang) expect(bundled.has(lang)).toBe(true);
+    }
   });
 });

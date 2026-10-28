@@ -786,7 +786,7 @@ Helper tools: `cargo install cargo-nextest cargo-flamegraph cargo-machete` (dete
 | Same-volume copy (APFS)           | Instant (clonefile)           |                                              |
 | Cross-volume copy                 | ≥ 90% of disk speed           | Comparison with `dd`                         |
 | Idle RAM                          | < 80 MB (including WebKit)    | Activity Monitor "Memory" (measured: 81 MB) |
-| DMG size                          | < 15 MB (universal)           |                                              |
+| DMG size                          | < 15 MB (universal)           | measured: 6.5 MB arm64 (opt-level "s", ~75 bundled grammars) |
 
 `scripts/gen-fixture.sh` generates 10k, 100k and deeply nested directories, unicode and NFD names, symlink cycles and large files.
 

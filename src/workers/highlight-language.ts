@@ -8,7 +8,6 @@ const EXTENSION_LANGS: Record<string, string> = {
   m: "objective-c",
   mm: "objective-cpp",
   patch: "diff",
-  gitignore: "ignore",
   env: "dotenv",
   zshrc: "shellscript",
   bashrc: "shellscript",
@@ -29,7 +28,6 @@ const FILE_NAMES: Record<string, string> = {
   rakefile: "ruby",
   brewfile: "ruby",
   justfile: "just",
-  ".gitignore": "ignore",
   ".gitattributes": "ini",
   ".editorconfig": "ini",
   ".npmrc": "ini",
@@ -45,16 +43,140 @@ const FILE_NAMES: Record<string, string> = {
 };
 
 /**
- * Picks a shiki language id for a file name; `known` is the set of ids the
- * bundle ships (aliases included). Unknown → null, the text stays plain.
+ * The languages bundled for highlighting: common ones only, since every shiki
+ * grammar is a chunk embedded in the app. Others stay plain text.
  */
-export function languageFor(fileName: string, known: ReadonlySet<string>): string | null {
+export const LANGUAGES = [
+  "apache",
+  "astro",
+  "bat",
+  "c",
+  "clojure",
+  "cmake",
+  "cpp",
+  "csharp",
+  "css",
+  "csv",
+  "dart",
+  "diff",
+  "dockerfile",
+  "dotenv",
+  "elixir",
+  "erlang",
+  "fish",
+  "fsharp",
+  "git-commit",
+  "go",
+  "graphql",
+  "groovy",
+  "haskell",
+  "hcl",
+  "html",
+  "ini",
+  "java",
+  "javascript",
+  "json",
+  "json5",
+  "jsonc",
+  "jsx",
+  "julia",
+  "just",
+  "kotlin",
+  "latex",
+  "less",
+  "log",
+  "lua",
+  "makefile",
+  "markdown",
+  "mdx",
+  "nginx",
+  "nim",
+  "nix",
+  "objective-c",
+  "objective-cpp",
+  "ocaml",
+  "perl",
+  "php",
+  "powershell",
+  "proto",
+  "python",
+  "r",
+  "regexp",
+  "ruby",
+  "rust",
+  "scala",
+  "scss",
+  "shellscript",
+  "solidity",
+  "sql",
+  "ssh-config",
+  "svelte",
+  "swift",
+  "terraform",
+  "toml",
+  "tsx",
+  "typescript",
+  "viml",
+  "vue",
+  "xml",
+  "yaml",
+  "zig",
+] as const;
+
+export type Language = (typeof LANGUAGES)[number];
+
+/** Short names and extensions shiki knows the languages by. */
+const ALIASES: Record<string, Language> = {
+  ts: "typescript",
+  cts: "typescript",
+  mts: "typescript",
+  js: "javascript",
+  cjs: "javascript",
+  mjs: "javascript",
+  py: "python",
+  rb: "ruby",
+  rs: "rust",
+  kt: "kotlin",
+  kts: "kotlin",
+  cs: "csharp",
+  fs: "fsharp",
+  hs: "haskell",
+  erl: "erlang",
+  clj: "clojure",
+  jl: "julia",
+  md: "markdown",
+  yml: "yaml",
+  gql: "graphql",
+  proto: "proto",
+  tf: "terraform",
+  tfvars: "terraform",
+  sh: "shellscript",
+  bash: "shellscript",
+  zsh: "shellscript",
+  shell: "shellscript",
+  ps1: "powershell",
+  cmd: "bat",
+  vim: "viml",
+  properties: "ini",
+  hpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  mk: "makefile",
+  tex: "latex",
+  htm: "html",
+  svg: "xml",
+};
+
+const KNOWN = new Set<string>(LANGUAGES);
+
+/** Picks a bundled language for a file name, or null to show it as plain text. */
+export function languageFor(fileName: string): Language | null {
   const name = fileName.toLowerCase();
   const byName = FILE_NAMES[name];
-  if (byName) return byName;
+  if (byName && KNOWN.has(byName)) return byName as Language;
   const dot = name.lastIndexOf(".");
   if (dot < 0) return null;
   const ext = name.slice(dot + 1);
-  const lang = EXTENSION_LANGS[ext] ?? ext;
-  return known.has(lang) ? lang : null;
+  const lang = EXTENSION_LANGS[ext] ?? ALIASES[ext] ?? ext;
+  return KNOWN.has(lang) ? (lang as Language) : (ALIASES[lang] ?? null);
 }

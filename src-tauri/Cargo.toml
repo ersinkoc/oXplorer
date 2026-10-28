@@ -68,7 +68,8 @@ tempfile = "3.27"
 [profile.release]
 codegen-units = 1
 lto = "fat"
-opt-level = 3
+# Size over speed: ~30% smaller binary for ~10% slower listings (100k entries: 160 → 178 ms).
+opt-level = "s"
 panic = "abort"
 strip = true
 
