@@ -18,10 +18,17 @@ import { t, tn } from "@/i18n";
 import { CommandError, describeError, unwrap } from "@/lib/ipc";
 import { isSearchPath, isVirtualPath, searchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION, invert, selectAll } from "@/lib/selection";
+import { nextSort, type SortField } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { measureFolders } from "@/stores/folder-size-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
+
+/** View → Sort by: like clicking the column header (again flips the order). */
+function sortBy(field: SortField): void {
+  const { sort } = getActiveTab().view;
+  useWorkspace.getState().updateView({ sort: nextSort(sort, field) });
+}
 
 /** Go menu: a standard folder, if this Mac has it. */
 function goToLocation(id: string): void {
@@ -128,6 +135,10 @@ export function registerAppCommands(): void {
       title: "as Columns",
       run: () => useWorkspace.getState().updateView({ mode: "columns" }),
     },
+    { id: "view.sortName", title: "Sort by Name", run: () => sortBy("name") },
+    { id: "view.sortKind", title: "Sort by Kind", run: () => sortBy("kind") },
+    { id: "view.sortModified", title: "Sort by Date Modified", run: () => sortBy("modified") },
+    { id: "view.sortSize", title: "Sort by Size", run: () => sortBy("size") },
     {
       id: "view.toggleHidden",
       title: "Show Hidden Files",

@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { msg, useT } from "@/i18n";
-import type { SortConfig, SortField } from "@/lib/sort";
+import { nextSort, type SortConfig, type SortField } from "@/lib/sort";
 import { type ColumnWidths, useApp } from "@/stores/app-store";
 
 const COLUMNS: { field: SortField; label: string; width?: keyof ColumnWidths; align?: "right" }[] = [
@@ -11,12 +11,6 @@ const COLUMNS: { field: SortField; label: string; width?: keyof ColumnWidths; al
 ];
 
 const MIN_WIDTH = 60;
-
-/** Finder flips direction on the active column; numeric/date columns start descending. */
-export function nextSort(current: SortConfig, field: SortField): SortConfig {
-  if (current.field === field) return { ...current, direction: current.direction === "asc" ? "desc" : "asc" };
-  return { ...current, field, direction: field === "modified" || field === "size" ? "desc" : "asc" };
-}
 
 export function gridTemplate(w: ColumnWidths): string {
   return `minmax(180px, 1fr) ${w.modified}px ${w.size}px ${w.kind}px`;

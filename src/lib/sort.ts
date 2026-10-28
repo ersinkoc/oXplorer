@@ -9,6 +9,12 @@ export interface SortConfig {
   foldersFirst: boolean;
 }
 
+/** Finder flips direction on the active column; numeric/date columns start descending. */
+export function nextSort(current: SortConfig, field: SortField): SortConfig {
+  if (current.field === field) return { ...current, direction: current.direction === "asc" ? "desc" : "asc" };
+  return { ...current, field, direction: field === "modified" || field === "size" ? "desc" : "asc" };
+}
+
 export const DEFAULT_SORT: SortConfig = { field: "name", direction: "asc", foldersFirst: true };
 
 /** Finder's natural order: "file2" < "file10", case-insensitive, accent-aware. */
