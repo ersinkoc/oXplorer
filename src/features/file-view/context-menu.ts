@@ -137,6 +137,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           command: "edit.copy",
         },
         { text: t("Copy Path"), command: "file.copyPath" },
+        { text: t("Copy Name"), command: "file.copyName" },
         "-",
         { text: t("Copy to Other Pane"), command: "file.copyToOther", enabled: dual },
         { text: t("Move to Other Pane"), command: "file.moveToOther", enabled: dual },

@@ -99,6 +99,16 @@ export function registerAppCommands(): void {
         toast.success(tn(paths.length, "Path copied", "{count} paths copied"));
       },
     },
+    {
+      id: "file.copyName",
+      title: "Copy Name",
+      run: async () => {
+        const names = selectedEntries().map((e) => e.name);
+        if (names.length === 0) return;
+        await writeText(names.join("\n"));
+        toast.success(tn(names.length, "Name copied", "{count} names copied"));
+      },
+    },
 
     {
       id: "edit.selectAll",
