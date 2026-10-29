@@ -66,6 +66,8 @@ export const commands = {
 	quickLookClose: () => typedError<null, AppError_Serialize>(__TAURI_INVOKE("quick_look_close")),
 	quickLookVisible: () => __TAURI_INVOKE<boolean>("quick_look_visible"),
 	previewText: (path: string) => typedError<TextPreview, AppError_Serialize>(__TAURI_INVOKE("preview_text", { path })),
+	/**  The head of a file as a hex dump (offset, bytes, ASCII), for binary files. */
+	previewHex: (path: string) => typedError<TextPreview, AppError_Serialize>(__TAURI_INVOKE("preview_hex", { path })),
 	/**  Lets the webview load `path` through `asset://` (images, audio, video). */
 	allowPreview: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("allow_preview", { path })),
 	/**  Starts a shell in `cwd` (home if it isn't a folder) and streams its output. */

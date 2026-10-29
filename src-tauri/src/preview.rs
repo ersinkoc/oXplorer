@@ -13,6 +13,8 @@ use crate::security::validate_path;
 
 /// Only the head of a file is read: a 50 MB log must not stall the UI.
 const TEXT_LIMIT: usize = 256 * 1024;
+/// Bytes shown by the hex view of a binary file.
+const HEX_LIMIT: usize = 4 * 1024;
 /// A NUL byte in the first chunk means the file isn't text.
 const BINARY_PROBE: usize = 8 * 1024;
 
@@ -30,6 +32,16 @@ pub struct TextPreview {
 pub async fn preview_text(path: String) -> AppResult<TextPreview> {
     let p = validate_path(&path)?;
     tauri::async_runtime::spawn_blocking(move || read_text(&p))
+        .await
+        .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
+}
+
+/// The head of a file as a hex dump (offset, bytes, ASCII), for binary files.
+#[tauri::command]
+#[specta::specta]
+pub async fn preview_hex(path: String) -> AppResult<TextPreview> {
+    let p = validate_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || read_hex(&p))
         .await
         .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
 }
@@ -62,6 +74,39 @@ pub fn read_text(path: &Path) -> AppResult<TextPreview> {
     let truncated = buf.len() > TEXT_LIMIT;
     buf.truncate(TEXT_LIMIT);
     Ok(decode(buf, truncated))
+}
+
+pub fn read_hex(path: &Path) -> AppResult<TextPreview> {
+    let file = File::open(path).map_err(|e| AppError::from_io(&e, path))?;
+    let mut buf = Vec::with_capacity(HEX_LIMIT + 1);
+    file.take(HEX_LIMIT as u64 + 1).read_to_end(&mut buf).map_err(|e| AppError::from_io(&e, path))?;
+    let truncated = buf.len() > HEX_LIMIT;
+    buf.truncate(HEX_LIMIT);
+    Ok(TextPreview { text: hex_dump(&buf), truncated, binary: false })
+}
+
+/// `hexdump -C` style: 16 bytes a line, split in two groups, then printable ASCII.
+fn hex_dump(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(bytes.len().div_ceil(16) * 79);
+    for (i, line) in bytes.chunks(16).enumerate() {
+        let _ = write!(out, "{:08x} ", i * 16);
+        for col in 0..16 {
+            if col == 8 {
+                out.push(' ');
+            }
+            match line.get(col) {
+                Some(b) => {
+                    let _ = write!(out, " {b:02x}");
+                }
+                None => out.push_str("   "),
+            }
+        }
+        out.push_str("  |");
+        out.extend(line.iter().map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '.' }));
+        out.push_str("|\n");
+    }
+    out
 }
 
 fn decode(buf: Vec<u8>, truncated: bool) -> TextPreview {
@@ -109,6 +154,18 @@ mod tests {
         // "ç" cut in half at the read limit is dropped, not turned into U+FFFD.
         assert_eq!(decode(vec![b'a', 0xC3], true).text, "a");
         assert_eq!(decode(vec![b'a', 0xFF, b'b'], false).text, "a\u{FFFD}b");
+    }
+
+    #[test]
+    fn dumps_hex_like_hexdump() {
+        let dump = hex_dump(b"MZ\x90\x00hello, world!\n\xffAB");
+        let lines: Vec<&str> = dump.lines().collect();
+        assert_eq!(
+            lines[0],
+            "00000000  4d 5a 90 00 68 65 6c 6c  6f 2c 20 77 6f 72 6c 64  |MZ..hello, world|"
+        );
+        assert_eq!(lines[1], "00000010  21 0a ff 41 42                                    |!..AB|");
+        assert_eq!(hex_dump(b""), "");
     }
 
     #[test]

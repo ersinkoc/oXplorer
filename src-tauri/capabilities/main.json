@@ -61,6 +61,7 @@
     "allow-quick-look-close",
     "allow-quick-look-visible",
     "allow-preview-text",
+    "allow-preview-hex",
     "allow-allow-preview",
     "allow-pty-open",
     "allow-pty-write",

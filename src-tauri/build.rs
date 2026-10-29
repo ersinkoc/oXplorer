@@ -38,6 +38,7 @@ const COMMANDS: &[&str] = &[
     "quick_look_close",
     "quick_look_visible",
     "preview_text",
+    "preview_hex",
     "allow_preview",
     "pty_open",
     "pty_write",

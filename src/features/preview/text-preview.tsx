@@ -41,7 +41,8 @@ export function TextPreview({ entry, onBinary }: { entry: FileEntry; onBinary: (
     };
   }, [entry.path, entry.name]);
 
-  if (error || data?.binary) return onBinary();
+  if (error) return onBinary();
+  if (data?.binary) return <BinaryPreview key={entry.path} entry={entry} icon={onBinary()} />;
   if (!data) return null;
   if (data.text.length === 0) return <p className="text-[12px] text-fg-faint">{t("Empty file")}</p>;
 
@@ -90,6 +91,45 @@ export function TextPreview({ entry, onBinary }: { entry: FileEntry; onBinary: (
         <p className="shrink-0 border-t border-border px-2.5 py-1 text-[11px] text-fg-faint">
           {t("Showing the first {shown} of {total}", {
             shown: formatSize(new TextEncoder().encode(data.text).length),
+            total: formatSize(entry.size),
+          })}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A binary file: its icon, with a button to look at its first bytes. */
+function BinaryPreview({ entry, icon }: { entry: FileEntry; icon: React.ReactNode }) {
+  const { t } = useT();
+  const [hex, setHex] = useState<TextData | null>(null);
+  const [failed, setFailed] = useState(false);
+  if (!hex)
+    return (
+      <div className="flex size-full flex-col items-center justify-center gap-3">
+        {icon}
+        <button
+          type="button"
+          onClick={() =>
+            void unwrap(commands.previewHex(entry.path))
+              .then(setHex)
+              .catch(() => setFailed(true))
+          }
+          className="h-6 rounded-md border border-border px-2.5 text-[11px] text-fg-muted hover:text-fg"
+        >
+          {failed ? t("Couldn’t read the file.") : t("Show Hex")}
+        </button>
+      </div>
+    );
+  return (
+    <div className="flex size-full min-h-0 flex-col overflow-hidden rounded-md border border-border bg-bg">
+      <pre className="m-0 min-h-0 flex-1 overflow-auto p-2.5 font-mono text-[10.5px] leading-[1.45] select-text">
+        {hex.text}
+      </pre>
+      {hex.truncated && (
+        <p className="shrink-0 border-t border-border px-2.5 py-1 text-[11px] text-fg-faint">
+          {t("Showing the first {shown} of {total}", {
+            shown: formatSize(4096),
             total: formatSize(entry.size),
           })}
         </p>

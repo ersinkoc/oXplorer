@@ -50,6 +50,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             integration::quick_look_close,
             integration::quick_look_visible,
             preview::preview_text,
+            preview::preview_hex,
             preview::allow_preview,
             pty::pty_open,
             pty::pty_write,

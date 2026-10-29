@@ -437,6 +437,14 @@ export async function runSelfTest(): Promise<void> {
       sum.status === "ok" ? sum.data : JSON.stringify(sum.error),
     );
 
+    // Preview → Show Hex of an empty file: nothing to dump, nothing cut off.
+    const hex = await commands.previewHex(nf1.path);
+    step(
+      "hex preview",
+      hex.status === "ok" && hex.data.text === "" && !hex.data.truncated,
+      JSON.stringify(hex.status === "ok" ? hex.data : hex.error),
+    );
+
     const syncRoot = parent(folder.path) ?? "/";
     // Back / Forward history menu: jump several places at once.
     useWorkspace.getState().setActivePane("left");

@@ -24,6 +24,7 @@ export const tr: Readonly<Record<string, string>> = {
   "Recent Folders": "Son Klasörler",
   "No Recent Folders": "Son Klasör Yok",
   "Clear Menu": "Menüyü Temizle",
+  "Show Hex": "Hex Göster",
   Open: "Aç",
   "Show in Finder": "Finder’da Göster",
   "Show in Enclosing Folder": "Bulunduğu Klasörde Göster",
