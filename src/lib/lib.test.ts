@@ -95,6 +95,10 @@ describe("sort", () => {
     expect(filterEntries(list, { showHidden: true, filter: "README" }).map((e) => e.name)).toEqual([
       "Readme.md",
     ]);
+    expect(filterEntries(list, { showHidden: true, filter: "*.rs; *.md" }).map((e) => e.name)).toEqual([
+      "Readme.md",
+      "main.rs",
+    ]);
   });
 });
 

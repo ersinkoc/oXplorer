@@ -1,4 +1,5 @@
 import { isFolderLike, kindLabel } from "@/lib/format";
+import { globMatcher } from "@/lib/glob";
 import type { FileEntry } from "@/lib/ipc";
 
 export type SortField = "name" | "modified" | "size" | "kind";
@@ -93,12 +94,10 @@ export interface VisibilityOptions {
   filter: string;
 }
 
+/** The filter field takes plain text or patterns like `*.jpg; *.png` (see `globMatcher`). */
 export function filterEntries(entries: readonly FileEntry[], opts: VisibilityOptions): FileEntry[] {
-  const needle = opts.filter.trim().toLocaleLowerCase();
+  const match = globMatcher(opts.filter);
   return entries.filter(
-    (e) =>
-      !e.isSystemJunk &&
-      (opts.showHidden || !e.isHidden) &&
-      (!needle || e.name.toLocaleLowerCase().includes(needle)),
+    (e) => !e.isSystemJunk && (opts.showHidden || !e.isHidden) && (!match || match(e.name)),
   );
 }

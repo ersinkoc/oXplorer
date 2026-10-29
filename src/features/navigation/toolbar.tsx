@@ -122,6 +122,7 @@ export function Toolbar({ inset }: { inset: boolean }) {
         <input
           type="search"
           placeholder={t("Filter")}
+          title={t("Filter by name, or by patterns like *.jpg; *.png")}
           data-filter-input
           value={tab.view.filter}
           onChange={(e) => useWorkspace.getState().updateView({ filter: e.target.value })}

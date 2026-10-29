@@ -36,6 +36,7 @@ export const tr: Readonly<Record<string, string>> = {
   "Couldn’t read the file.": "Dosya okunamadı.",
   "Copy Path": "Yolu Kopyala",
   "Copy Name": "Adı Kopyala",
+  "Filter by name, or by patterns like *.jpg; *.png": "Ada göre ya da *.jpg; *.png gibi desenlerle süz",
   "Name copied": "Ad kopyalandı",
   "{count} names copied": "{count} ad kopyalandı",
   "Select All": "Tümünü Seç",
