@@ -99,6 +99,14 @@ export function registerAppCommands(): void {
       },
     },
     { id: "nav.recentFolders", title: "Recent Folders", run: showRecentFolders },
+    ...Array.from({ length: 9 }, (_, i) => ({
+      id: `nav.favorite.${i + 1}`,
+      title: `Go to Sidebar Favorite ${i + 1}`,
+      run: () => {
+        const path = useApp.getState().favorites[i];
+        if (path) navigateTo(path);
+      },
+    })),
     { id: "nav.goToFolder", title: "Go to Folder…", run: () => useApp.getState().set({ editingPath: true }) },
 
     {

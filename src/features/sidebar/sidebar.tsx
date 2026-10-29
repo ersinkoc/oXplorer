@@ -121,7 +121,7 @@ export function Sidebar() {
                 onMouseDown={(e) => startFavoriteDrag(e, index)}
                 icon={isSearchPath(path) ? Search : isRemotePath(path) ? Server : Folder}
                 label={label}
-                title={path}
+                title={index < 9 ? `${path}  ⌃${index + 1}` : path}
                 active={current === path}
                 dropDir={isVirtualPath(path) ? undefined : path}
                 onClick={() => {

@@ -520,6 +520,16 @@ export async function runSelfTest(): Promise<void> {
       `nf=${iconsAgain} folder=${getActiveTab("left").view.mode}`,
     );
 
+    // ⌃1 opens the first sidebar favorite (favorites are put back afterwards).
+    const favorites = useApp.getState().favorites;
+    useApp.getState().setPreference("favorites", [nfDir.path, ...favorites]);
+    navigateTo(folder.path, { pane: "left" });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "1", code: "Digit1", ctrlKey: true }));
+    const favJump = await waitFor(() => getActiveTab("left").path === nfDir.path, 2000);
+    useApp.getState().setPreference("favorites", favorites);
+    navigateTo(folder.path, { pane: "left" });
+    step("favorite shortcut", favJump, `at=${getActiveTab("left").path}`);
+
     // ⌘= / ⌘-: the first press switches to icons, then the size steps (and is put back).
     const iconSize = useApp.getState().iconSize;
     useWorkspace.getState().setActivePane("left");

@@ -10,6 +10,10 @@ export const GLOBAL_KEYS: Record<string, string> = {
   "$mod+ArrowDown": "file.open",
   // Digit codes: with ⌥ held, `key` is a symbol ("¡"), not the digit.
   ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`$mod+Alt+Digit${i + 1}`, `tab.goto.${i + 1}`])),
+  // ⌃1…⌃9: the sidebar favorites in order.
+  ...Object.fromEntries(
+    Array.from({ length: 9 }, (_, i) => [`Control+Digit${i + 1}`, `nav.favorite.${i + 1}`]),
+  ),
 };
 
 export function installGlobalKeys(): () => void {
