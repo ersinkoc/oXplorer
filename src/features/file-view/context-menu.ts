@@ -181,6 +181,7 @@ export async function showBackgroundMenu(): Promise<void> {
       { text: t("Sort by Name"), command: "view.sortName" },
       { text: t("Sort by Kind"), command: "view.sortKind" },
       { text: t("Sort by Date Modified"), command: "view.sortModified" },
+      { text: t("Sort by Date Created"), command: "view.sortCreated" },
       { text: t("Sort by Size"), command: "view.sortSize" },
       {
         text: foldersFirst ? t("Mix Folders with Files") : t("Keep Folders on Top"),

@@ -6,7 +6,7 @@ import { dropDirFor } from "@/features/dnd/drop-target";
 import { CompareStripe } from "@/features/file-view/compare-stripe";
 import { FileIcon } from "@/features/file-view/file-icon";
 import { GitBadge } from "@/features/file-view/git-badge";
-import { gridTemplate, ListHeader } from "@/features/file-view/list-header";
+import { gridTemplate, ListHeader, visibleColumns } from "@/features/file-view/list-header";
 import { RenameInput } from "@/features/file-view/rename-input";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { useFileView } from "@/features/file-view/use-file-view";
@@ -18,7 +18,7 @@ import type { FileEntry } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
 import { isRemotePath } from "@/lib/remote-path";
 import { isVirtualPath, parseSearchPath } from "@/lib/search-path";
-import { useApp } from "@/stores/app-store";
+import { type ListColumn, useApp } from "@/stores/app-store";
 import { useCompareMarks } from "@/stores/compare-store";
 import { type FolderSize, useFolderSizes } from "@/stores/folder-size-store";
 import { useGitStates } from "@/stores/git-store";
@@ -50,6 +50,10 @@ export function FileList({ pane }: { pane: PaneId }) {
   const git = useGitStates(tab.path);
   const compare = useCompareMarks(pane);
   const sizes = useFolderSizes((s) => s.sizes);
+  const columns = visibleColumns(
+    useApp((s) => s.listColumns),
+    !!search,
+  );
   const detail = (entry: FileEntry): string | undefined => {
     if (!search) return undefined;
     const m = matches?.get(entry.path);
@@ -60,9 +64,10 @@ export function FileList({ pane }: { pane: PaneId }) {
   return (
     <div
       className="file-list flex min-h-0 flex-1 flex-col"
-      style={{ ["--grid" as string]: gridTemplate(widths) }}
+      style={{ ["--grid" as string]: gridTemplate(widths, columns) }}
     >
       <ListHeader
+        columns={columns}
         sort={tab.view.sort}
         onSort={(sort) => useWorkspace.getState().updateView({ sort }, pane)}
         kindLabel={search ? (search.mode === "content" ? t("Match") : t("Where")) : undefined}
@@ -101,6 +106,7 @@ export function FileList({ pane }: { pane: PaneId }) {
                   git={git?.get(entry.name)}
                   compare={compare?.get(entry.name)}
                   measured={sizes[entry.path]}
+                  columns={columns}
                   onMouseDown={view.onItemMouseDown}
                   onDoubleClick={view.onItemDoubleClick}
                   onContextMenu={view.onItemContextMenu}
@@ -130,11 +136,13 @@ const Row = memo(function Row({
   git,
   compare,
   measured,
+  columns,
   onMouseDown,
   onDoubleClick,
   onContextMenu,
 }: {
   id: string;
+  columns: readonly ListColumn[];
   /** Replaces the kind column (search results). */
   detail?: string;
   git?: GitState;
@@ -179,15 +187,34 @@ const Row = memo(function Row({
         <TagDots tags={entry.tags} />
         <GitBadge state={git} />
       </div>
-      <div role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted">
-        {formatDate(entry.modifiedMs)}
-      </div>
-      <div role="gridcell" className="file-row-muted truncate px-2.5 text-right text-fg-muted tabular-nums">
-        {entrySizeLabel(entry, measured)}
-      </div>
-      <div role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted" title={detail}>
-        {detail ?? kindLabel(entry)}
-      </div>
+      {columns.map((c) =>
+        c === "size" ? (
+          <div
+            key={c}
+            role="gridcell"
+            className="file-row-muted truncate px-2.5 text-right text-fg-muted tabular-nums"
+          >
+            {entrySizeLabel(entry, measured)}
+          </div>
+        ) : c === "kind" ? (
+          <div
+            key={c}
+            role="gridcell"
+            className="file-row-muted truncate px-2.5 text-fg-muted"
+            title={detail}
+          >
+            {detail ?? kindLabel(entry)}
+          </div>
+        ) : (
+          <div key={c} role="gridcell" className="file-row-muted truncate px-2.5 text-fg-muted">
+            {c === "created"
+              ? entry.createdMs === null
+                ? "--"
+                : formatDate(entry.createdMs)
+              : formatDate(entry.modifiedMs)}
+          </div>
+        ),
+      )}
     </div>
   );
 });

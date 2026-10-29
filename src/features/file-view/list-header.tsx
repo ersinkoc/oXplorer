@@ -1,26 +1,57 @@
+import { Menu } from "@tauri-apps/api/menu";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { msg, useT } from "@/i18n";
+import { msg, t as translate, useT } from "@/i18n";
 import { nextSort, type SortConfig, type SortField } from "@/lib/sort";
-import { type ColumnWidths, useApp } from "@/stores/app-store";
+import { type ColumnWidths, LIST_COLUMNS, type ListColumn, useApp } from "@/stores/app-store";
 
-const COLUMNS: { field: SortField; label: string; width?: keyof ColumnWidths; align?: "right" }[] = [
-  { field: "name", label: msg("Name") },
-  { field: "modified", label: msg("Date Modified"), width: "modified" },
-  { field: "size", label: msg("Size"), width: "size", align: "right" },
-  { field: "kind", label: msg("Kind"), width: "kind" },
-];
+const LABELS: Record<SortField, string> = {
+  name: msg("Name"),
+  modified: msg("Date Modified"),
+  created: msg("Date Created"),
+  size: msg("Size"),
+  kind: msg("Kind"),
+};
 
 const MIN_WIDTH = 60;
+const DEFAULT_WIDTH = 150;
 
-export function gridTemplate(w: ColumnWidths): string {
-  return `minmax(180px, 1fr) ${w.modified}px ${w.size}px ${w.kind}px`;
+/** The columns to show, in display order (a stored list may be stale). Search
+ * results always keep the last column: it says where each item was found. */
+export function visibleColumns(chosen: readonly string[], search = false): ListColumn[] {
+  return LIST_COLUMNS.filter((c) => chosen.includes(c) || (search && c === "kind"));
+}
+
+export function columnWidth(w: ColumnWidths, c: ListColumn): number {
+  return w[c] ?? DEFAULT_WIDTH;
+}
+
+export function gridTemplate(w: ColumnWidths, columns: readonly ListColumn[]): string {
+  return ["minmax(180px, 1fr)", ...columns.map((c) => `${columnWidth(w, c)}px`)].join(" ");
+}
+
+/** Right-click on the header: which columns to show, like Finder's. */
+async function showColumnsMenu(): Promise<void> {
+  const shown = visibleColumns(useApp.getState().listColumns);
+  const menu = await Menu.new({
+    items: LIST_COLUMNS.map((c) => ({
+      text: translate(LABELS[c]),
+      checked: shown.includes(c),
+      action: () => {
+        const next = shown.includes(c) ? shown.filter((x) => x !== c) : [...shown, c];
+        useApp.getState().setPreference("listColumns", visibleColumns(next));
+      },
+    })),
+  });
+  await menu.popup();
 }
 
 export function ListHeader({
+  columns,
   sort,
   onSort,
   kindLabel,
 }: {
+  columns: readonly ListColumn[];
   sort: SortConfig;
   onSort: (s: SortConfig) => void;
   /** Replaces "Kind" when the last column shows something else (search results). */
@@ -29,11 +60,11 @@ export function ListHeader({
   const { t } = useT();
   const widths = useApp((s) => s.columnWidths);
 
-  const startResize = (key: keyof ColumnWidths, e: React.PointerEvent) => {
+  const startResize = (key: ListColumn, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const startW = widths[key];
+    const startW = columnWidth(widths, key);
     const target = e.currentTarget;
     target.setPointerCapture(e.pointerId);
     let latest = startW;
@@ -55,33 +86,37 @@ export function ListHeader({
     <div
       role="row"
       className="grid h-[26px] shrink-0 border-b border-border bg-bg text-[12px] text-fg-muted"
-      style={{ gridTemplateColumns: gridTemplate(widths) }}
+      style={{ gridTemplateColumns: gridTemplate(widths, columns) }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        void showColumnsMenu();
+      }}
     >
-      {COLUMNS.map((col) => {
-        const active = sort.field === col.field;
+      {(["name", ...columns] as const).map((field) => {
+        const active = sort.field === field;
         const Arrow = sort.direction === "asc" ? ChevronUp : ChevronDown;
         return (
           <div
-            key={col.field}
+            key={field}
             role="columnheader"
             aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
             className="relative flex min-w-0"
           >
-            {col.width && (
+            {field !== "name" && (
               <div
                 aria-hidden
-                onPointerDown={(e) => col.width && startResize(col.width, e)}
+                onPointerDown={(e) => startResize(field, e)}
                 className="absolute inset-y-1 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-border"
               />
             )}
             <button
               type="button"
-              onClick={() => onSort(nextSort(sort, col.field))}
+              onClick={() => onSort(nextSort(sort, field))}
               className={`flex min-w-0 flex-1 items-center gap-1 px-2.5 hover:bg-hover ${
-                col.align === "right" ? "justify-end" : ""
+                field === "size" ? "justify-end" : ""
               } ${active ? "font-semibold text-fg" : ""}`}
             >
-              <span className="truncate">{col.field === "kind" && kindLabel ? kindLabel : t(col.label)}</span>
+              <span className="truncate">{field === "kind" && kindLabel ? kindLabel : t(LABELS[field])}</span>
               {active && <Arrow className="size-3 shrink-0" />}
             </button>
           </div>

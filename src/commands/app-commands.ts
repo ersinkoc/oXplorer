@@ -206,6 +206,7 @@ export function registerAppCommands(): void {
     { id: "view.sortName", title: "Sort by Name", run: () => sortBy("name") },
     { id: "view.sortKind", title: "Sort by Kind", run: () => sortBy("kind") },
     { id: "view.sortModified", title: "Sort by Date Modified", run: () => sortBy("modified") },
+    { id: "view.sortCreated", title: "Sort by Date Created", run: () => sortBy("created") },
     { id: "view.sortSize", title: "Sort by Size", run: () => sortBy("size") },
     { id: "view.biggerIcons", title: "Bigger Icons", run: () => zoomIcons(1) },
     { id: "view.smallerIcons", title: "Smaller Icons", run: () => zoomIcons(-1) },

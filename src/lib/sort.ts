@@ -2,7 +2,7 @@ import { isFolderLike, kindLabel } from "@/lib/format";
 import { globMatcher } from "@/lib/glob";
 import type { FileEntry } from "@/lib/ipc";
 
-export type SortField = "name" | "modified" | "size" | "kind";
+export type SortField = "name" | "modified" | "created" | "size" | "kind";
 
 export interface SortConfig {
   field: SortField;
@@ -13,7 +13,11 @@ export interface SortConfig {
 /** Finder flips direction on the active column; numeric/date columns start descending. */
 export function nextSort(current: SortConfig, field: SortField): SortConfig {
   if (current.field === field) return { ...current, direction: current.direction === "asc" ? "desc" : "asc" };
-  return { ...current, field, direction: field === "modified" || field === "size" ? "desc" : "asc" };
+  return {
+    ...current,
+    field,
+    direction: field === "modified" || field === "created" || field === "size" ? "desc" : "asc",
+  };
 }
 
 export const DEFAULT_SORT: SortConfig = { field: "name", direction: "asc", foldersFirst: true };
@@ -60,6 +64,8 @@ function fieldValue(e: FileEntry, folder: boolean, field: SortField, sizes?: Kno
       return 0;
     case "modified":
       return e.modifiedMs;
+    case "created":
+      return e.createdMs ?? 0;
     case "size":
       if (!folder) return e.size;
       return sizes?.[e.path]?.done ? (sizes[e.path]?.bytes ?? -1) : -1;

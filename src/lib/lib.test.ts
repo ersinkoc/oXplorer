@@ -69,6 +69,17 @@ describe("sort", () => {
     ).toEqual(["a", "b", "c"]);
   });
 
+  it("sorts by date created, unknown dates last when descending", () => {
+    const list = [
+      entry("a", { createdMs: 5 }),
+      entry("b", { createdMs: null }),
+      entry("c", { createdMs: 9 }),
+    ];
+    expect(
+      sortEntries(list, { field: "created", direction: "desc", foldersFirst: true }).map((e) => e.name),
+    ).toEqual(["c", "a", "b"]);
+  });
+
   it("sorts folders by their measured size", () => {
     const list = [entry("x", { kind: "dir" }), entry("y", { kind: "dir" }), entry("z", { kind: "dir" })];
     const sizes = {

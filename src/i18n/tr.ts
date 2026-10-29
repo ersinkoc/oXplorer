@@ -26,6 +26,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Clear Menu": "Menüyü Temizle",
   "Show Hex": "Hex Göster",
   "Bigger Icons": "Daha Büyük Simgeler",
+  "Date Created": "Oluşturulma Tarihi",
+  "Sort by Date Created": "Oluşturulma Tarihine Göre Sırala",
   "Smaller Icons": "Daha Küçük Simgeler",
   "Convert Image…": "Görüntüyü Dönüştür…",
   "Convert Image": "Görüntüyü Dönüştür",

@@ -5,9 +5,14 @@ import type { FileEntry } from "@/lib/ipc";
 
 export interface ColumnWidths {
   modified: number;
+  created?: number;
   size: number;
   kind: number;
 }
+
+/** List view columns besides Name, in display order. */
+export type ListColumn = "modified" | "created" | "size" | "kind";
+export const LIST_COLUMNS: readonly ListColumn[] = ["modified", "created", "size", "kind"];
 
 export type Theme = "system" | "light" | "dark";
 
@@ -16,6 +21,8 @@ export interface Preferences {
   sidebarVisible: boolean;
   showHidden: boolean;
   columnWidths: ColumnWidths;
+  /** List view columns shown (header right-click). */
+  listColumns: ListColumn[];
   terminalVisible: boolean;
   /** Height of the terminal panel in px. */
   terminalHeight: number;
@@ -83,7 +90,8 @@ interface AppState extends Preferences {
 export const DEFAULT_PREFERENCES: Preferences = {
   sidebarVisible: true,
   showHidden: false,
-  columnWidths: { modified: 190, size: 90, kind: 150 },
+  columnWidths: { modified: 190, created: 190, size: 90, kind: 150 },
+  listColumns: ["modified", "size", "kind"],
   terminalVisible: false,
   terminalHeight: 260,
   theme: "system",

@@ -95,6 +95,7 @@ const VIEW: &[Item] = &[
     ("view.sortName", "Sort by Name", Some("Ctrl+Alt+CmdOrCtrl+1")),
     ("view.sortKind", "Sort by Kind", Some("Ctrl+Alt+CmdOrCtrl+2")),
     ("view.sortModified", "Sort by Date Modified", Some("Ctrl+Alt+CmdOrCtrl+5")),
+    ("view.sortCreated", "Sort by Date Created", Some("Ctrl+Alt+CmdOrCtrl+6")),
     ("view.sortSize", "Sort by Size", Some("Ctrl+Alt+CmdOrCtrl+7")),
     ("view.foldersFirst", "Keep Folders on Top", None),
     SEP,
