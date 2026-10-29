@@ -118,6 +118,7 @@ const GO: &[Item] = &[
     ("nav.home", "Home", Some("Shift+CmdOrCtrl+H")),
     ("nav.applications", "Applications", Some("Shift+CmdOrCtrl+A")),
     ("nav.utilities", "Utilities", Some("Shift+CmdOrCtrl+U")),
+    ("nav.recentFolders", "Recent Folders", None),
     ("nav.goToFolder", "Go to Folder…", Some("Shift+CmdOrCtrl+G")),
     ("palette.open", "Command Palette…", Some("CmdOrCtrl+K")),
 ];

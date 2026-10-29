@@ -59,3 +59,8 @@ export function rankedVisits(): Visit[] {
   const now = Date.now();
   return [...useRecents.getState().visits].sort((a, b) => frecency(b, now) - frecency(a, now));
 }
+
+/** The `n` folders opened most recently, newest first (Go → Recent Folders). */
+export function latestVisits(n: number): Visit[] {
+  return [...useRecents.getState().visits].sort((a, b) => b.last - a.last).slice(0, n);
+}

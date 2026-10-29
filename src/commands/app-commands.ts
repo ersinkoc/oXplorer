@@ -1,3 +1,4 @@
+import { Menu } from "@tauri-apps/api/menu";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
@@ -16,14 +17,37 @@ import { paneLayout } from "@/features/file-view/visible-order";
 import { focusedTerminal } from "@/features/terminal/terminal-registry";
 import { t, tn } from "@/i18n";
 import { CommandError, describeError, unwrap } from "@/lib/ipc";
-import { parent } from "@/lib/path";
+import { basename, parent, tildify } from "@/lib/path";
 import { isSearchPath, isVirtualPath, searchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION, invert, selectAll } from "@/lib/selection";
 import { nextSort, type SortField } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { measureFolders } from "@/stores/folder-size-store";
+import { clearRecents, latestVisits } from "@/stores/recents-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
+
+/** Go → Recent Folders: a menu of the last folders opened, like Finder's. */
+async function showRecentFolders(): Promise<void> {
+  const { home } = useApp.getState();
+  const visits = latestVisits(15);
+  const names = visits.map((v) => (v.path === "/" ? "Macintosh HD" : basename(v.path)));
+  const items = visits.map((v, i) => {
+    const name = names[i] ?? v.path;
+    // Same-named folders show where they are.
+    const clash = names.indexOf(name) !== names.lastIndexOf(name);
+    const where = clash ? tildify(parent(v.path) ?? "/", home) : null;
+    return { text: where ? `${name} — ${where}` : name, action: () => navigateTo(v.path) };
+  });
+  const menu = await Menu.new({
+    items: [
+      ...(items.length > 0 ? items : [{ text: t("No Recent Folders"), enabled: false }]),
+      { item: "Separator" as const },
+      { text: t("Clear Menu"), enabled: items.length > 0, action: clearRecents },
+    ],
+  });
+  await menu.popup();
+}
 
 /** View → Sort by: like clicking the column header (again flips the order). */
 function sortBy(field: SortField): void {
@@ -61,6 +85,7 @@ export function registerAppCommands(): void {
         }
       },
     },
+    { id: "nav.recentFolders", title: "Recent Folders", run: showRecentFolders },
     { id: "nav.goToFolder", title: "Go to Folder…", run: () => useApp.getState().set({ editingPath: true }) },
 
     {
