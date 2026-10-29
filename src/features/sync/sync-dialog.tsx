@@ -76,6 +76,8 @@ function useComparison(left: string, right: string, byContent: boolean): Scan {
   useEffect(() => {
     const id = crypto.randomUUID();
     latest.current = id;
+    // Results of an earlier run (the other mode) mustn't show while this one starts.
+    setScan(fresh(key, id));
     const channel = new Channel<SyncEvent>();
     const current = (s: Scan) => (s.run === id ? s : fresh(key, id));
     channel.onmessage = (ev) =>

@@ -45,7 +45,17 @@ impl ImageFormat {
 pub fn convert(src: &Path, format: ImageFormat, max_size: Option<u32>) -> Result<PathBuf, AppError> {
     let dir = src.parent().unwrap_or(Path::new("/"));
     let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let dst = names::untitled(dir, &format!("{stem}.{}", format.extension()), true);
+    let ext = format.extension();
+    // sips writes to a hidden file reserved for us; the final name is claimed
+    // afterwards without overwriting, so nothing else is ever replaced or removed.
+    let tmp = reserve_temp(dir, &stem, ext).map_err(|e| AppError::from_io(&e, dir))?;
+    let result =
+        run_sips(src, &tmp, format, max_size).and_then(|()| claim(&tmp, dir, &format!("{stem}.{ext}")));
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
+
+fn run_sips(src: &Path, tmp: &Path, format: ImageFormat, max_size: Option<u32>) -> Result<(), AppError> {
     let mut cmd = Command::new(SIPS);
     cmd.args(["-s", "format", format.sips_name()]);
     if let Some(px) = max_size {
@@ -54,19 +64,51 @@ pub fn convert(src: &Path, format: ImageFormat, max_size: Option<u32>) -> Result
             cmd.arg("-Z").arg(px.to_string());
         }
     }
-    let out = cmd.arg(src).arg("--out").arg(&dst).output().map_err(|e| AppError::Io {
+    let out = cmd.arg(src).arg("--out").arg(tmp).output().map_err(|e| AppError::Io {
         path: Some(src.to_string_lossy().into_owned()),
         message: e.to_string(),
     })?;
-    if !out.status.success() || !dst.exists() {
-        let _ = std::fs::remove_file(&dst);
+    let written = std::fs::metadata(tmp).is_ok_and(|m| m.len() > 0);
+    if !out.status.success() || !written {
         let message = String::from_utf8_lossy(&out.stderr).trim().to_owned();
         return Err(AppError::Io {
             path: Some(src.to_string_lossy().into_owned()),
             message: if message.is_empty() { "the image couldn’t be converted".into() } else { message },
         });
     }
-    Ok(dst)
+    Ok(())
+}
+
+/// Creates an empty hidden file next to the original for sips to write into.
+fn reserve_temp(dir: &Path, stem: &str, ext: &str) -> std::io::Result<PathBuf> {
+    let nanos =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+    for n in 0..100u32 {
+        let tmp = dir.join(format!(".{stem}.oxconvert-{}-{nanos}-{n}.{ext}", std::process::id()));
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp) {
+            Ok(_) => return Ok(tmp),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::ErrorKind::AlreadyExists.into())
+}
+
+/// Links `tmp` under the first free variant of `name`; a name taken in the
+/// meantime is skipped, never overwritten.
+fn claim(tmp: &Path, dir: &Path, name: &str) -> Result<PathBuf, AppError> {
+    for _ in 0..100 {
+        let dst = names::untitled(dir, name, true);
+        match std::fs::hard_link(tmp, &dst) {
+            Ok(()) => return Ok(dst),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(AppError::from_io(&e, &dst)),
+        }
+    }
+    Err(AppError::InvalidPath {
+        path: dir.join(name).to_string_lossy().into_owned(),
+        reason: "no free name".into(),
+    })
 }
 
 /// Whether both sides of the picture are at most `px` (sips -Z would enlarge it).
@@ -131,6 +173,8 @@ mod tests {
         let src = tmp.path().join("notes.txt");
         fs::write(&src, b"hello").unwrap();
         assert!(convert(&src, ImageFormat::Png, None).is_err());
-        assert!(!tmp.path().join("notes.png").exists());
+        // Nothing is left behind, not even the hidden temporary file.
+        let left: Vec<_> = fs::read_dir(tmp.path()).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(left, vec![std::ffi::OsString::from("notes.txt")]);
     }
 }

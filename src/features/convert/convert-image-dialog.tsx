@@ -54,10 +54,12 @@ function Body({ paths, onClose }: { paths: string[]; onClose: () => void }) {
       }
       setDone(made.length + failed.length);
     }
+    // Escape may have closed this dialog meanwhile, and another one may be open now.
+    const stillOpen = useApp.getState().convertPaths === paths;
     if (made.length > 0) {
       applyFsChanges(made, []);
       recordUndo({ label: msg("Convert Image"), steps: made.map((e) => ({ kind: "trash", path: e.path })) });
-      useWorkspace.getState().setSelection(selectAll(made.map((e) => e.path)));
+      if (stillOpen) useWorkspace.getState().setSelection(selectAll(made.map((e) => e.path)));
     }
     if (failed.length > 0)
       toast.error(
@@ -66,7 +68,7 @@ function Body({ paths, onClose }: { paths: string[]; onClose: () => void }) {
           description: failed.slice(0, 3).join("\n"),
         },
       );
-    onClose();
+    if (stillOpen) onClose();
   };
 
   const busy = done !== null;
