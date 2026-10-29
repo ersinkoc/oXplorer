@@ -4655,7 +4655,7 @@ dependencies = [
 
 [[package]]
 name = "oxplorer"
-version = "0.1.0-beta.2"
+version = "0.1.0-beta.3"
 dependencies = [
  "block2",
  "dirs",
