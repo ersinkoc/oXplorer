@@ -9,7 +9,14 @@ import { toggleQuickLook } from "@/features/preview/quick-look";
 import { TextPreview } from "@/features/preview/text-preview";
 import { useT } from "@/i18n";
 import { isArchivePath } from "@/lib/archive-path";
-import { entrySizeLabel, formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
+import {
+  entrySizeLabel,
+  formatDate,
+  formatDuration,
+  formatSize,
+  isFolderLike,
+  kindLabel,
+} from "@/lib/format";
 import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
 import { isRemotePath } from "@/lib/remote-path";
@@ -87,14 +94,18 @@ function ArchiveMemberPreview({ entry }: { entry: FileEntry }) {
   return <EntryPreview entry={real ?? entry} />;
 }
 
+/** What the loaded media tells about itself: pixel size or playing time. */
+type MediaInfo = { width: number; height: number } | { duration: number };
+
 export function EntryPreview({ entry }: { entry: FileEntry }) {
   const kind = previewKind(entry);
+  const [media, setMedia] = useState<MediaInfo | null>(null);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 items-center justify-center p-3">
-        <Content entry={entry} kind={kind} />
+        <Content entry={entry} kind={kind} onMedia={setMedia} />
       </div>
-      <InfoCard entry={entry} />
+      <InfoCard entry={entry} media={media} />
     </div>
   );
 }
@@ -118,7 +129,15 @@ function useAllowedSrc(entry: FileEntry, enabled: boolean): string | null {
   return src;
 }
 
-function Content({ entry, kind }: { entry: FileEntry; kind: Kind }) {
+function Content({
+  entry,
+  kind,
+  onMedia,
+}: {
+  entry: FileEntry;
+  kind: Kind;
+  onMedia: (info: MediaInfo) => void;
+}) {
   const media = kind === "image" || kind === "video" || kind === "audio";
   const src = useAllowedSrc(entry, media);
   const [failed, setFailed] = useState(false);
@@ -133,6 +152,9 @@ function Content({ entry, kind }: { entry: FileEntry; kind: Kind }) {
           alt={entry.name}
           draggable={false}
           onError={() => setFailed(true)}
+          onLoad={(e) =>
+            onMedia({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })
+          }
           className="max-h-full max-w-full rounded-sm object-contain shadow-sm"
         />
       );
@@ -143,6 +165,12 @@ function Content({ entry, kind }: { entry: FileEntry; kind: Kind }) {
           src={src}
           controls
           onError={() => setFailed(true)}
+          onLoadedMetadata={(e) => {
+            const v = e.currentTarget;
+            onMedia(
+              v.videoWidth > 0 ? { width: v.videoWidth, height: v.videoHeight } : { duration: v.duration },
+            );
+          }}
           className="max-h-full max-w-full rounded-sm"
         >
           <track kind="captions" />
@@ -151,7 +179,15 @@ function Content({ entry, kind }: { entry: FileEntry; kind: Kind }) {
     return (
       <div className="flex w-full flex-col items-center gap-4">
         <BigIcon entry={entry} />
-        <audio src={src} controls onError={() => setFailed(true)} className="w-full">
+        <audio
+          src={src}
+          controls
+          onError={() => setFailed(true)}
+          onLoadedMetadata={(e) => {
+            if (Number.isFinite(e.currentTarget.duration)) onMedia({ duration: e.currentTarget.duration });
+          }}
+          className="w-full"
+        >
           <track kind="captions" />
         </audio>
       </div>
@@ -175,7 +211,7 @@ function BigIcon({ entry, thumbnail = false }: { entry: FileEntry; thumbnail?: b
   );
 }
 
-function InfoCard({ entry }: { entry: FileEntry }) {
+function InfoCard({ entry, media = null }: { entry: FileEntry; media?: MediaInfo | null }) {
   const { t } = useT();
   const measured = useFolderSizes((s) => s.sizes[entry.path]);
   const rows: [string, string][] = [
@@ -184,6 +220,10 @@ function InfoCard({ entry }: { entry: FileEntry }) {
     [t("Created"), entry.createdMs ? formatDate(entry.createdMs) : "--"],
     [t("Modified"), formatDate(entry.modifiedMs)],
   ];
+  if (media && "width" in media)
+    rows.push([t("Dimensions"), `${media.width.toLocaleString()} × ${media.height.toLocaleString()}`]);
+  if (media && "duration" in media && Number.isFinite(media.duration))
+    rows.push([t("Duration"), formatDuration(media.duration)]);
   if (entry.symlink) rows.push([t("Original"), entry.symlink.target]);
   return (
     <div className="shrink-0 border-t border-border px-3 py-2.5">

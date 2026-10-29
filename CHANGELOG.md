@@ -37,7 +37,7 @@ The first public build of OXplorer.
 
 ### Look inside
 
-- Preview pane (⇧⌘P) with syntax-highlighted code, Markdown, images, audio and video.
+- Preview pane (⇧⌘P) with syntax-highlighted code, Markdown, images, audio and video; shows image dimensions and playing time.
 - Quick Look (Space).
 - Get Info (⌘I): SHA-256 checksum of a file and editable permissions.
 

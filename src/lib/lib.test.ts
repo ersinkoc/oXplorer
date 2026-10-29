@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, kindLabel } from "@/lib/format";
+import { formatDate, formatDuration, kindLabel } from "@/lib/format";
 import { iconUrl, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
 import { basename, normalizeUserInput, parent, segments, tildify } from "@/lib/path";
@@ -209,5 +209,13 @@ describe("applyTags", () => {
     const next = applyTags([a, b], new Map([["/d/b", [{ name: "Red", color: 6 }]]]));
     expect(next[0]).toBe(a);
     expect(next[1]?.tags).toEqual([{ name: "Red", color: 6 }]);
+  });
+});
+
+describe("formatDuration", () => {
+  it("shows minutes, and hours only when needed", () => {
+    expect(formatDuration(0)).toBe("0:00");
+    expect(formatDuration(75.4)).toBe("1:15");
+    expect(formatDuration(3725)).toBe("1:02:05");
   });
 });

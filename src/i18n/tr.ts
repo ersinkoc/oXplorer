@@ -26,6 +26,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Show in Enclosing Folder": "Bulunduğu Klasörde Göster",
   Calculate: "Hesapla",
   Owner: "Sahip",
+  Dimensions: "Boyutlar",
+  Duration: "Süre",
   Group: "Grup",
   Everyone: "Herkes",
   Read: "Okuma",
