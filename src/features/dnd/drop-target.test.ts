@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { dropMode, isValidDrop, volumeOf } from "@/features/dnd/drop-target";
+import { dropMode, isValidDrop, localFolders, volumeOf } from "@/features/dnd/drop-target";
+import type { FileEntry } from "@/lib/ipc";
 import { useApp } from "@/stores/app-store";
+import { useDirCache } from "@/stores/dir-cache-store";
 
 describe("drop rules", () => {
   useApp.setState({
@@ -46,5 +48,24 @@ describe("drop rules", () => {
     expect(isValidDrop(["/a/b", "/a/c"], "/a")).toBe(false);
     expect(isValidDrop(["/a/b"], "/a/bb")).toBe(true);
     expect(isValidDrop(["/a/b", "/x/c"], "/a")).toBe(true);
+  });
+});
+
+describe("favorites drop", () => {
+  it("takes only folders on this Mac", () => {
+    const entry = (name: string, kind: FileEntry["kind"]) =>
+      ({ name, path: `/d/${name}`, kind }) as FileEntry;
+    useDirCache.setState({
+      dirs: {
+        "/d": {
+          status: "ready",
+          error: null,
+          entries: [entry("Photos", "dir"), entry("a.txt", "file"), entry("Tool.app", "package")],
+        },
+      },
+    });
+    expect(localFolders(["/d/Photos", "/d/a.txt", "/d/Tool.app", "/d/unknown", "remote:x/y"])).toEqual([
+      "/d/Photos",
+    ]);
   });
 });

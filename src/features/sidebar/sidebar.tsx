@@ -17,7 +17,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { commands, type FinderTag, type VolumeInfo } from "@/bindings";
 import { navigateTo } from "@/commands/navigation";
-import { useDrag } from "@/features/dnd/drag-store";
+import { FAVORITES_TARGET, useDrag } from "@/features/dnd/drag-store";
 import { msg, t, useT } from "@/i18n";
 import { TAG_COLORS } from "@/lib/icons";
 import { describeError } from "@/lib/ipc";
@@ -93,7 +93,7 @@ export function Sidebar() {
       {/* Traffic lights sit over this strip; it doubles as a window drag handle. */}
       <div data-tauri-drag-region className="h-[52px] shrink-0" />
       <div className="flex-1 overflow-y-auto px-2.5 pb-3">
-        <Section title={t("Favorites")}>
+        <Section title={t("Favorites")} favoritesDrop>
           {locations.map((l) => (
             <Item
               key={l.id}
@@ -246,9 +246,22 @@ async function eject(volume: VolumeInfo): Promise<void> {
     );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  favoritesDrop = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  /** Folders dropped here (not on an item) become favorites. */
+  favoritesDrop?: boolean;
+}) {
+  const highlight = useDrag((s) => favoritesDrop && s.target === FAVORITES_TARGET);
   return (
-    <section className="mb-3">
+    <section
+      data-drop-favorites={favoritesDrop || undefined}
+      className={`mb-3 rounded-md ${highlight ? "ring-2 ring-accent ring-inset" : ""}`}
+    >
       <h2 className="px-2 pt-1 pb-1 text-[11px] font-semibold text-fg-faint">{title}</h2>
       <ul className="flex flex-col gap-px">{children}</ul>
     </section>

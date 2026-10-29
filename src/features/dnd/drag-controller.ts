@@ -3,12 +3,21 @@ import { commands } from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { transferSpec } from "@/commands/locations";
 import { navigateTo } from "@/commands/navigation";
-import { useDrag } from "@/features/dnd/drag-store";
-import { dropDirAt, dropMode, isValidDrop, springTargetAt, terminalAt } from "@/features/dnd/drop-target";
+import { FAVORITES_TARGET, useDrag } from "@/features/dnd/drag-store";
+import {
+  dropDirAt,
+  dropMode,
+  favoritesZoneAt,
+  isValidDrop,
+  localFolders,
+  springTargetAt,
+  terminalAt,
+} from "@/features/dnd/drop-target";
 import { pasteInto } from "@/features/terminal/terminal-registry";
 import { isArchivePath } from "@/lib/archive-path";
 import { isRemotePath } from "@/lib/remote-path";
 import { shellArgs } from "@/lib/shell";
+import { useApp } from "@/stores/app-store";
 import { getActiveTab } from "@/stores/workspace-store";
 
 const THRESHOLD = 5;
@@ -89,7 +98,12 @@ export function beginPotentialDrag(
       return;
     }
     const dir = dropDirAt(ev.clientX, ev.clientY);
-    const target = dir && isValidDrop(paths, dir) ? dir : null;
+    const target =
+      dir && isValidDrop(paths, dir)
+        ? dir
+        : !dir && favoritesZoneAt(ev.clientX, ev.clientY) && localFolders(paths).length > 0
+          ? FAVORITES_TARGET
+          : null;
     updateSpring(ev.clientX, ev.clientY);
     useDrag.setState({
       active: true,
@@ -112,6 +126,12 @@ export function beginPotentialDrag(
     const terminal = terminalAt(ev.clientX, ev.clientY);
     if (terminal) {
       if (!paths.some((p) => isArchivePath(p) || isRemotePath(p))) pasteInto(terminal, shellArgs(paths));
+      return;
+    }
+    if (target === FAVORITES_TARGET) {
+      const { favorites, setPreference } = useApp.getState();
+      const added = localFolders(paths).filter((p) => !favorites.includes(p));
+      if (added.length > 0) setPreference("favorites", [...favorites, ...added]);
       return;
     }
     if (target) {

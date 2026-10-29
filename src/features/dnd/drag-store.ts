@@ -6,10 +6,13 @@ interface DragState {
   count: number;
   x: number;
   y: number;
-  /** Folder under the pointer that would receive the drop. */
+  /** Folder under the pointer that would receive the drop, or FAVORITES_TARGET. */
   target: string | null;
   copy: boolean;
 }
+
+/** The sidebar's Favorites list: a drop there adds the dragged folders. */
+export const FAVORITES_TARGET = "favorites:";
 
 export const useDrag = create<DragState>()(() => ({
   active: false,

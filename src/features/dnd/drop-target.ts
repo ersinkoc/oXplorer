@@ -1,6 +1,7 @@
 import type { FileEntry } from "@/lib/ipc";
 import { parent } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
+import { useDirCache } from "@/stores/dir-cache-store";
 
 /** Folder path of the drop target under a viewport point, if any. */
 export function dropDirAt(x: number, y: number): string | null {
@@ -18,6 +19,22 @@ export function springTargetAt(x: number, y: number): { pane: "left" | "right"; 
   if (!el || !dir || el.closest("[role=tab]")) return null;
   const pane = el.closest<HTMLElement>("[data-pane]")?.dataset.pane;
   return pane === "left" || pane === "right" ? { pane, dir } : null;
+}
+
+/** Whether a viewport point is in the sidebar's Favorites list but not on an item that takes drops. */
+export function favoritesZoneAt(x: number, y: number): boolean {
+  const el = document.elementFromPoint(x, y);
+  return !!el?.closest("[data-drop-favorites]") && !el.closest("[data-drop-dir]");
+}
+
+/** The dragged paths that are folders on this Mac (known from the listings on screen). */
+export function localFolders(paths: readonly string[]): string[] {
+  const { dirs } = useDirCache.getState();
+  return paths.filter((p) => {
+    if (!p.startsWith("/")) return false;
+    const entry = dirs[parent(p) ?? "/"]?.entries.find((e) => e.path === p);
+    return entry?.kind === "dir";
+  });
 }
 
 /** Session id of the terminal under a viewport point, if any. */

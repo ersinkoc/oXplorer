@@ -36,7 +36,7 @@ The first public build of OXplorer.
 - Command palette (⌘K) with your most used folders.
 - Go to Folder (⇧⌘G) completes folder names with Tab and the arrow keys.
 - Finder's Go shortcuts: Documents (⇧⌘O), Desktop (⇧⌘D), Downloads (⌥⌘L), Applications (⇧⌘A), Utilities (⇧⌘U).
-- Add folders, searches and server folders to the sidebar (⌃⌘T); ⌃1…⌃9 jump to the first nine.
+- Add folders, searches and server folders to the sidebar (⌃⌘T) or by dragging folders onto Favorites; ⌃1…⌃9 jump to the first nine.
 
 ### Look inside
 
