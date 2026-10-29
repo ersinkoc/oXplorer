@@ -1,0 +1,61 @@
+import { LazyStore } from "@tauri-apps/plugin-store";
+import { DEFAULT_SORT, type SortConfig } from "@/lib/sort";
+import type { ViewMode } from "@/stores/workspace-store";
+
+/** How a folder was last shown, like Finder's per-folder view options. */
+export interface FolderView {
+  mode: ViewMode;
+  sort: SortConfig;
+}
+
+const KEEP = 500;
+const SAVE_DELAY_MS = 1000;
+
+/** Oldest first (a Map keeps insertion order), so trimming drops the least recent. */
+const views = new Map<string, FolderView>();
+const store = new LazyStore("folder-views.json");
+let timer: ReturnType<typeof setTimeout> | undefined;
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/** A stored `{ mode, sort }`, with anything unexpected replaced by the defaults. */
+export function parseView(raw: unknown): FolderView {
+  const v = isRecord(raw) ? raw : {};
+  const sort =
+    isRecord(v.sort) &&
+    typeof v.sort.field === "string" &&
+    (v.sort.direction === "asc" || v.sort.direction === "desc")
+      ? (v.sort as unknown as SortConfig)
+      : DEFAULT_SORT;
+  return { mode: v.mode === "icons" || v.mode === "columns" ? v.mode : "list", sort };
+}
+
+export async function loadFolderViews(): Promise<void> {
+  try {
+    const raw = await store.get<unknown>("views");
+    if (!Array.isArray(raw)) return;
+    for (const item of raw) {
+      if (Array.isArray(item) && typeof item[0] === "string") views.set(item[0], parseView(item[1]));
+    }
+  } catch (err) {
+    console.warn("failed to load folder views", err);
+  }
+}
+
+export function rememberedView(path: string): FolderView | undefined {
+  return views.get(path);
+}
+
+/** Called when the user changes how `path` is shown (view mode or sorting). */
+export function rememberView(path: string, view: FolderView): void {
+  views.delete(path);
+  views.set(path, { mode: view.mode, sort: { ...view.sort } });
+  for (const oldest of views.keys()) {
+    if (views.size <= KEEP) break;
+    views.delete(oldest);
+  }
+  clearTimeout(timer);
+  timer = setTimeout(() => void store.set("views", [...views]).catch(() => {}), SAVE_DELAY_MS);
+}

@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { EMPTY_SELECTION, type Selection } from "@/lib/selection";
 import { DEFAULT_SORT, type SortConfig } from "@/lib/sort";
+import { rememberedView, rememberView } from "@/stores/folder-views";
 
 enableMapSet();
 
@@ -152,6 +153,12 @@ export const useWorkspace = create<WorkspaceState>()(
         }
         tab.path = path;
         tab.view.filter = "";
+        // A folder comes back the way it was last shown; column view keeps its columns.
+        const remembered = tab.view.mode === "columns" ? undefined : rememberedView(path);
+        if (remembered) {
+          tab.view.mode = remembered.mode;
+          tab.view.sort = { ...remembered.sort };
+        }
         tab.selection = opts.select
           ? { paths: new Set([opts.select]), anchor: opts.select, focus: opts.select }
           : EMPTY_SELECTION;
@@ -166,6 +173,7 @@ export const useWorkspace = create<WorkspaceState>()(
       set((s) => {
         const tab = activeTabOf(s.panes[pane ?? s.activePane]);
         Object.assign(tab.view, patch);
+        if (patch.mode || patch.sort) rememberView(tab.path, { mode: tab.view.mode, sort: tab.view.sort });
       }),
 
     setActivePane: (pane) => {

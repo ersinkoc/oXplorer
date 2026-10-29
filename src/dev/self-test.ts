@@ -441,6 +441,20 @@ export async function runSelfTest(): Promise<void> {
       `back=${jumpedBack} forward=${getActiveTab("left").path}`,
     );
 
+    // Each folder comes back the way it was last shown.
+    navigateTo(nfDir.path, { pane: "left" });
+    useWorkspace.getState().updateView({ mode: "icons" }, "left");
+    navigateTo(folder.path, { pane: "left" });
+    useWorkspace.getState().updateView({ mode: "list" }, "left");
+    navigateTo(nfDir.path, { pane: "left" });
+    const iconsAgain = getActiveTab("left").view.mode;
+    navigateTo(folder.path, { pane: "left" });
+    step(
+      "per-folder view",
+      iconsAgain === "icons" && getActiveTab("left").view.mode === "list",
+      `nf=${iconsAgain} folder=${getActiveTab("left").view.mode}`,
+    );
+
     // Synchronized browsing: the right pane follows the left into "sub" and back up.
     const syncA = await unwrap(commands.createItem(folder.path, "sync a", true));
     const syncB = await unwrap(commands.createItem(folder.path, "sync b", true));

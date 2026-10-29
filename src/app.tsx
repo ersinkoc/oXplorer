@@ -20,6 +20,7 @@ import { t } from "@/i18n";
 import { unwrap } from "@/lib/ipc";
 import { isMainWindow } from "@/lib/window";
 import { loadPreferences, useApp, watchPreferences } from "@/stores/app-store";
+import { loadFolderViews } from "@/stores/folder-views";
 import { clearRecents, loadRecents } from "@/stores/recents-store";
 import { autosaveSession, fromSession, loadSession } from "@/stores/session";
 import { useWorkspace } from "@/stores/workspace-store";
@@ -47,6 +48,7 @@ async function loadInitialState(): Promise<void> {
     loadPreferences(),
     loadSession(),
     loadRecents(),
+    loadFolderViews(),
   ]);
   useApp.getState().set({ ...prefs, home, locations, volumes, fullDiskAccess: fda });
   // Before the first render, so the UI doesn't flash in English.

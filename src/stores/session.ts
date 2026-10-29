@@ -2,7 +2,8 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 import { parseArchivePath } from "@/lib/archive-path";
 import { parseSearchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION } from "@/lib/selection";
-import { DEFAULT_SORT, type SortConfig } from "@/lib/sort";
+import type { SortConfig } from "@/lib/sort";
+import { parseView } from "@/stores/folder-views";
 import {
   newTab,
   PANES,
@@ -104,17 +105,11 @@ function restoreTab(raw: unknown): TabState | null {
   const stack = Array.isArray(h.stack) ? h.stack.filter((p): p is string => typeof p === "string") : [];
   const index = typeof h.index === "number" ? h.index : -1;
   const history = stack[index] === path ? { stack, index } : { stack: [path], index: 0 };
-  const v = isRecord(raw.view) ? raw.view : {};
-  const sort =
-    isRecord(v.sort) &&
-    typeof v.sort.field === "string" &&
-    (v.sort.direction === "asc" || v.sort.direction === "desc")
-      ? (v.sort as unknown as SortConfig)
-      : DEFAULT_SORT;
+  const { mode, sort } = parseView(raw.view);
   const tab = newTab(path, {
     id: typeof raw.id === "string" ? raw.id : undefined,
     history,
-    view: { mode: v.mode === "icons" || v.mode === "columns" ? v.mode : "list", sort, filter: "" },
+    view: { mode, sort, filter: "" },
     selection: EMPTY_SELECTION,
     pinned: raw.pinned === true,
   });

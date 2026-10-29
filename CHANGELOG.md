@@ -12,6 +12,7 @@ The first public build of OXplorer.
 - Tabs in each pane, dual pane (⌘U), and your tabs and layout come back at launch.
 - More windows with New Window (⌘N) or Open in New Window on a folder.
 - Right-click Back or Forward to jump several folders at once.
+- Each folder remembers its view and sorting, like Finder.
 
 ### Work with files
 
