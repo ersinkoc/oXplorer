@@ -104,6 +104,7 @@ const VIEW: &[Item] = &[
     ("view.toggleSidebar", "Toggle Sidebar", Some("Ctrl+CmdOrCtrl+S")),
     ("view.reload", "Reload", Some("CmdOrCtrl+R")),
     ("view.diskUsage", "Disk Usage…", Some("Alt+CmdOrCtrl+D")),
+    ("view.findDuplicates", "Find Duplicates…", None),
     ("view.calculateSizes", "Calculate Folder Sizes", Some("Alt+CmdOrCtrl+S")),
 ];
 

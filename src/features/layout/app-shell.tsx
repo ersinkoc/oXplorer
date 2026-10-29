@@ -1,6 +1,7 @@
 import { CompareFilesDialog } from "@/features/compare/compare-files-dialog";
 import { DragGhost } from "@/features/dnd/drag-ghost";
 import { useExternalDrop } from "@/features/dnd/use-external-drop";
+import { DuplicatesDialog } from "@/features/duplicates/duplicates-dialog";
 import { WhatsNewDialog } from "@/features/help/whats-new";
 import { InfoDialog } from "@/features/info/info-dialog";
 import { ConflictDialog } from "@/features/jobs/conflict-dialog";
@@ -43,6 +44,7 @@ export function AppShell() {
       <BatchRenameDialog />
       <SelectMatchingDialog />
       <CompareFilesDialog />
+      <DuplicatesDialog />
       <WhatsNewDialog />
       <DiskUsageDialog />
     </div>

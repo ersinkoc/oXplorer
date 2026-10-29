@@ -48,19 +48,22 @@ export function DialogButton({
   onClick,
   primary,
   autoFocus,
+  disabled,
 }: {
   children: ReactNode;
   onClick: () => void;
   primary?: boolean;
   autoFocus?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       // biome-ignore lint/a11y/noAutofocus: dialogs move focus to their default action
       autoFocus={autoFocus}
+      disabled={disabled}
       onClick={onClick}
-      className={`h-7 rounded-md px-3 text-[13px] ${
+      className={`h-7 rounded-md px-3 text-[13px] disabled:opacity-40 ${
         primary ? "bg-accent text-white" : "border border-border bg-bg hover:bg-hover"
       }`}
     >

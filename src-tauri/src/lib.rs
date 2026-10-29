@@ -38,6 +38,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::checksum,
             jobs::set_permissions,
             jobs::pause_job,
+            jobs::find_duplicates,
             jobs::batch_rename,
             integration::pasteboard_write_files,
             integration::pasteboard_read_files,

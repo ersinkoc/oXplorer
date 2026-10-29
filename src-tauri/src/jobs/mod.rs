@@ -2,6 +2,7 @@
 //! cooperative cancellation, and conflict prompts answered by the frontend.
 
 pub(crate) mod archive;
+pub mod dupes;
 mod fsops;
 mod names;
 mod rename;
@@ -197,6 +198,25 @@ pub fn resolve_conflict(jobs: State<'_, Arc<JobManager>>, id: String, resolution
     {
         let _ = tx.send(resolution);
     }
+}
+
+/// Find Duplicates in `path`; groups stream through `on_event`. Cancel with `cancel_job(id)`.
+#[tauri::command]
+#[specta::specta]
+pub async fn find_duplicates(
+    jobs: State<'_, Arc<JobManager>>,
+    id: String,
+    path: String,
+    on_event: Channel<dupes::DupEvent>,
+) -> AppResult<()> {
+    let root = validate_path(&path)?;
+    let (cancel, _, _) = jobs.register(&id)?;
+    let manager = Arc::clone(&jobs);
+    tauri::async_runtime::spawn_blocking(move || {
+        dupes::find(&root, &mut |ev| !cancel.load(Ordering::Relaxed) && on_event.send(ev).is_ok());
+        manager.unregister(&id);
+    });
+    Ok(())
 }
 
 /// Total size of `paths` (recursively), cancellable via `cancel_job(id)`.

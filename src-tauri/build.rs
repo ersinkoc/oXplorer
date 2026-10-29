@@ -14,6 +14,7 @@ const COMMANDS: &[&str] = &[
     "checksum",
     "set_permissions",
     "pause_job",
+    "find_duplicates",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",

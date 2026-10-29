@@ -44,6 +44,8 @@ export const commands = {
 	setPermissions: (path: string, mode: number) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("set_permissions", { path, mode })),
 	/**  Pauses or resumes a copy / move (it stops between chunks; cancel still works). */
 	pauseJob: (id: string, paused: boolean) => __TAURI_INVOKE<void>("pause_job", { id, paused }),
+	/**  Find Duplicates in `path`; groups stream through `on_event`. Cancel with `cancel_job(id)`. */
+	findDuplicates: (id: string, path: string, onEvent: Channel<DupEvent>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("find_duplicates", { id, path, onEvent })),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */
@@ -276,6 +278,12 @@ export type DirEvent_Deserialize = { type: "batch"; entries: FileEntry_Deseriali
 export type DirEvent_Serialize = { type: "batch"; entries: FileEntry_Serialize[] } | { type: "done"; total: number } | 
 /**  Follows `Done`: Finder tags for the entries that have any. */
 { type: "tags"; entries: TaggedPath[] };
+
+export type DupEvent = 
+/**  Files looked at so far, and files whose contents were read. */
+{ type: "progress"; scanned: number; hashed: number } | 
+/**  Files with identical contents, sorted by path. */
+{ type: "group"; size: number; paths: string[] } | { type: "done"; groups: number };
 
 export type EntryKind = "file" | "dir" | 
 /**  A directory macOS presents as a single document (`.app`, `.bundle`, …). */

@@ -204,6 +204,19 @@ export function registerAppCommands(): void {
       },
     },
     {
+      id: "view.findDuplicates",
+      title: "Find Duplicates…",
+      run: () => {
+        const [first] = selectedEntries();
+        const folder = first && first.kind === "dir" ? first.path : currentFolder();
+        if (isVirtualPath(folder)) {
+          toast(t("Find Duplicates works in folders on this Mac."));
+          return;
+        }
+        useApp.getState().set({ duplicatesPath: folder });
+      },
+    },
+    {
       id: "file.addToSidebar",
       title: "Add to Sidebar",
       run: () => {

@@ -3,6 +3,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { info, error as logError } from "@tauri-apps/plugin-log";
 import {
   commands,
+  type DupEvent,
   type MeasureEvent,
   type UsageEvent_Deserialize,
   type UsageEvent_Serialize,
@@ -417,6 +418,16 @@ export async function runSelfTest(): Promise<void> {
       chmod.status === "ok" && (chmod.data.mode & 0o777) === 0o600,
       chmod.status === "ok" ? chmod.data.mode.toString(8) : JSON.stringify(chmod.error),
     );
+
+    // Find Duplicates streams to a done event (empty files never count as duplicates).
+    const dupChannel = new Channel<DupEvent>();
+    let dupDone: number | null = null;
+    dupChannel.onmessage = (ev) => {
+      if (ev.type === "done") dupDone = ev.groups;
+    };
+    await unwrap(commands.findDuplicates(crypto.randomUUID(), nfDir.path, dupChannel));
+    await waitFor(() => dupDone !== null, 5000);
+    step("find duplicates", dupDone === 0, `groups=${dupDone}`);
 
     // SHA-256 (Get Info) of an empty file.
     const sum = await commands.checksum(crypto.randomUUID(), nf1.path);

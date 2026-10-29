@@ -26,6 +26,7 @@ The first public build of OXplorer.
 - Make Alias (⌃⌘A) creates a symbolic link next to the item.
 - Select by pattern (Select Matching…, `*.jpg; *.png`), Invert Selection, Deselect All (⌥⌘A).
 - Calculate Folder Sizes (⌥⌘S) shows folder totals in the list and sorts by them.
+- Find Duplicates… lists files with the same contents and moves the extra copies to the Trash.
 
 ### Find
 
