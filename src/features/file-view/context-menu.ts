@@ -23,7 +23,9 @@ function build(items: Item[]) {
 
 async function openWithSubmenu(entries: readonly FileEntry[]): Promise<Submenu | null> {
   const [first] = entries;
-  if (!first || entries.some((e) => isFolderLike(e))) return null;
+  // Files, or one folder (terminals and editors open folders).
+  const folder = entries.length === 1 && first?.kind === "dir";
+  if (!first || (!folder && entries.some((e) => isFolderLike(e)))) return null;
   const res = await commands.appsForPath(first.path);
   if (res.status === "error" || res.data.length === 0) return null;
   const targets = entries.map((e) => e.path);

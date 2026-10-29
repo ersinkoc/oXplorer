@@ -22,6 +22,7 @@ The first public build of OXplorer.
 - Merge folders when a folder with the same name is already there (undo puts everything back).
 - Compress to zip, tar.gz or tar.zst and extract archives.
 - Rename many items at once, edit Finder tags.
+- Open With works on a folder too: editors and terminals that open folders, plus Terminal.
 - New Folder with Selection (⌃⌘N), undone in one step.
 - Make Alias (⌃⌘A) creates a symbolic link next to the item.
 - Convert Image… makes JPEG, PNG, HEIF or TIFF copies of pictures, optionally scaled down, next to the originals (undo removes them).

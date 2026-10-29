@@ -35,13 +35,28 @@ pub fn apps_for(path: &Path) -> Vec<AppInfo> {
             b.is_default.cmp(&a.is_default).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
         apps.dedup_by(|a, b| a.path == b.path);
+        // Folders: Terminal opens a window there, though Launch Services doesn't list it.
+        if path.is_dir() && Path::new(TERMINAL).exists() && !apps.iter().any(|a| a.path == TERMINAL) {
+            apps.push(AppInfo { name: "Terminal".into(), path: TERMINAL.into(), is_default: false });
+        }
+        // This app is listed for folders too; opening one in itself isn't useful here.
+        apps.retain(|a| !a.path.ends_with("/OXplorer.app"));
         apps
     })
 }
 
+const TERMINAL: &str = "/System/Applications/Utilities/Terminal.app";
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn folders_open_in_terminal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let apps = apps_for(tmp.path());
+        assert!(apps.iter().any(|a| a.path == TERMINAL), "{apps:?}");
+    }
 
     #[test]
     fn text_files_have_an_editor() {
