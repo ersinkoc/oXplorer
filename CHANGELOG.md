@@ -42,7 +42,7 @@ The first public build of OXplorer.
 
 - Preview pane (⇧⌘P) with syntax-highlighted code, Markdown, images, audio and video; shows image dimensions and playing time, and a hex dump of binary files (Show Hex).
 - Quick Look (Space).
-- Get Info (⌘I): SHA-256 checksum of a file and editable permissions.
+- Get Info (⌘I): SHA-256 checksum of a file and editable permissions, and Locked like Finder.
 
 ### Beyond Finder
 

@@ -17,6 +17,8 @@ const COMMANDS: &[&str] = &[
     "find_duplicates",
     "compare_folders",
     "convert_image",
+    "is_locked",
+    "set_locked",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",

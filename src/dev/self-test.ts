@@ -447,6 +447,16 @@ export async function runSelfTest(): Promise<void> {
       JSON.stringify(conv.status === "error" ? conv.error : conv.data.name),
     );
 
+    // Get Info → Locked, then unlocked again (a locked file couldn't be cleaned up).
+    const lockOn = await commands.setLocked(nf1.path, true);
+    const lockedNow = await commands.isLocked(nf1.path);
+    const lockOff = await commands.setLocked(nf1.path, false);
+    step(
+      "lock + unlock",
+      lockOn.status === "ok" && lockedNow.status === "ok" && lockedNow.data && lockOff.status === "ok",
+      `${lockOn.status} ${JSON.stringify(lockedNow)} ${lockOff.status}`,
+    );
+
     // Get Info → Permissions.
     const chmod = await commands.setPermissions(nf1.path, 0o600);
     step(

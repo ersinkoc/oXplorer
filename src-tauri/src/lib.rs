@@ -41,6 +41,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::find_duplicates,
             jobs::compare_folders,
             jobs::convert_image,
+            jobs::is_locked,
+            jobs::set_locked,
             jobs::batch_rename,
             integration::pasteboard_write_files,
             integration::pasteboard_read_files,

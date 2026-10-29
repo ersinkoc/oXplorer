@@ -148,6 +148,38 @@ function PermissionsEditor({ path, initial }: { path: string; initial: number })
   );
 }
 
+/** Finder's "Locked": the item can't be changed, renamed or trashed until unlocked. */
+function LockedToggle({ path }: { path: string }) {
+  const { t } = useT();
+  const [locked, setLocked] = useState<boolean | null>(null);
+  useEffect(() => {
+    let stale = false;
+    void commands.isLocked(path).then((r) => !stale && r.status === "ok" && setLocked(r.data));
+    return () => {
+      stale = true;
+    };
+  }, [path]);
+  if (locked === null) return <span className="text-fg-faint">--</span>;
+  return (
+    <label className="flex items-center gap-1.5">
+      <input
+        type="checkbox"
+        checked={locked}
+        onChange={async (e) => {
+          const want = e.target.checked;
+          setLocked(want);
+          const r = await commands.setLocked(path, want);
+          if (r.status === "error") {
+            toast.error(describeError(toAppError(r.error)));
+            setLocked(!want);
+          }
+        }}
+      />
+      <span className="text-fg-muted">{t("Can’t be changed or moved to the Trash")}</span>
+    </label>
+  );
+}
+
 function permissions(mode: number): string {
   const bits = "rwxrwxrwx";
   let out = "";
@@ -197,7 +229,10 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
           ],
           ...(single.symlink
             ? ([[t("Original"), single.symlink.target]] as [string, React.ReactNode][])
-            : []),
+            : ([[t("Locked"), <LockedToggle key="lock" path={single.path} />]] as [
+                string,
+                React.ReactNode,
+              ][])),
           ...(single.kind === "file"
             ? ([["SHA-256", <Checksum key="sha" path={single.path} />]] as [string, React.ReactNode][])
             : []),

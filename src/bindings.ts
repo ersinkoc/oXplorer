@@ -53,6 +53,10 @@ export const commands = {
 	compareFolders: (id: string, left: string, right: string, byContent: boolean, onEvent: Channel<SyncEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("compare_folders", { id, left, right, byContent, onEvent })),
 	/**  Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels. */
 	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
+	/**  Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked"). */
+	isLocked: (path: string) => typedError<boolean, AppError_Serialize>(__TAURI_INVOKE("is_locked", { path })),
+	/**  Locks or unlocks an item (the user immutable flag, like Finder). Returns the new state. */
+	setLocked: (path: string, locked: boolean) => typedError<boolean, AppError_Serialize>(__TAURI_INVOKE("set_locked", { path, locked })),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */

@@ -27,6 +27,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Show Hex": "Hex Göster",
   "Bigger Icons": "Daha Büyük Simgeler",
   "Date Created": "Oluşturulma Tarihi",
+  Locked: "Kilitli",
+  "Can’t be changed or moved to the Trash": "Değiştirilemez ve Çöp Sepeti’ne taşınamaz",
   "Compare Contents": "İçerikleri Karşılaştır",
   "Reads files of the same size, so copies with other dates don’t count as different.":
     "Aynı boyuttaki dosyaları okur; tarihi farklı kopyalar fark sayılmaz.",

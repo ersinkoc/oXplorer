@@ -299,6 +299,53 @@ pub async fn set_permissions(path: String, mode: u32) -> AppResult<FileEntry> {
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
 }
 
+/// Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked").
+#[tauri::command]
+#[specta::specta]
+pub async fn is_locked(path: String) -> AppResult<bool> {
+    use std::os::macos::fs::MetadataExt as _;
+    let p = validate_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let meta = fs::symlink_metadata(&p).map_err(|e| AppError::from_io(&e, &p))?;
+        Ok(meta.st_flags() & libc::UF_IMMUTABLE != 0)
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
+/// Locks or unlocks an item (the user immutable flag, like Finder). Returns the new state.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_locked(path: String, locked: bool) -> AppResult<bool> {
+    let p = validate_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || set_locked_flag(&p, locked))
+        .await
+        .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
+fn set_locked_flag(p: &Path, locked: bool) -> AppResult<bool> {
+    use std::os::macos::fs::MetadataExt as _;
+    use std::os::unix::ffi::OsStrExt as _;
+    let meta = fs::symlink_metadata(p).map_err(|e| AppError::from_io(&e, p))?;
+    if meta.file_type().is_symlink() {
+        return Err(AppError::InvalidPath {
+            path: p.to_string_lossy().into_owned(),
+            reason: "a symbolic link can’t be locked".into(),
+        });
+    }
+    let flags =
+        if locked { meta.st_flags() | libc::UF_IMMUTABLE } else { meta.st_flags() & !libc::UF_IMMUTABLE };
+    let c = std::ffi::CString::new(p.as_os_str().as_bytes()).map_err(|_| AppError::InvalidPath {
+        path: p.to_string_lossy().into_owned(),
+        reason: "contains a NUL byte".into(),
+    })?;
+    // SAFETY: `c` is a valid NUL-terminated path that outlives the call.
+    if unsafe { libc::chflags(c.as_ptr(), flags) } != 0 {
+        return Err(AppError::from_io(&std::io::Error::last_os_error(), p));
+    }
+    Ok(locked)
+}
+
 /// SHA-256 of a file as lowercase hex (Get Info). Cancel with `cancel_job(id)`.
 #[tauri::command]
 #[specta::specta]
@@ -435,6 +482,20 @@ pub async fn convert_image(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn locking_blocks_changes_until_unlocked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("keep.txt");
+        fs::write(&file, b"v1").unwrap();
+        let path = file.to_string_lossy().into_owned();
+        assert!(tauri::async_runtime::block_on(set_locked(path.clone(), true)).unwrap());
+        assert!(tauri::async_runtime::block_on(is_locked(path.clone())).unwrap());
+        assert!(fs::write(&file, b"v2").is_err());
+        assert!(!tauri::async_runtime::block_on(set_locked(path.clone(), false)).unwrap());
+        assert!(!tauri::async_runtime::block_on(is_locked(path)).unwrap());
+        fs::write(&file, b"v2").unwrap();
+    }
 
     #[test]
     fn set_permissions_changes_rwx_only() {
