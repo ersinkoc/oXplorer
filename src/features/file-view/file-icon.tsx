@@ -2,9 +2,12 @@ import { useState } from "react";
 import { type IconPx, iconUrl, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
 
+const TIERS: readonly IconPx[] = [32, 64, 128, 256, 512, 1024];
+
 /**
  * Native macOS icon (or QuickLook thumbnail) served by the `oxthumb://` scheme.
- * `size` is in CSS pixels; the image is requested at 2x for Retina.
+ * `size` is in CSS pixels; the image is requested at 2x for Retina, from the
+ * next size the scheme serves.
  */
 export function FileIcon({
   entry,
@@ -13,11 +16,11 @@ export function FileIcon({
   className,
 }: {
   entry: FileEntry;
-  size: 16 | 32 | 64 | 128;
+  size: number;
   thumbnail?: boolean;
   className?: string;
 }) {
-  const px = (size * 2) as IconPx;
+  const px = TIERS.find((t) => t >= size * 2) ?? 1024;
   const src = thumbnail ? thumbnailUrl(entry, px) : iconUrl(entry, px);
   const [failed, setFailed] = useState<string | null>(null);
 

@@ -25,6 +25,8 @@ export const tr: Readonly<Record<string, string>> = {
   "No Recent Folders": "Son Klasör Yok",
   "Clear Menu": "Menüyü Temizle",
   "Show Hex": "Hex Göster",
+  "Bigger Icons": "Daha Büyük Simgeler",
+  "Smaller Icons": "Daha Küçük Simgeler",
   "Convert Image…": "Görüntüyü Dönüştür…",
   "Convert Image": "Görüntüyü Dönüştür",
   "Select one or more pictures first.": "Önce bir veya daha fazla resim seç.",

@@ -7,7 +7,7 @@ The first public build of OXplorer.
 ### Browse
 
 - Huge folders stream in: 100,000 items list in about a second, first rows in ~20 ms, with live updates.
-- List, icon and column views (⌘1 / ⌘2 / ⌘3), Finder-style natural sorting and keyboard navigation.
+- List, icon and column views (⌘1 / ⌘2 / ⌘3), Finder-style natural sorting and keyboard navigation. Bigger / Smaller Icons (⌘= / ⌘-) in icon view.
 - Sort by Name, Kind, Date Modified or Size from the View menu (⌃⌥⌘1 / 2 / 5 / 7), in every view; Keep Folders on Top can be turned off.
 - Tabs in each pane, dual pane (⌘U), and your tabs and layout come back at launch. Reopen Closed Tab (⇧⌘T).
 - More windows with New Window (⌘N) or Open in New Window on a folder or tab; a tab's menu also has Show in Finder and Copy Path.

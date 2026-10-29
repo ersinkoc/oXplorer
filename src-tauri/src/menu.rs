@@ -89,6 +89,8 @@ const VIEW: &[Item] = &[
     ("view.asList", "as List", Some("CmdOrCtrl+1")),
     ("view.asIcons", "as Icons", Some("CmdOrCtrl+2")),
     ("view.asColumns", "as Columns", Some("CmdOrCtrl+3")),
+    ("view.biggerIcons", "Bigger Icons", Some("CmdOrCtrl+Equal")),
+    ("view.smallerIcons", "Smaller Icons", Some("CmdOrCtrl+Minus")),
     SEP,
     ("view.sortName", "Sort by Name", Some("Ctrl+Alt+CmdOrCtrl+1")),
     ("view.sortKind", "Sort by Kind", Some("Ctrl+Alt+CmdOrCtrl+2")),

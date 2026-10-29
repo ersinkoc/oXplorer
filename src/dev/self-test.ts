@@ -510,6 +510,18 @@ export async function runSelfTest(): Promise<void> {
       `nf=${iconsAgain} folder=${getActiveTab("left").view.mode}`,
     );
 
+    // ⌘= / ⌘-: the first press switches to icons, then the size steps (and is put back).
+    const iconSize = useApp.getState().iconSize;
+    useWorkspace.getState().setActivePane("left");
+    runCommand("view.biggerIcons");
+    const zoomMode = await waitFor(() => getActiveTab("left").view.mode === "icons", 2000);
+    if (iconSize === 128) runCommand("view.smallerIcons");
+    else runCommand("view.biggerIcons");
+    const zoomed = await waitFor(() => useApp.getState().iconSize !== iconSize, 2000);
+    useApp.getState().setPreference("iconSize", iconSize);
+    useWorkspace.getState().updateView({ mode: "list" }, "left");
+    step("icon size", zoomMode && zoomed, `icons=${zoomMode} changed=${zoomed}`);
+
     // Synchronized browsing: the right pane follows the left into "sub" and back up.
     const syncA = await unwrap(commands.createItem(folder.path, "sync a", true));
     const syncB = await unwrap(commands.createItem(folder.path, "sync b", true));

@@ -13,6 +13,7 @@ import {
   selectedEntries,
 } from "@/commands/navigation";
 import { defineCommands, runCommand } from "@/commands/registry";
+import { ICON_SIZES } from "@/features/file-view/file-grid";
 import { paneLayout } from "@/features/file-view/visible-order";
 import { focusedTerminal } from "@/features/terminal/terminal-registry";
 import { t, tn } from "@/i18n";
@@ -47,6 +48,18 @@ async function showRecentFolders(): Promise<void> {
     ],
   });
   await menu.popup();
+}
+
+/** View → Bigger / Smaller Icons: steps through ICON_SIZES; other views switch to icons first. */
+function zoomIcons(step: 1 | -1): void {
+  if (getActiveTab().view.mode !== "icons") {
+    useWorkspace.getState().updateView({ mode: "icons" });
+    return;
+  }
+  const { iconSize, setPreference } = useApp.getState();
+  const at = ICON_SIZES.findIndex((s) => s >= iconSize);
+  const next = ICON_SIZES[Math.min(ICON_SIZES.length - 1, Math.max(0, (at < 0 ? 2 : at) + step))];
+  if (next !== undefined && next !== iconSize) setPreference("iconSize", next);
 }
 
 /** View → Sort by: like clicking the column header (again flips the order). */
@@ -194,6 +207,8 @@ export function registerAppCommands(): void {
     { id: "view.sortKind", title: "Sort by Kind", run: () => sortBy("kind") },
     { id: "view.sortModified", title: "Sort by Date Modified", run: () => sortBy("modified") },
     { id: "view.sortSize", title: "Sort by Size", run: () => sortBy("size") },
+    { id: "view.biggerIcons", title: "Bigger Icons", run: () => zoomIcons(1) },
+    { id: "view.smallerIcons", title: "Smaller Icons", run: () => zoomIcons(-1) },
     {
       id: "view.foldersFirst",
       title: "Keep Folders on Top",

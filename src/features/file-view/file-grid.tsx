@@ -15,20 +15,29 @@ import type { CompareMark } from "@/lib/compare";
 import type { FileEntry } from "@/lib/ipc";
 import { isRemotePath } from "@/lib/remote-path";
 import { isVirtualPath } from "@/lib/search-path";
+import { useApp } from "@/stores/app-store";
 import { useCompareMarks } from "@/stores/compare-store";
 import { useGitStates } from "@/stores/git-store";
 import type { PaneId } from "@/stores/workspace-store";
 
-const CELL_WIDTH = 104;
-const CELL_HEIGHT = 112;
-const ICON = 64;
 const PADDING = 12;
+
+/** Icon sizes of View → Bigger / Smaller Icons. */
+export const ICON_SIZES = [32, 48, 64, 96, 128] as const;
+
+/** Cell box for an icon size: room for the icon and two lines of name. */
+function cellSize(icon: number): { width: number; height: number } {
+  return { width: Math.max(88, icon + 40), height: icon + 48 };
+}
 
 /** Icon view: virtualized by rows, column count follows the pane width. */
 export function FileGrid({ pane }: { pane: PaneId }) {
   const { t } = useT();
   const [width, setWidth] = useState(0);
-  const columns = Math.max(1, Math.floor((width - PADDING * 2) / CELL_WIDTH));
+  const preferred = useApp((s) => s.iconSize);
+  const icon = ICON_SIZES.includes(preferred as (typeof ICON_SIZES)[number]) ? preferred : 64;
+  const cell = cellSize(icon);
+  const columns = Math.max(1, Math.floor((width - PADDING * 2) / cell.width));
   const view = useFileView(pane, columns, (i) =>
     virtualizer.scrollToIndex(Math.floor(i / columns), { align: "auto" }),
   );
@@ -41,11 +50,16 @@ export function FileGrid({ pane }: { pane: PaneId }) {
   const virtualizer = useVirtualizer({
     count: rows,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => CELL_HEIGHT,
+    estimateSize: () => cell.height,
     overscan: 4,
     paddingStart: PADDING,
     paddingEnd: PADDING,
   });
+
+  // Rows change height with the icon size.
+  useEffect(() => {
+    if (cell.height > 0) virtualizer.measure();
+  }, [virtualizer, cell.height]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -66,7 +80,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
         aria-multiselectable
         aria-activedescendant={focusIndex >= 0 ? cellId(pane, focusIndex) : undefined}
         tabIndex={0}
-        onKeyDown={(e) => view.onKeyDown(e, { columns, rowHeight: CELL_HEIGHT })}
+        onKeyDown={(e) => view.onKeyDown(e, { columns, rowHeight: cell.height })}
         onMouseDown={view.onBackgroundMouseDown}
         onContextMenu={view.onBackgroundContextMenu}
         onScroll={view.onScroll}
@@ -80,7 +94,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
                 key={row.index}
                 role="row"
                 className="absolute flex"
-                style={{ top: row.start, left: PADDING, height: CELL_HEIGHT }}
+                style={{ top: row.start, left: PADDING, height: cell.height }}
               >
                 {entries.slice(row.index * columns, row.index * columns + columns).map((entry, col) => {
                   const index = row.index * columns + col;
@@ -97,6 +111,7 @@ export function FileGrid({ pane }: { pane: PaneId }) {
                       onMouseDown={view.onItemMouseDown}
                       onDoubleClick={view.onItemDoubleClick}
                       onContextMenu={view.onItemContextMenu}
+                      icon={icon}
                     />
                   );
                 })}
@@ -124,6 +139,7 @@ const Cell = memo(function Cell({
   onMouseDown,
   onDoubleClick,
   onContextMenu,
+  icon,
 }: {
   id: string;
   entry: FileEntry;
@@ -135,7 +151,9 @@ const Cell = memo(function Cell({
   onMouseDown: (e: React.MouseEvent, entry: FileEntry) => void;
   onDoubleClick: (entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
+  icon: number;
 }) {
+  const cell = cellSize(icon);
   return (
     <div
       id={id}
@@ -149,11 +167,11 @@ const Cell = memo(function Cell({
       className={`grid-cell relative flex flex-col items-center gap-1 rounded-md px-1 pt-2 ${
         entry.isHidden || git === "ignored" ? "opacity-60" : ""
       } ${dropTarget ? "ring-2 ring-accent ring-inset" : ""}`}
-      style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
+      style={{ width: cell.width, height: cell.height }}
     >
       <CompareStripe mark={compare} />
       <div className="grid-cell-icon flex items-center justify-center rounded-md p-1">
-        <FileIcon entry={entry} size={ICON} thumbnail />
+        <FileIcon entry={entry} size={icon} thumbnail />
       </div>
       <div className="flex max-w-full items-start">
         {renaming ? (

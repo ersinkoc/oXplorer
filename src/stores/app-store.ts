@@ -35,6 +35,8 @@ export interface Preferences {
   favorites: string[];
   /** Saved server connections (secrets are in the Keychain, not here). */
   connections: Connection[];
+  /** Icon view: icon size in CSS px (one of ICON_SIZES). */
+  iconSize: number;
   /** Menu shortcut overrides by command id; null removes the shortcut. */
   shortcuts: Record<string, string | null>;
 }
@@ -91,6 +93,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showGitStatus: true,
   terminalFontSize: 12,
   terminalStartIn: "pane",
+  iconSize: 64,
   shortcuts: {},
   favorites: [],
   connections: [],
