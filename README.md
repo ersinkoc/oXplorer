@@ -2,7 +2,7 @@
 
 A modern, open-source, dual-pane file manager for macOS — Finder's look and feel with Total Commander's efficiency. Built with Tauri 2, React 19 and Rust.
 
-> Status: early development. Phases 0–8 of the [plan](oxplorer-project-plan-v2.md) are done and Phase 9 (v1.0 polish) is under way: Turkish and English UI, What's New, problem reports, notifications and the updater are in; signed releases are pending (see [packaging/RELEASING.md](packaging/RELEASING.md)). Not yet signed or released; build it from source.
+> Status: public beta. The [plan](oxplorer-project-plan-v2.md) is done; betas are on the [Releases page](https://github.com/ersinkoc/oXplorer/releases). Signed, notarized releases (and self-updating) come with v0.1.0 (see [packaging/RELEASING.md](packaging/RELEASING.md)).
 
 ## Features (so far)
 
@@ -27,7 +27,11 @@ A modern, open-source, dual-pane file manager for macOS — Finder's look and fe
 
 ## Install
 
-There's no signed release yet. Build from source (below); once releases are published, they'll be on the [Releases page](https://github.com/ersinkoc/oXplorer/releases) and via Homebrew (`packaging/homebrew/oxplorer.rb`), and the app will update itself.
+Download the latest beta DMG from the [Releases page](https://github.com/ersinkoc/oXplorer/releases) (macOS 14+, Apple Silicon and Intel) and drag OXplorer to Applications.
+
+Betas aren't signed with an Apple Developer ID yet, so macOS blocks the first launch: right-click OXplorer → **Open** (or System Settings → Privacy & Security → **Open Anyway**), or run `xattr -dr com.apple.quarantine /Applications/OXplorer.app`. **Check for Updates…** tells you when a newer beta is out.
+
+Signed releases will also come through Homebrew (`packaging/homebrew/oxplorer.rb`) and update themselves. You can always build from source (below).
 
 ## Development
 
