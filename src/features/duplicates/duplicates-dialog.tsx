@@ -89,8 +89,8 @@ function Body({ path, onClose }: { path: string; onClose: () => void }) {
     setBusy(true);
     const out = await runJob({ kind: "trash", paths: sources });
     setBusy(false);
-    const failed = new Set((out?.failures ?? []).map((f) => f.path));
-    const gone = new Set(sources.filter((p) => !failed.has(p)));
+    // Only what really went: a cancelled or failed job leaves the rest in place.
+    const gone = new Set(out?.removed ?? []);
     updateGroups((gs) =>
       gs.map((g) => ({ ...g, paths: g.paths.filter((p) => !gone.has(p)) })).filter((g) => g.paths.length > 1),
     );

@@ -33,8 +33,9 @@ pub enum DupEvent {
     },
 }
 
-/// Walks `root` and reports groups through `emit`; stops (returning false) once `emit` does.
-pub fn find(root: &Path, emit: &mut dyn FnMut(DupEvent) -> bool) -> bool {
+/// Walks `root` and reports groups through `emit`; stops (returning false) once
+/// `emit` does or `stop` says so (checked while big files are read, too).
+pub fn find(root: &Path, stop: &dyn Fn() -> bool, emit: &mut dyn FnMut(DupEvent) -> bool) -> bool {
     let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
     let mut seen = HashSet::new();
     let mut stack = vec![root.to_path_buf()];
@@ -64,12 +65,19 @@ pub fn find(root: &Path, emit: &mut dyn FnMut(DupEvent) -> bool) -> bool {
     let mut hashed = 0u32;
     let mut groups = 0u32;
     for (size, paths) in candidates {
-        for head in split_by(paths, |p| hash(p, Some(HEAD))) {
+        let heads = split_by(paths, |p| hash(p, Some(HEAD), stop));
+        if stop() {
+            return false;
+        }
+        for head in heads {
             hashed += u32::try_from(head.len()).unwrap_or(u32::MAX);
             if !emit(DupEvent::Progress { scanned, hashed }) {
                 return false;
             }
-            let same = if size <= HEAD { vec![head] } else { split_by(head, |p| hash(p, None)) };
+            let same = if size <= HEAD { vec![head] } else { split_by(head, |p| hash(p, None, stop)) };
+            if stop() {
+                return false;
+            }
             for mut group in same {
                 group.sort();
                 groups += 1;
@@ -95,7 +103,7 @@ fn split_by(paths: Vec<PathBuf>, key: impl Fn(&Path) -> io::Result<[u8; 32]>) ->
 }
 
 /// SHA-256 of the first `limit` bytes, or of the whole file.
-fn hash(path: &Path, limit: Option<u64>) -> io::Result<[u8; 32]> {
+fn hash(path: &Path, limit: Option<u64>, stop: &dyn Fn() -> bool) -> io::Result<[u8; 32]> {
     let file = fs::File::open(path)?;
     let mut reader: Box<dyn io::Read> = match limit {
         Some(n) => Box::new(file.take(n)),
@@ -104,6 +112,9 @@ fn hash(path: &Path, limit: Option<u64>) -> io::Result<[u8; 32]> {
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 256 * 1024];
     loop {
+        if stop() {
+            return Err(io::ErrorKind::Interrupted.into());
+        }
         let n = reader.read(&mut buf)?;
         if n == 0 {
             break;
@@ -136,7 +147,7 @@ mod tests {
 
         let mut groups = Vec::new();
         let mut done = None;
-        assert!(find(&root, &mut |ev| {
+        assert!(find(&root, &|| false, &mut |ev| {
             match ev {
                 DupEvent::Group { size, paths } => groups.push((size, paths)),
                 DupEvent::Done { groups } => done = Some(groups),
@@ -154,6 +165,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         fs::write(tmp.path().join("a"), b"x").unwrap();
         fs::write(tmp.path().join("b"), b"x").unwrap();
-        assert!(!find(tmp.path(), &mut |_| false));
+        assert!(!find(tmp.path(), &|| false, &mut |_| false));
+        // Asked to stop while hashing: no group comes out.
+        let mut groups = 0;
+        assert!(!find(tmp.path(), &|| true, &mut |ev| {
+            groups += u32::from(matches!(ev, DupEvent::Group { .. }));
+            true
+        }));
+        assert_eq!(groups, 0);
     }
 }

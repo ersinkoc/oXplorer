@@ -87,6 +87,24 @@ describe("tabs and panes", () => {
     expect(getActiveTab().history.stack).toEqual(["/a", "/a/x"]);
   });
 
+  it("reopens tabs closed together in their order, after pinned tabs", () => {
+    ws().setPath("/a");
+    ws().openTab("/b");
+    ws().openTab("/c");
+    ws().openTab("/d");
+    const a = ws().panes.left.tabs[0]?.id ?? "";
+    ws().closeOtherTabs("left", a);
+    for (let i = 0; i < 3; i++) ws().reopenClosedTab();
+    expect(paths("left")).toEqual(["/a", "/b", "/c", "/d"]);
+
+    // A tab closed at the front comes back after tabs pinned since.
+    ws().closeTab("left", a);
+    ws().togglePin("left", ws().panes.left.tabs[0]?.id ?? "");
+    ws().reopenClosedTab();
+    expect(paths("left")).toEqual(["/b", "/a", "/c", "/d"]);
+    expect(ws().panes.left.tabs.map((t) => t.pinned)).toEqual([true, false, false, false]);
+  });
+
   it("keeps pinned tabs first and spares them when closing others", () => {
     ws().openTab("/b");
     ws().openTab("/c");

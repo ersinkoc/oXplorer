@@ -15,6 +15,9 @@ describe("globMatcher", () => {
     expect(m?.("abbc")).toBe(false);
     expect(m?.("photo.jpg.txt")).toBe(false);
     expect(globMatcher("port")?.("Report.pdf")).toBe(true);
+    // Without wildcards a comma is part of the name.
+    expect(globMatcher("Smith, John")?.("Smith, John.pdf")).toBe(true);
+    expect(globMatcher("Smith, John")?.("John.pdf")).toBe(false);
   });
 
   it("treats regex characters literally and ignores normalization", () => {

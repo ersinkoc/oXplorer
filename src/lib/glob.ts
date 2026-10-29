@@ -1,12 +1,13 @@
 /**
  * Matcher for "Select Matching…": `*.jpg; *.png` style patterns separated by
- * `;` or `,`. `*` is any run of characters and `?` one character. A pattern
+ * `;` or `,` (a comma only separates once there's a wildcard or `;`, so
+ * "Smith, John" stays one name). `*` is any run of characters and `?` one character. A pattern
  * without wildcards matches names that contain it. Case-insensitive and
  * Unicode-normalized, since macOS stores names decomposed.
  */
 export function globMatcher(input: string): ((name: string) => boolean) | null {
   const patterns = input
-    .split(/[;,]/)
+    .split(/[*?;]/.test(input) ? /[;,]/ : /;/)
     .map((p) => p.trim().normalize("NFC").toLocaleLowerCase())
     .filter(Boolean);
   if (patterns.length === 0) return null;

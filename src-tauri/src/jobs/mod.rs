@@ -217,7 +217,8 @@ pub async fn find_duplicates(
     let (cancel, _, _) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     tauri::async_runtime::spawn_blocking(move || {
-        dupes::find(&root, &mut |ev| !cancel.load(Ordering::Relaxed) && on_event.send(ev).is_ok());
+        let stop = || cancel.load(Ordering::Relaxed);
+        dupes::find(&root, &stop, &mut |ev| !stop() && on_event.send(ev).is_ok());
         manager.unregister(&id);
     });
     Ok(())

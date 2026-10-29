@@ -115,6 +115,7 @@ function clamp(n: number, min: number, max: number): number {
 interface ClosedTab {
   pane: PaneId;
   index: number;
+  pinned: boolean;
   path: string;
   history: { stack: string[]; index: number };
   view: { mode: ViewMode; sort: SortConfig };
@@ -127,17 +128,21 @@ function removeTabs(pane: PaneState, drop: (t: TabState, i: number) => boolean, 
   const activeIndex = pane.tabs.findIndex((t) => t.id === pane.activeTabId);
   const kept = pane.tabs.filter((t, i) => !drop(t, i));
   if (kept.length === 0) return;
+  const closed: ClosedTab[] = [];
+  // Right to left, so reopening several brings them back left to right at their old places.
   pane.tabs.forEach((t, index) => {
     if (kept.includes(t)) return;
     // Plain copies: `t` is an Immer draft that's revoked after this update.
-    closedTabs.push({
+    closed.unshift({
       pane: id,
       index,
+      pinned: t.pinned,
       path: t.path,
       history: { stack: [...t.history.stack], index: t.history.index },
       view: { mode: t.view.mode, sort: { ...t.view.sort } },
     });
   });
+  closedTabs.push(...closed);
   closedTabs.splice(0, Math.max(0, closedTabs.length - CLOSED_KEEP));
   if (!kept.some((t) => t.id === pane.activeTabId)) {
     const right = pane.tabs.slice(activeIndex + 1).find((t) => kept.includes(t));
@@ -273,8 +278,12 @@ export const useWorkspace = create<WorkspaceState>()(
         const tab = newTab(closed.path, {
           history: closed.history,
           view: { ...closed.view, filter: "" },
+          pinned: closed.pinned,
         });
-        p.tabs.splice(Math.min(closed.index, p.tabs.length), 0, castDraft(tab));
+        // Pinned tabs stay a prefix of the strip.
+        const pins = pinnedCount(p);
+        const [min, max] = closed.pinned ? [0, pins] : [pins, p.tabs.length];
+        p.tabs.splice(clamp(closed.index, min, max), 0, castDraft(tab));
         p.activeTabId = tab.id;
         s.activePane = paneId;
       });

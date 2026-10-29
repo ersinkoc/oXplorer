@@ -32,16 +32,31 @@ export function parseView(raw: unknown): FolderView {
   return { mode: v.mode === "icons" || v.mode === "columns" ? v.mode : "list", sort };
 }
 
+async function stored(): Promise<[string, FolderView][]> {
+  const raw = await store.get<unknown>("views");
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) =>
+    Array.isArray(item) && typeof item[0] === "string"
+      ? [[item[0], parseView(item[1])] as [string, FolderView]]
+      : [],
+  );
+}
+
 export async function loadFolderViews(): Promise<void> {
   try {
-    const raw = await store.get<unknown>("views");
-    if (!Array.isArray(raw)) return;
-    for (const item of raw) {
-      if (Array.isArray(item) && typeof item[0] === "string") views.set(item[0], parseView(item[1]));
-    }
+    for (const [path, view] of await stored()) views.set(path, view);
   } catch (err) {
     console.warn("failed to load folder views", err);
   }
+}
+
+/** Other windows save to the same file: what they remembered is kept, as older entries. */
+async function save(): Promise<void> {
+  const others = (await stored()).filter(([path]) => !views.has(path));
+  const merged = [...others, ...views].slice(-KEEP);
+  views.clear();
+  for (const [path, view] of merged) views.set(path, view);
+  await store.set("views", merged);
 }
 
 export function rememberedView(path: string): FolderView | undefined {
@@ -57,5 +72,5 @@ export function rememberView(path: string, view: FolderView): void {
     views.delete(oldest);
   }
   clearTimeout(timer);
-  timer = setTimeout(() => void store.set("views", [...views]).catch(() => {}), SAVE_DELAY_MS);
+  timer = setTimeout(() => void save().catch(() => {}), SAVE_DELAY_MS);
 }
