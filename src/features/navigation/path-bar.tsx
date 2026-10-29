@@ -1,13 +1,35 @@
+import { Menu } from "@tauri-apps/api/menu";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { ChevronRight, HardDrive, Search, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { commands } from "@/bindings";
 import { goToTypedPath, navigateTo } from "@/commands/navigation";
-import { useT } from "@/i18n";
+import { t, useT } from "@/i18n";
 import { archivePath, parseArchivePath } from "@/lib/archive-path";
 import { basename, parent, segments, tildify } from "@/lib/path";
 import { parseRemotePath, remotePath } from "@/lib/remote-path";
-import { parseSearchPath, searchTitle } from "@/lib/search-path";
+import { isVirtualPath, parseSearchPath, searchTitle } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
+import { useWorkspace } from "@/stores/workspace-store";
+
+/** Right-click on a path segment: that folder in a new tab or window, or its path. */
+async function showSegmentMenu(path: string): Promise<void> {
+  const local = !isVirtualPath(path);
+  const menu = await Menu.new({
+    items: [
+      { text: t("Open in New Tab"), action: () => useWorkspace.getState().openTab(path) },
+      ...(local
+        ? [
+            { text: t("Open in New Window"), action: () => void commands.openWindow(path) },
+            { item: "Separator" as const },
+            { text: t("Show in Finder"), action: () => void commands.revealInFinder(path) },
+            { text: t("Copy Path"), action: () => void writeText(path) },
+          ]
+        : []),
+    ],
+  });
+  await menu.popup();
+}
 
 /** Breadcrumb that turns into a text field on double-click or ⇧⌘G. */
 export function PathBar({ path }: { path: string }) {
@@ -66,7 +88,18 @@ export function PathBar({ path }: { path: string }) {
             {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-fg-faint" />}
             <button
               type="button"
-              onClick={() => !last && navigateTo(seg.path)}
+              onClick={(e) => {
+                // ⌘-click opens the folder in a new tab, like a link.
+                if (e.metaKey) useWorkspace.getState().openTab(seg.path);
+                else if (!last) navigateTo(seg.path);
+              }}
+              onAuxClick={(e) => {
+                if (e.button === 1) useWorkspace.getState().openTab(seg.path);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                void showSegmentMenu(seg.path);
+              }}
               className={`flex min-w-0 items-center gap-1 truncate rounded px-1.5 py-0.5 text-[13px] ${
                 last ? "font-semibold" : "text-fg-muted hover:bg-hover hover:text-fg"
               }`}
