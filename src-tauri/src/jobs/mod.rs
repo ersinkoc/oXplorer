@@ -8,6 +8,7 @@ mod fsops;
 mod names;
 mod rename;
 mod run;
+mod split;
 pub mod sync;
 mod types;
 
@@ -160,7 +161,12 @@ pub fn start_job(
     // Only local copies pause: archive and server streams would time out while held open.
     let pausable = matches!(
         spec,
-        JobSpec::Copy { .. } | JobSpec::Move { .. } | JobSpec::Duplicate { .. } | JobSpec::Sync { .. }
+        JobSpec::Copy { .. }
+            | JobSpec::Move { .. }
+            | JobSpec::Duplicate { .. }
+            | JobSpec::Sync { .. }
+            | JobSpec::Split { .. }
+            | JobSpec::Join { .. }
     );
     let paused = if pausable { paused } else { Arc::new(AtomicBool::new(false)) };
     let manager = Arc::clone(&jobs);

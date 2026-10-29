@@ -62,6 +62,18 @@ pub enum JobSpec {
     Sync {
         items: Vec<SyncCopy>,
     },
+    /// Split File: cuts a file into numbered parts (`name.001`, …) in `dest_dir`.
+    Split {
+        source: String,
+        dest_dir: String,
+        #[specta(type = u32)]
+        part_size: u64,
+    },
+    /// Combine Files: joins `first` (`name.001`) and the parts after it into `dest_dir`.
+    Join {
+        first: String,
+        dest_dir: String,
+    },
     /// Replays an `UndoAction` from an earlier job (undo and redo alike).
     Undo {
         action: UndoAction,

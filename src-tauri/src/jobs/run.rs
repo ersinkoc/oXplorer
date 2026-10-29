@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use super::archive;
 use super::fsops;
 use super::names;
+use super::split;
 use super::types::{
     ConflictChoice, ConflictResolution, JobFailure, JobOutcome, JobSpec, UndoAction, UndoStep,
 };
@@ -85,6 +86,8 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Extract { .. } => "Extract",
         JobSpec::ExtractMembers { .. } | JobSpec::Download { .. } | JobSpec::Upload { .. } => "Copy",
         JobSpec::Sync { .. } => "Synchronize",
+        JobSpec::Split { .. } => "Split File",
+        JobSpec::Join { .. } => "Combine Files",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -132,6 +135,10 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
             job.policy = Some(ConflictChoice::Replace);
             job.transfer(pairs, Mode::Copy);
         }
+        JobSpec::Split { source, dest_dir, part_size } => {
+            job.split(&validate_path(&source)?, &validate_path(&dest_dir)?, part_size);
+        }
+        JobSpec::Join { first, dest_dir } => job.join(&validate_path(&first)?, &validate_path(&dest_dir)?),
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
     Ok(job.finish(label))
@@ -577,6 +584,42 @@ impl Runner<'_> {
             self.done_bytes = before + total;
             self.done_items += 1;
             self.r.progress(self.done_bytes, self.done_items, archive);
+        }
+    }
+
+    fn split(&mut self, source: &Path, dest_dir: &Path, part_size: u64) {
+        let len = fs::metadata(source).map_or(0, |m| m.len());
+        let count = split::part_count(len, part_size).unwrap_or(1);
+        self.r.planned(len, u32::try_from(count).unwrap_or(u32::MAX));
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            split::split(source, dest_dir, part_size, &mut |n| {
+                done += n;
+                r.progress(done, 0, source);
+                !r.cancelled()
+            })
+        };
+        if let Some(parts) = self.archive_result(source, result) {
+            self.done_items = u32::try_from(parts.len()).unwrap_or(u32::MAX);
+            self.log.extend(parts.into_iter().map(Done::Created));
+        }
+    }
+
+    fn join(&mut self, first: &Path, dest_dir: &Path) {
+        self.r.planned(split::joined_size(first), 1);
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            split::join(first, dest_dir, &mut |n| {
+                done += n;
+                r.progress(done, 0, first);
+                !r.cancelled()
+            })
+        };
+        if let Some(out) = self.archive_result(first, result) {
+            self.done_items = 1;
+            self.log.push(Done::Created(out));
         }
     }
 

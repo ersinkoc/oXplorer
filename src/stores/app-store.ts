@@ -82,6 +82,8 @@ interface AppState extends Preferences {
   syncPair: { left: string; right: string } | null;
   /** Convert Image… for these pictures. */
   convertPaths: string[] | null;
+  /** Split File… for this file. */
+  splitFile: { path: string; size: number } | null;
 
   set: (patch: Partial<AppState>) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -131,6 +133,7 @@ export const useApp = create<AppState>()((set) => ({
   duplicatesPath: null,
   syncPair: null,
   convertPaths: null,
+  splitFile: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {

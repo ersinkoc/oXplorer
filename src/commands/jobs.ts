@@ -33,6 +33,8 @@ const LABELS: Record<JobSpec["kind"], string> = {
   download: msg("Downloading"),
   upload: msg("Uploading"),
   sync: msg("Synchronizing"),
+  split: msg("Splitting"),
+  join: msg("Combining"),
   undo: msg("Undoing"),
 };
 
@@ -123,6 +125,8 @@ const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
   download: msg("Download"),
   upload: msg("Upload"),
   sync: msg("Synchronize"),
+  split: msg("Split File"),
+  join: msg("Combine Files"),
 };
 
 /** Jobs that ran this long get a system notification when OXplorer isn't in front. */

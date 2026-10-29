@@ -7,6 +7,7 @@ import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { isConvertibleImage } from "@/lib/media";
 import { isSearchPath, isVirtualPath } from "@/lib/search-path";
+import { firstPart } from "@/lib/split-parts";
 import { useApp } from "@/stores/app-store";
 import { useHistory } from "@/stores/history-store";
 import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
@@ -116,6 +117,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
         { text: t("Make Alias"), command: "file.makeAlias" },
         ...(entries.some(isConvertibleImage)
           ? [{ text: t("Convert Image…"), command: "file.convertImage" }]
+          : []),
+        ...(one && firstPart(entries[0]?.path ?? "")
+          ? [{ text: t("Combine Files"), command: "file.combine" }]
           : []),
         ...(entries.length > 1
           ? [

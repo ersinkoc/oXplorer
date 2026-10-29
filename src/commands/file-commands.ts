@@ -16,6 +16,7 @@ import { isRemotePath, remoteDirOf } from "@/lib/remote-path";
 import { isSearchPath } from "@/lib/search-path";
 import { selectOne } from "@/lib/selection";
 import { shellArgs } from "@/lib/shell";
+import { firstPart } from "@/lib/split-parts";
 import { copyText, cutText, deleteToLineStart, focusedTextField, pasteText, undoText } from "@/lib/text-edit";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
@@ -302,6 +303,18 @@ async function compress(format: ArchiveFormat, withPassword = false): Promise<vo
   await runJob({ kind: "compress", sources: sel, format, password });
 }
 
+/** Combine Files: joins the set the selected part belongs to, next to the parts. */
+async function combineParts(): Promise<void> {
+  const sel = paths(selectedEntries());
+  const first = sel.length === 1 && sel[0] ? firstPart(sel[0]) : null;
+  if (!first) {
+    toast(t("Select the first part of a split file (a name ending in .001)."));
+    return;
+  }
+  if (refuseArchiveMembers([first]) || refuseRemote([first])) return;
+  await runJob({ kind: "join", first, destDir: parent(first) ?? "/" });
+}
+
 /** Extract Here: encrypted zips ask for their password first (one for all of them). */
 async function extractSelected(): Promise<void> {
   const archives = selectedEntries()
@@ -403,6 +416,21 @@ export function registerFileCommands(): void {
       },
     },
     { id: "file.makeAlias", title: "Make Alias", run: makeAliases },
+    {
+      id: "file.split",
+      title: "Split File…",
+      run: () => {
+        const sel = selectedEntries();
+        const file = sel[0];
+        if (sel.length !== 1 || !file || file.kind !== "file") {
+          toast(t("Select one file to split."));
+          return;
+        }
+        if (refuseArchiveMembers([file.path]) || refuseRemote([file.path])) return;
+        useApp.getState().set({ splitFile: { path: file.path, size: file.size } });
+      },
+    },
+    { id: "file.combine", title: "Combine Files", run: combineParts },
     {
       id: "file.convertImage",
       title: "Convert Image…",

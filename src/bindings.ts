@@ -487,6 +487,10 @@ password?: Password | null } |
  *  (into the Trash) whatever is there.
  */
 { kind: "sync"; items: SyncCopy[] } | 
+/**  Split File: cuts a file into numbered parts (`name.001`, …) in `dest_dir`. */
+{ kind: "split"; source: string; destDir: string; partSize: number } | 
+/**  Combine Files: joins `first` (`name.001`) and the parts after it into `dest_dir`. */
+{ kind: "join"; first: string; destDir: string } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
@@ -515,6 +519,10 @@ password: Password | null } |
  *  (into the Trash) whatever is there.
  */
 { kind: "sync"; items: SyncCopy[] } | 
+/**  Split File: cuts a file into numbered parts (`name.001`, …) in `dest_dir`. */
+{ kind: "split"; source: string; destDir: string; partSize: number } | 
+/**  Combine Files: joins `first` (`name.001`) and the parts after it into `dest_dir`. */
+{ kind: "join"; first: string; destDir: string } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 

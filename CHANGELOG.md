@@ -21,6 +21,7 @@ The first public build of OXplorer.
 - Spring-loaded folders: hold a dragged item over a folder to open it.
 - Merge folders when a folder with the same name is already there (undo puts everything back).
 - Compress to zip, tar.gz or tar.zst and extract archives. Zip with Password… makes an AES-256 encrypted zip; Extract Here asks for the password of encrypted zips.
+- Split File… cuts a big file into numbered parts (`name.001`, `.002`, …; presets for e-mail, CD, DVD and the FAT32 4 GB limit, or a custom size), into the same folder or the other pane. Combine Files joins them back (also 7-Zip / Total Commander parts). Both run as cancellable, undoable jobs.
 - Rename many items at once, edit Finder tags.
 - Open With works on a folder too: editors and terminals that open folders, plus Terminal.
 - New Folder with Selection (⌃⌘N), undone in one step.

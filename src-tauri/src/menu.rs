@@ -34,6 +34,8 @@ const FILE: &[Item] = &[
     ("file.duplicate", "Duplicate", Some("CmdOrCtrl+D")),
     ("file.makeAlias", "Make Alias", Some("Ctrl+CmdOrCtrl+A")),
     ("file.convertImage", "Convert Image…", None),
+    ("file.split", "Split File…", None),
+    ("file.combine", "Combine Files", None),
     ("file.copyPath", "Copy Path", Some("Alt+CmdOrCtrl+C")),
     ("file.addToSidebar", "Add to Sidebar", Some("Ctrl+CmdOrCtrl+T")),
     ("file.compress.zip", "Compress", None),

@@ -185,6 +185,26 @@ export async function runSelfTest(): Promise<void> {
       `zip=${lockedZip} enc=${JSON.stringify(encrypted)} wrong=${JSON.stringify(wrongPw?.failures)} out=${lockedOut}`,
     );
 
+    // Split File / Combine Files: the joined copy matches the original byte count.
+    const zipStat = await commands.statPath(zipPath);
+    const zipSize = zipStat.status === "ok" ? zipStat.data.size : 0;
+    const partSize = Math.ceil(zipSize / 3);
+    const parts = await runJob(
+      { kind: "split", source: zipPath, destDir: parent(zipPath) ?? "/", partSize },
+      { history: "none", select: false },
+    );
+    const firstOfSet = parts?.created.find((e) => e.name.endsWith(".001"))?.path ?? "";
+    const joined = await runJob(
+      { kind: "join", first: firstOfSet, destDir: parent(zipPath) ?? "/" },
+      { history: "none", select: false },
+    );
+    const joinedEntry = joined?.created[0];
+    step(
+      "split and combine",
+      zipSize > 0 && parts?.created.length === 3 && joinedEntry?.size === zipSize,
+      `parts=${parts?.created.map((e) => e.name).join(",")} joined=${joinedEntry?.path} size=${joinedEntry?.size}/${zipSize}`,
+    );
+
     // Browsing the zip like a folder: list, copy a member out, open one, go back up.
     navigateTo(archivePath(zipPath));
     const inZip = archivePath(zipPath, "arc");

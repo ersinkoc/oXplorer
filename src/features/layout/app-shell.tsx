@@ -13,6 +13,7 @@ import { BatchRenameDialog } from "@/features/rename/batch-rename-dialog";
 import { SelectMatchingDialog } from "@/features/selection/select-matching-dialog";
 import { usePreferenceEffects } from "@/features/settings/use-preference-effects";
 import { Sidebar } from "@/features/sidebar/sidebar";
+import { SplitFileDialog } from "@/features/split/split-file-dialog";
 import { SyncDialog } from "@/features/sync/sync-dialog";
 import { TerminalPanel } from "@/features/terminal/terminal-panel";
 import { PasswordPrompt } from "@/features/ui/password-prompt";
@@ -50,6 +51,7 @@ export function AppShell() {
       <DuplicatesDialog />
       <SyncDialog />
       <ConvertImageDialog />
+      <SplitFileDialog />
       <PasswordPrompt />
       <WhatsNewDialog />
       <DiskUsageDialog />
