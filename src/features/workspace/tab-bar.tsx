@@ -1,13 +1,15 @@
 import { Menu } from "@tauri-apps/api/menu";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Pin, Plus, Search, Server, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { commands } from "@/bindings";
 import { closeTab } from "@/commands/tab-commands";
 import { useT } from "@/i18n";
 import { parseArchivePath } from "@/lib/archive-path";
 import { pathIconUrl } from "@/lib/icons";
 import { locationTitle } from "@/lib/location-title";
 import { isRemotePath } from "@/lib/remote-path";
-import { parseSearchPath } from "@/lib/search-path";
+import { isVirtualPath, parseSearchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { otherPane, type PaneId, type TabState, useWorkspace } from "@/stores/workspace-store";
 
@@ -100,6 +102,15 @@ export function TabBar({ pane }: { pane: PaneId }) {
             ws.moveTab(pane, tab.id, to, ws.panes[to].tabs.length);
           },
         },
+        // Folders on this Mac only: searches, archives and servers have no Finder path.
+        ...(isVirtualPath(tab.path)
+          ? []
+          : [
+              { item: "Separator" as const },
+              { text: t("Open in New Window"), action: () => void commands.openWindow(tab.path) },
+              { text: t("Show in Finder"), action: () => void commands.revealInFinder(tab.path) },
+              { text: t("Copy Path"), action: () => void writeText(tab.path) },
+            ]),
       ],
     });
     await menu.popup();
