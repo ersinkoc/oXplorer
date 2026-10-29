@@ -40,6 +40,17 @@ const DATES = [
   [365, msg("Past Year")],
 ] as const;
 
+const KINDS = [
+  [null, msg("Any Kind")],
+  ["folder", msg("Folders")],
+  ["image", msg("Images")],
+  ["movie", msg("Movies")],
+  ["music", msg("Music")],
+  ["document", msg("Documents")],
+  ["archive", msg("Archives")],
+  ["application", msg("Applications")],
+] as const;
+
 /** Set right before re-running a search so the new header keeps keyboard focus. */
 let keepFocus = false;
 
@@ -181,6 +192,12 @@ export function SearchHeader({ pane, path }: { pane: PaneId; path: string }) {
               onChange={(minSize) => run({ minSize })}
             />
             <Filter
+              label={t("Kind")}
+              value={spec.kind ?? null}
+              options={KINDS}
+              onChange={(kind) => run({ kind })}
+            />
+            <Filter
               label={t("Modified")}
               value={spec.modifiedWithinDays ?? null}
               options={DATES}
@@ -208,16 +225,16 @@ export function SearchHeader({ pane, path }: { pane: PaneId; path: string }) {
 }
 
 /** A compact select for one search filter; "any" is null. */
-function Filter({
+function Filter<T extends string | number>({
   label,
   value,
   options,
   onChange,
 }: {
   label: string;
-  value: number | null;
-  options: readonly (readonly [number | null, string])[];
-  onChange: (value: number | null) => void;
+  value: T | null;
+  options: readonly (readonly [T | null, string])[];
+  onChange: (value: T | null) => void;
 }) {
   const { t } = useT();
   // A value from an older search path that isn't offered still shows as itself.
@@ -226,7 +243,7 @@ function Filter({
     <select
       aria-label={label}
       value={value ?? ""}
-      onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      onChange={(e) => onChange(options.find(([v]) => String(v ?? "") === e.target.value)?.[0] ?? value)}
       className={`h-[18px] rounded border-0 bg-transparent px-1 text-[12px] hover:bg-hover ${value ? "text-fg" : ""}`}
     >
       {options.map(([v, text]) => (

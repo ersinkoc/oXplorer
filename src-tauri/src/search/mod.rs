@@ -55,15 +55,105 @@ pub struct SearchSpec {
     /// Only items modified within this many days.
     #[serde(default)]
     pub modified_within_days: Option<u32>,
+    /// Only items of this kind (by extension, like Finder's Kind criterion).
+    #[serde(default)]
+    pub kind: Option<SearchKind>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchKind {
+    Folder,
+    Image,
+    Movie,
+    Music,
+    Document,
+    Archive,
+    Application,
+}
+
+impl SearchKind {
+    fn matches(self, entry: &FileEntry) -> bool {
+        use crate::model::EntryKind;
+        let ext = entry.extension.as_deref().map(str::to_ascii_lowercase).unwrap_or_default();
+        let ext = ext.as_str();
+        match self {
+            Self::Folder => entry.kind == EntryKind::Dir,
+            Self::Application => entry.kind == EntryKind::Package && ext == "app",
+            _ if entry.kind != EntryKind::File && entry.kind != EntryKind::Package => false,
+            Self::Image => matches!(
+                ext,
+                "png"
+                    | "jpg"
+                    | "jpeg"
+                    | "gif"
+                    | "webp"
+                    | "avif"
+                    | "bmp"
+                    | "ico"
+                    | "svg"
+                    | "heic"
+                    | "heif"
+                    | "tif"
+                    | "tiff"
+                    | "psd"
+                    | "raw"
+                    | "cr2"
+                    | "cr3"
+                    | "nef"
+                    | "arw"
+                    | "dng"
+            ),
+            Self::Movie => {
+                matches!(ext, "mp4" | "m4v" | "mov" | "webm" | "mkv" | "avi" | "wmv" | "mpg" | "mpeg")
+            }
+            Self::Music => {
+                matches!(
+                    ext,
+                    "mp3" | "m4a" | "aac" | "wav" | "aif" | "aiff" | "flac" | "ogg" | "opus" | "caf" | "alac"
+                )
+            }
+            Self::Document => matches!(
+                ext,
+                "pdf"
+                    | "txt"
+                    | "md"
+                    | "rtf"
+                    | "doc"
+                    | "docx"
+                    | "pages"
+                    | "xls"
+                    | "xlsx"
+                    | "numbers"
+                    | "csv"
+                    | "ppt"
+                    | "pptx"
+                    | "key"
+                    | "odt"
+                    | "ods"
+                    | "odp"
+                    | "epub"
+            ),
+            Self::Archive => matches!(
+                ext,
+                "zip" | "tar" | "gz" | "tgz" | "bz2" | "xz" | "zst" | "7z" | "rar" | "dmg" | "iso" | "pkg"
+            ),
+        }
+    }
 }
 
 impl SearchSpec {
     fn has_filters(&self) -> bool {
-        self.min_size.is_some() || self.modified_within_days.is_some()
+        self.min_size.is_some() || self.modified_within_days.is_some() || self.kind.is_some()
     }
 
     /// Size and date filters; the name or contents were matched already.
     fn keeps(&self, entry: &FileEntry, now_ms: f64) -> bool {
+        if let Some(kind) = self.kind
+            && !kind.matches(entry)
+        {
+            return false;
+        }
         if let Some(min) = self.min_size
             && (entry.kind != crate::model::EntryKind::File || entry.size < min)
         {

@@ -552,6 +552,8 @@ export type SearchEvent_Serialize = { type: "batch"; entries: FileEntry_Serializ
 /**  Items looked at so far (files read in content mode). */
 { type: "progress"; scanned: number } | { type: "done"; total: number; cancelled: boolean; truncated: boolean };
 
+export type SearchKind = "folder" | "image" | "movie" | "music" | "document" | "archive" | "application";
+
 export type SearchMode = 
 /**  File and folder names: substring, or a glob when the query has `*?[{`. */
 "name" | 
@@ -576,6 +578,8 @@ export type SearchSpec_Deserialize = {
 	minSize?: number | null,
 	/**  Only items modified within this many days. */
 	modifiedWithinDays?: number | null,
+	/**  Only items of this kind (by extension, like Finder's Kind criterion). */
+	kind?: SearchKind | null,
 };
 
 export type SearchSpec_Serialize = {
@@ -590,6 +594,8 @@ export type SearchSpec_Serialize = {
 	minSize: number | null,
 	/**  Only items modified within this many days. */
 	modifiedWithinDays: number | null,
+	/**  Only items of this kind (by extension, like Finder's Kind criterion). */
+	kind: SearchKind | null,
 };
 
 export type SizeInfo = {

@@ -1,4 +1,4 @@
-import type { SearchMode, SearchSpec } from "@/bindings";
+import type { SearchKind, SearchMode, SearchSpec } from "@/bindings";
 import { t } from "@/i18n";
 import { isArchivePath, parseArchivePath } from "@/lib/archive-path";
 import { basename, parent } from "@/lib/path";
@@ -12,6 +12,15 @@ import { useApp } from "@/stores/app-store";
  */
 const PREFIX = "search:?";
 const MODES: readonly SearchMode[] = ["name", "content", "spotlight", "tag"];
+export const SEARCH_KINDS: readonly SearchKind[] = [
+  "folder",
+  "image",
+  "movie",
+  "music",
+  "document",
+  "archive",
+  "application",
+];
 
 export function isSearchPath(path: string): boolean {
   return path.startsWith(PREFIX);
@@ -24,6 +33,7 @@ export function searchPath(spec: SearchSpec): string {
   if (spec.includeHidden) p.set("hidden", "1");
   if (spec.minSize) p.set("min", String(spec.minSize));
   if (spec.modifiedWithinDays) p.set("days", String(spec.modifiedWithinDays));
+  if (spec.kind) p.set("kind", spec.kind);
   return PREFIX + p.toString();
 }
 
@@ -42,6 +52,7 @@ export function parseSearchPath(path: string): SearchSpec | null {
     includeHidden: p.get("hidden") === "1",
     minSize: positive(p.get("min")),
     modifiedWithinDays: positive(p.get("days")),
+    kind: SEARCH_KINDS.find((k) => k === p.get("kind")) ?? null,
   };
 }
 
@@ -52,7 +63,9 @@ function positive(raw: string | null): number | null {
 
 /** Whether there's something to search for: a query, or (by name) only size / date filters. */
 export function isSearchable(spec: SearchSpec): boolean {
-  return !!spec.query.trim() || (spec.mode === "name" && !!(spec.minSize || spec.modifiedWithinDays));
+  return (
+    !!spec.query.trim() || (spec.mode === "name" && !!(spec.minSize || spec.modifiedWithinDays || spec.kind))
+  );
 }
 
 /** Search results and archive contents: shown like folders, but not on disk as such. */

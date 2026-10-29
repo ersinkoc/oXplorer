@@ -17,6 +17,7 @@ fn spec(scope: &Path, mode: SearchMode, query: &str) -> SearchSpec {
         include_hidden: false,
         min_size: None,
         modified_within_days: None,
+        kind: None,
     }
 }
 
@@ -219,4 +220,22 @@ fn filters_by_size_and_date_even_without_a_name() {
     s.min_size = None;
     s.query = "small".into();
     assert_eq!(result_names(&collect(&s, control())), ["small.bin"]);
+}
+
+#[test]
+fn filters_by_kind() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = tmp.path();
+    for f in ["photo.JPG", "song.mp3", "notes.pdf", "src.rs", "pack.zip"] {
+        fs::write(r.join(f), b"x").unwrap();
+    }
+    fs::create_dir(r.join("photos")).unwrap();
+    let mut s = spec(r, SearchMode::Name, "");
+    s.kind = Some(SearchKind::Image);
+    assert_eq!(result_names(&collect(&s, control())), ["photo.JPG"]);
+    s.kind = Some(SearchKind::Folder);
+    assert_eq!(result_names(&collect(&s, control())), ["photos"]);
+    s.kind = Some(SearchKind::Archive);
+    s.query = "pack".into();
+    assert_eq!(result_names(&collect(&s, control())), ["pack.zip"]);
 }
