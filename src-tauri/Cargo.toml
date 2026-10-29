@@ -54,7 +54,10 @@ grep-regex = "0.1"
 grep-matcher = "0.1"
 globset = "0.4"
 unicode-normalization = "0.1"
-sha2 = "0.10"
+sha2 = "0.11"
+# Verify Checksums; already in the tree via OpenDAL / reqsign.
+md-5 = "0.11"
+sha1 = "0.11"
 zip = { version = "9.1", default-features = false, features = ["deflate-flate2-zlib-rs", "aes-crypto"] }
 tar = "0.4"
 flate2 = "1.1"

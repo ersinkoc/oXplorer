@@ -9,6 +9,7 @@ import {
   type UsageEvent_Deserialize,
   type UsageEvent_Serialize,
   type UsageNode,
+  type VerifyEvent,
 } from "@/bindings";
 import { resolveConflict, runJob } from "@/commands/jobs";
 import { goHistory, goUp, navigateTo } from "@/commands/navigation";
@@ -19,7 +20,7 @@ import { menuTitles } from "@/i18n";
 import { MENU_LABELS } from "@/i18n/menu-labels";
 import { archivePath } from "@/lib/archive-path";
 import { highlight } from "@/lib/highlight";
-import { unwrap } from "@/lib/ipc";
+import { describeError, unwrap } from "@/lib/ipc";
 import { join, parent } from "@/lib/path";
 import { remotePath } from "@/lib/remote-path";
 import { searchPath } from "@/lib/search-path";
@@ -203,6 +204,20 @@ export async function runSelfTest(): Promise<void> {
       "split and combine",
       zipSize > 0 && parts?.created.length === 3 && joinedEntry?.size === zipSize,
       `parts=${parts?.created.map((e) => e.name).join(",")} joined=${joinedEntry?.path} size=${joinedEntry?.size}/${zipSize}`,
+    );
+
+    // Verify Checksums over IPC: an empty list is refused with a clear reason.
+    const emptyList = await unwrap(commands.createItem(dir, "empty.sha256", false));
+    const verifyEvents: string[] = [];
+    const verifyChannel = new Channel<VerifyEvent>();
+    verifyChannel.onmessage = (ev) => verifyEvents.push(ev.type);
+    const verified = await commands.verifyChecksums(crypto.randomUUID(), emptyList.path, verifyChannel);
+    step(
+      "verify checksums",
+      verified.status === "error" &&
+        describeError(verified.error).includes("no checksums") &&
+        verifyEvents.length === 0,
+      JSON.stringify(verified),
     );
 
     // Browsing the zip like a folder: list, copy a member out, open one, go back up.

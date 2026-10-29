@@ -3,6 +3,7 @@ import { commands } from "@/bindings";
 import { ARCHIVE_FORMATS, isArchive, toggleTag } from "@/commands/file-commands";
 import { runCommand } from "@/commands/registry";
 import { t } from "@/i18n";
+import { isChecksumList } from "@/lib/checksum-list";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
 import { isConvertibleImage } from "@/lib/media";
@@ -120,6 +121,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           : []),
         ...(one && firstPart(entries[0]?.path ?? "")
           ? [{ text: t("Combine Files"), command: "file.combine" }]
+          : []),
+        ...(one && isChecksumList(entries[0]?.name ?? "")
+          ? [{ text: t("Verify Checksums…"), command: "file.verifyChecksums" }]
           : []),
         ...(entries.length > 1
           ? [

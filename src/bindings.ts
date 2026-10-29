@@ -51,6 +51,11 @@ export const commands = {
 	 *  `on_event`. Cancel with `cancel_job(id)`.
 	 */
 	compareFolders: (id: string, left: string, right: string, byContent: boolean, onEvent: Channel<SyncEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("compare_folders", { id, left, right, byContent, onEvent })),
+	/**
+	 *  Verify Checksums: checks the files the list at `path` names; results stream
+	 *  through `on_event`. Cancel with `cancel_job(id)`.
+	 */
+	verifyChecksums: (id: string, path: string, onEvent: Channel<VerifyEvent>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("verify_checksums", { id, path, onEvent })),
 	/**  Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels. */
 	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
 	/**  Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked"). */
@@ -410,6 +415,8 @@ export type GitStatus_Serialize = {
 	/**  The status walk hit the time limit; what's here may be incomplete. */
 	partial: boolean,
 };
+
+export type HashKind = "md5" | "sha1" | "sha256" | "sha512";
 
 export type ImageFormat = "jpeg" | "png" | "heic" | "tiff";
 
@@ -774,6 +781,14 @@ export type UsageNode = {
 	/**  A folder whose children weren't sent (below the depth limit). */
 	truncated: boolean,
 };
+
+export type VerifyEvent = 
+/**  The list was read: this many files to check. */
+{ type: "started"; total: number } | { type: "item"; name: string; path: string; kind: HashKind; status: VerifyStatus } | { type: "done"; cancelled: boolean };
+
+export type VerifyStatus = "ok" | "mismatch" | "missing" | 
+/**  Couldn't be read (permissions, a folder, …), or a name that leaves the list's folder. */
+"unreadable";
 
 export type VolumeInfo = {
 	name: string,

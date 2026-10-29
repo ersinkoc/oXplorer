@@ -432,6 +432,20 @@ export function registerFileCommands(): void {
     },
     { id: "file.combine", title: "Combine Files", run: combineParts },
     {
+      id: "file.verifyChecksums",
+      title: "Verify Checksums…",
+      run: () => {
+        const sel = selectedEntries();
+        const list = sel[0];
+        if (sel.length !== 1 || !list || list.kind !== "file") {
+          toast(t("Select a checksum list (such as SHA256SUMS or a .sha256 file)."));
+          return;
+        }
+        if (refuseArchiveMembers([list.path]) || refuseRemote([list.path])) return;
+        useApp.getState().set({ verifyPath: list.path });
+      },
+    },
+    {
       id: "file.convertImage",
       title: "Convert Image…",
       run: () => {

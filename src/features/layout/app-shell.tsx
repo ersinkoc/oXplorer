@@ -18,6 +18,7 @@ import { SyncDialog } from "@/features/sync/sync-dialog";
 import { TerminalPanel } from "@/features/terminal/terminal-panel";
 import { PasswordPrompt } from "@/features/ui/password-prompt";
 import { DiskUsageDialog } from "@/features/usage/disk-usage-dialog";
+import { VerifyDialog } from "@/features/verify/verify-dialog";
 import { useLiveDirs } from "@/features/watch/use-live-dirs";
 import { Workspace } from "@/features/workspace/workspace";
 import { useApp } from "@/stores/app-store";
@@ -52,6 +53,7 @@ export function AppShell() {
       <SyncDialog />
       <ConvertImageDialog />
       <SplitFileDialog />
+      <VerifyDialog />
       <PasswordPrompt />
       <WhatsNewDialog />
       <DiskUsageDialog />

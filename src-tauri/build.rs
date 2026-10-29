@@ -16,6 +16,7 @@ const COMMANDS: &[&str] = &[
     "pause_job",
     "find_duplicates",
     "compare_folders",
+    "verify_checksums",
     "convert_image",
     "is_locked",
     "archive_encrypted",

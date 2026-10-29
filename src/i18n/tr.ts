@@ -92,6 +92,18 @@ export const tr: Readonly<Record<string, string>> = {
   "That would make more than 999 parts. Choose a bigger part size.":
     "Bu 999’dan fazla parça oluşturur. Daha büyük bir parça boyutu seç.",
   Split: "Böl",
+  "Verify Checksums…": "Sağlama Toplamlarını Doğrula…",
+  "Verify Checksums": "Sağlama Toplamlarını Doğrula",
+  "Select a checksum list (such as SHA256SUMS or a .sha256 file).":
+    "Bir sağlama toplamı listesi seç (SHA256SUMS ya da .sha256 dosyası gibi).",
+  "Checksums in “{name}”": "“{name}” içindeki sağlama toplamları",
+  "Checking {done} of {total}…": "{done} / {total} denetleniyor…",
+  "All {count} files are intact.": "{count} dosyanın tümü sağlam.",
+  "{bad} of {count} files failed the check.": "{count} dosyadan {bad} tanesi denetimi geçemedi.",
+  "Doesn’t match": "Eşleşmiyor",
+  Missing: "Eksik",
+  "Couldn’t be read": "Okunamadı",
+  "Show in Folder": "Klasörde Göster",
   "Actual Size": "Gerçek Boyut",
   "Large (3000 px)": "Büyük (3000 px)",
   "Medium (1600 px)": "Orta (1600 px)",

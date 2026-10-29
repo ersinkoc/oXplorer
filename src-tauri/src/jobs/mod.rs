@@ -11,6 +11,7 @@ mod run;
 mod split;
 pub mod sync;
 mod types;
+pub mod verify;
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -229,6 +230,29 @@ pub async fn find_duplicates(
         manager.unregister(&id);
     });
     Ok(())
+}
+
+/// Verify Checksums: checks the files the list at `path` names; results stream
+/// through `on_event`. Cancel with `cancel_job(id)`.
+#[tauri::command]
+#[specta::specta]
+pub async fn verify_checksums(
+    jobs: State<'_, Arc<JobManager>>,
+    id: String,
+    path: String,
+    on_event: Channel<verify::VerifyEvent>,
+) -> AppResult<()> {
+    let list = validate_path(&path)?;
+    let (cancel, _, _) = jobs.register(&id)?;
+    let manager = Arc::clone(&jobs);
+    tauri::async_runtime::spawn_blocking(move || {
+        let stop = || cancel.load(Ordering::Relaxed);
+        let out = verify::verify(&list, &stop, &mut |ev| on_event.send(ev).is_ok());
+        manager.unregister(&id);
+        out.map_err(|e| AppError::from_io(&e, &list))
+    })
+    .await
+    .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
 }
 
 /// Synchronize Folders: differences between `left` and `right` stream through

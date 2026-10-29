@@ -39,6 +39,7 @@
     "allow-pause-job",
     "allow-find-duplicates",
     "allow-compare-folders",
+    "allow-verify-checksums",
     "allow-convert-image",
     "allow-is-locked",
     "allow-archive-encrypted",

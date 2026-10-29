@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-verify-checksums"
+description = "Enables the verify_checksums command without any pre-configured scope."
+commands.allow = ["verify_checksums"]
+
+[[permission]]
+identifier = "deny-verify-checksums"
+description = "Denies the verify_checksums command without any pre-configured scope."
+commands.deny = ["verify_checksums"]

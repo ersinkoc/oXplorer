@@ -84,6 +84,8 @@ interface AppState extends Preferences {
   convertPaths: string[] | null;
   /** Split File… for this file. */
   splitFile: { path: string; size: number } | null;
+  /** Verify Checksums… for this checksum list. */
+  verifyPath: string | null;
 
   set: (patch: Partial<AppState>) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -134,6 +136,7 @@ export const useApp = create<AppState>()((set) => ({
   syncPair: null,
   convertPaths: null,
   splitFile: null,
+  verifyPath: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {
