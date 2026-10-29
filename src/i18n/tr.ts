@@ -35,6 +35,9 @@ export const tr: Readonly<Record<string, string>> = {
   "Over 1 GB": "1 GB üstü",
   "Any Time": "Her Zaman",
   "Any Kind": "Her Tür",
+  "This build doesn’t update itself; download the new version from GitHub.":
+    "Bu sürüm kendini güncellemez; yeni sürümü GitHub'dan indir.",
+  "Download…": "İndir…",
   Images: "Görüntüler",
   Movies: "Filmler",
   Music: "Müzik",
@@ -568,8 +571,6 @@ export const tr: Readonly<Record<string, string>> = {
   "Badges for changed files and the branch in folders under Git.":
     "Git altındaki klasörlerde değişen dosyalar için rozetler ve dal adı.",
   "Check for Updates…": "Güncellemeleri Denetle…",
-  "This build doesn’t update itself. Download new versions from GitHub.":
-    "Bu yapı kendini güncellemiyor. Yeni sürümleri GitHub’dan indirin.",
   "OXplorer is up to date.": "OXplorer güncel.",
   "OXplorer {version} is available": "OXplorer {version} kullanılabilir",
   "Install and Relaunch": "Yükle ve Yeniden Başlat",

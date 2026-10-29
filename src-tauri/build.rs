@@ -59,6 +59,7 @@ const COMMANDS: &[&str] = &[
     "open_settings",
     "log_file",
     "updates_enabled",
+    "newer_release",
     "git_status",
     "disk_usage",
     "disk_usage_cancel",

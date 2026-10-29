@@ -457,6 +457,10 @@ export async function runSelfTest(): Promise<void> {
       `${lockOn.status} ${JSON.stringify(lockedNow)} ${lockOff.status}`,
     );
 
+    // Unsigned builds look for newer releases on GitHub (needs the network).
+    const newer = await commands.newerRelease();
+    step("github release check", newer.status === "ok", JSON.stringify(newer));
+
     // Get Info → Permissions.
     const chmod = await commands.setPermissions(nf1.path, 0o600);
     step(

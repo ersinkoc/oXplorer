@@ -9,6 +9,7 @@ mod menu;
 mod model;
 mod preview;
 mod pty;
+mod releases;
 mod remote;
 mod search;
 mod security;
@@ -65,6 +66,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             system::favorite_tags,
             system::log_file,
             system::updates_enabled,
+            releases::newer_release,
             git::git_status,
             usage::disk_usage,
             usage::disk_usage_cancel,

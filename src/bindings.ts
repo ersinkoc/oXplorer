@@ -100,6 +100,11 @@ export const commands = {
 	 *  dev builds and builds without a signing key never do.
 	 */
 	updatesEnabled: () => __TAURI_INVOKE<boolean>("updates_enabled"),
+	/**
+	 *  The newest published release above this build, if any. Pre-releases only
+	 *  count for pre-release builds (beta testers get betas, everyone else doesn't).
+	 */
+	newerRelease: () => typedError<ReleaseInfo | null, AppError_Serialize>(__TAURI_INVOKE("newer_release")),
 	/**  Git state of a folder's children, or `None` outside a repository. */
 	gitStatus: (path: string) => typedError<GitStatus_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("git_status", { path })),
 	/**  Scans `path`; progress and the result (`Done`) arrive through `on_event`. */
@@ -533,6 +538,12 @@ export type QuickLookKey = {
 /**  The Quick Look panel opened or closed (by the app or by the user). */
 export type QuickLookState = {
 	visible: boolean,
+};
+
+export type ReleaseInfo = {
+	version: string,
+	/**  The release page, where the DMG is. */
+	url: string,
 };
 
 export type RemoteKind = "sftp" | "ftp" | "webdav" | "s3";

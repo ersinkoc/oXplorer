@@ -63,3 +63,4 @@ The first public build of OXplorer.
 ### Settings
 
 - Appearance, Turkish and English, terminal options and customizable shortcuts (⌘,).
+- Check for Updates… also works in beta builds: it points to a newer release on GitHub.

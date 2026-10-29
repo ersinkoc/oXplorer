@@ -82,6 +82,7 @@
     "allow-open-settings",
     "allow-log-file",
     "allow-updates-enabled",
+    "allow-newer-release",
     "allow-git-status",
     "allow-disk-usage",
     "allow-disk-usage-cancel",

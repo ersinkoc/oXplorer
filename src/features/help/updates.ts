@@ -1,9 +1,11 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { check } from "@tauri-apps/plugin-updater";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import { t } from "@/i18n";
+import { describeError } from "@/lib/ipc";
 
 const DAY_MS = 86_400_000;
 const store = new LazyStore("settings.json");
@@ -14,10 +16,7 @@ const store = new LazyStore("settings.json");
  * update exists.
  */
 export async function checkForUpdates(interactive: boolean): Promise<void> {
-  if (!(await commands.updatesEnabled())) {
-    if (interactive) toast(t("This build doesn’t update itself. Download new versions from GitHub."));
-    return;
-  }
+  if (!(await commands.updatesEnabled())) return announceNewerRelease(interactive);
   try {
     const update = await check();
     if (!update) {
@@ -47,11 +46,35 @@ export async function checkForUpdates(interactive: boolean): Promise<void> {
   }
 }
 
+/**
+ * Builds without the updater (unsigned betas): a newer release on GitHub is
+ * announced with a link to its download page.
+ */
+async function announceNewerRelease(interactive: boolean): Promise<void> {
+  const r = await commands.newerRelease();
+  if (r.status === "error") {
+    if (interactive)
+      toast.error(t("Couldn’t check for updates: {reason}", { reason: describeError(r.error) }));
+    return;
+  }
+  if (!r.data) {
+    if (interactive) toast.success(t("OXplorer is up to date."));
+    return;
+  }
+  const { version, url } = r.data;
+  toast(t("OXplorer {version} is available", { version }), {
+    description: t("This build doesn’t update itself; download the new version from GitHub."),
+    duration: Number.POSITIVE_INFINITY,
+    action: { label: t("Download…"), onClick: () => void openUrl(url) },
+  });
+}
+
 /** At most once a day, a quiet check at launch. */
 export async function checkForUpdatesDaily(): Promise<void> {
   try {
     const last = (await store.get<number>("lastUpdateCheck")) ?? 0;
-    if (Date.now() - last < DAY_MS) return;
+    // Dev runs (and self-tests) don't ask GitHub.
+    if (import.meta.env.DEV || Date.now() - last < DAY_MS) return;
     await store.set("lastUpdateCheck", Date.now());
     await checkForUpdates(false);
   } catch (err) {
