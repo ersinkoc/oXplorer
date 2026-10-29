@@ -234,6 +234,7 @@ pub async fn compare_folders(
     id: String,
     left: String,
     right: String,
+    by_content: bool,
     on_event: Channel<sync::SyncEvent>,
 ) -> AppResult<()> {
     let left = validate_path(&left)?;
@@ -241,7 +242,8 @@ pub async fn compare_folders(
     let (cancel, _, _) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     tauri::async_runtime::spawn_blocking(move || {
-        sync::compare(&left, &right, &mut |ev| !cancel.load(Ordering::Relaxed) && on_event.send(ev).is_ok());
+        let stop = || cancel.load(Ordering::Relaxed);
+        sync::compare(&left, &right, by_content, &stop, &mut |ev| !stop() && on_event.send(ev).is_ok());
         manager.unregister(&id);
     });
     Ok(())

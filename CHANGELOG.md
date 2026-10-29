@@ -51,7 +51,7 @@ The first public build of OXplorer.
 - Compare Files: a line-by-line diff of two text files (two selected, or one in each pane).
 - Synchronized Browsing: the other pane follows into same-named subfolders and back up.
 - Compare Panes marks what differs between the two folders; Select Differences + F5 syncs.
-- Synchronize Folders… compares the two panes' folders with their subfolders and copies the newer side over (both ways or one way, per item adjustable); replaced items go to the Trash and the whole run undoes in one step.
+- Synchronize Folders… compares the two panes' folders with their subfolders and copies the newer side over (both ways or one way, per item adjustable); replaced items go to the Trash and the whole run undoes in one step. Compare Contents reads same-size files so copies with other dates don't count.
 - Disk Usage (⌥⌘D): a treemap of what takes space.
 - "Open in OXplorer" in Finder's context menu and toolbar (Finder extension).
 

@@ -423,7 +423,7 @@ export async function runSelfTest(): Promise<void> {
       if (ev.type === "item") diffs.push(`${ev.rel}:${ev.status}`);
       if (ev.type === "done") syncDone = true;
     };
-    await unwrap(commands.compareFolders(crypto.randomUUID(), syncL.path, syncR.path, syncChannel));
+    await unwrap(commands.compareFolders(crypto.randomUUID(), syncL.path, syncR.path, true, syncChannel));
     await waitFor(() => syncDone, 5000);
     const synced = await runJob(
       { kind: "sync", items: [{ source: join(syncL.path, "only.txt"), dest: join(syncR.path, "only.txt") }] },

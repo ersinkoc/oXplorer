@@ -50,7 +50,7 @@ export const commands = {
 	 *  Synchronize Folders: differences between `left` and `right` stream through
 	 *  `on_event`. Cancel with `cancel_job(id)`.
 	 */
-	compareFolders: (id: string, left: string, right: string, onEvent: Channel<SyncEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("compare_folders", { id, left, right, onEvent })),
+	compareFolders: (id: string, left: string, right: string, byContent: boolean, onEvent: Channel<SyncEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("compare_folders", { id, left, right, byContent, onEvent })),
 	/**  Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels. */
 	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
 	/**  Renames several items at once; all or nothing. */

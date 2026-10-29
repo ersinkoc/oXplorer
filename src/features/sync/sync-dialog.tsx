@@ -1,6 +1,6 @@
 import { Channel } from "@tauri-apps/api/core";
 import { ArrowLeft, ArrowRight, Equal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { commands, type SyncEvent, type SyncSide, type SyncStatus } from "@/bindings";
 import { runJob } from "@/commands/jobs";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
@@ -57,19 +57,32 @@ export function join(root: string, rel: string): string {
 const SHOWN = 3000;
 
 interface Scan {
+  /** Which comparison mode and run these results belong to. */
+  key: string;
+  run: string;
   items: SyncItem[];
   folders: number;
   done: boolean;
 }
 
-function useComparison(left: string, right: string): Scan {
-  const [scan, setScan] = useState<Scan>({ items: [], folders: 0, done: false });
+const fresh = (key: string, run = ""): Scan => ({ key, run, items: [], folders: 0, done: false });
+
+/** Streams the differences; a new comparison (other mode) starts from an empty list. */
+function useComparison(left: string, right: string, byContent: boolean): Scan {
+  const key = String(byContent);
+  const [state, setScan] = useState<Scan>(fresh(key));
+  // Messages of a cancelled run can still arrive; only the latest run counts.
+  const latest = useRef("");
   useEffect(() => {
     const id = crypto.randomUUID();
+    latest.current = id;
     const channel = new Channel<SyncEvent>();
+    const current = (s: Scan) => (s.run === id ? s : fresh(key, id));
     channel.onmessage = (ev) =>
-      setScan((s) =>
-        ev.type === "item"
+      setScan((prev) => {
+        if (latest.current !== id) return prev;
+        const s = current(prev);
+        return ev.type === "item"
           ? {
               ...s,
               items: [
@@ -79,14 +92,14 @@ function useComparison(left: string, right: string): Scan {
             }
           : ev.type === "progress"
             ? { ...s, folders: ev.folders }
-            : { ...s, done: true },
-      );
-    void commands.compareFolders(id, left, right, channel).then((r) => {
-      if (r.status === "error") setScan((s) => ({ ...s, done: true }));
+            : { ...s, done: true };
+      });
+    void commands.compareFolders(id, left, right, byContent, channel).then((r) => {
+      if (r.status === "error" && latest.current === id) setScan((s) => ({ ...current(s), done: true }));
     });
     return () => void commands.cancelJob(id);
-  }, [left, right]);
-  return scan;
+  }, [left, right, byContent, key]);
+  return state.key === key ? state : fresh(key);
 }
 
 const DIRECTIONS = [
@@ -97,7 +110,8 @@ const DIRECTIONS = [
 
 function Body({ left, right, onClose }: { left: string; right: string; onClose: () => void }) {
   const { t, tn } = useT();
-  const scan = useComparison(left, right);
+  const [byContent, setByContent] = useState(false);
+  const scan = useComparison(left, right, byContent);
   const [direction, setDirection] = useState<SyncDirection>("both");
   // Only the rows the user changed by hand; the rest follow the direction.
   const [overrides, setOverrides] = useState<ReadonlyMap<string, SyncAction>>(new Map());
@@ -136,6 +150,13 @@ function Body({ left, right, onClose }: { left: string; right: string; onClose: 
               : t("Comparing… {count} folders", { count: scan.folders.toLocaleString() })}
           </p>
         </div>
+        <label
+          className="flex items-center gap-1.5 text-[12px] text-fg-muted"
+          title={t("Reads files of the same size, so copies with other dates don’t count as different.")}
+        >
+          <input type="checkbox" checked={byContent} onChange={(e) => setByContent(e.target.checked)} />
+          {t("Compare Contents")}
+        </label>
         <fieldset aria-label={t("Direction")} className="m-0 flex gap-0.5 border-0 p-0">
           {DIRECTIONS.map(([value, label]) => (
             <button

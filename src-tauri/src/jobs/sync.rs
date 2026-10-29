@@ -53,9 +53,17 @@ pub enum SyncEvent {
 }
 
 /// Compares `left` with `right`, streaming differences through `emit`; stops
-/// (returning false) once `emit` does.
-pub fn compare(left: &Path, right: &Path, emit: &mut dyn FnMut(SyncEvent) -> bool) -> bool {
-    let mut walk = Walk { emit, folders: 0, items: 0 };
+/// (returning false) once `emit` does or `stop` says so. With `by_content`,
+/// files of the same size are read: identical ones aren't differences even when
+/// their dates differ.
+pub fn compare(
+    left: &Path,
+    right: &Path,
+    by_content: bool,
+    stop: &dyn Fn() -> bool,
+    emit: &mut dyn FnMut(SyncEvent) -> bool,
+) -> bool {
+    let mut walk = Walk { emit, stop, by_content, folders: 0, items: 0 };
     if !walk.dir(left, right, "") {
         return false;
     }
@@ -65,6 +73,8 @@ pub fn compare(left: &Path, right: &Path, emit: &mut dyn FnMut(SyncEvent) -> boo
 
 struct Walk<'a> {
     emit: &'a mut dyn FnMut(SyncEvent) -> bool,
+    stop: &'a dyn Fn() -> bool,
+    by_content: bool,
     folders: u32,
     items: u32,
 }
@@ -72,6 +82,9 @@ struct Walk<'a> {
 impl Walk<'_> {
     fn dir(&mut self, left: &Path, right: &Path, rel: &str) -> bool {
         self.folders += 1;
+        if (self.stop)() {
+            return false;
+        }
         if self.folders.is_multiple_of(64) && !(self.emit)(SyncEvent::Progress { folders: self.folders }) {
             return false;
         }
@@ -92,6 +105,17 @@ impl Walk<'_> {
                     self.dir(&left.join(l), &right.join(r), &child)
                 }
                 (Some(lm), Some(rm)) => match status(&lm, &rm) {
+                    Some(_)
+                        if self.by_content
+                            && lm.is_file()
+                            && rm.is_file()
+                            && lm.len() == rm.len()
+                            && let (Some(l), Some(r)) = (&l, &r)
+                            && same_contents(&left.join(l), &right.join(r), self.stop) =>
+                    {
+                        true
+                    }
+                    _ if (self.stop)() => false,
                     Some(s) => self.item(child, s, Some(&lm), Some(&rm)),
                     None => true,
                 },
@@ -132,6 +156,38 @@ fn status(l: &Metadata, r: &Metadata) -> Option<SyncStatus> {
         return None;
     }
     Some(newer(lt, rt).unwrap_or(SyncStatus::Differs))
+}
+
+/// Whether two files hold the same bytes (false on a read error or when stopped).
+fn same_contents(a: &Path, b: &Path, stop: &dyn Fn() -> bool) -> bool {
+    use std::io::Read as _;
+    let (Ok(mut fa), Ok(mut fb)) = (fs::File::open(a), fs::File::open(b)) else { return false };
+    let (mut ba, mut bb) = (vec![0u8; 256 * 1024], vec![0u8; 256 * 1024]);
+    loop {
+        if stop() {
+            return false;
+        }
+        let Ok(n) = read_full(&mut fa, &mut ba) else { return false };
+        let Ok(m) = read_full(&mut fb, &mut bb) else { return false };
+        if n != m || ba[..n] != bb[..m] {
+            return false;
+        }
+        if n == 0 {
+            return true;
+        }
+    }
+
+    /// Fills `buf` unless the file ends first; returns the bytes read.
+    fn read_full(f: &mut fs::File, buf: &mut [u8]) -> std::io::Result<usize> {
+        let mut filled = 0;
+        while filled < buf.len() {
+            match f.read(&mut buf[filled..])? {
+                0 => break,
+                n => filled += n,
+            }
+        }
+        Ok(filled)
+    }
 }
 
 fn newer(lt: f64, rt: f64) -> Option<SyncStatus> {
@@ -193,7 +249,7 @@ mod tests {
 
         let mut items = Vec::new();
         let mut done = None;
-        assert!(compare(&l, &r, &mut |ev| {
+        assert!(compare(&l, &r, false, &|| false, &mut |ev| {
             match ev {
                 SyncEvent::Item { rel, status, .. } => items.push((rel, status)),
                 SyncEvent::Done { items } => done = Some(items),
@@ -214,12 +270,37 @@ mod tests {
     }
 
     #[test]
+    fn content_comparison_ignores_dates_of_identical_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (l, r) = (tmp.path().join("l"), tmp.path().join("r"));
+        fs::create_dir_all(&l).unwrap();
+        fs::create_dir_all(&r).unwrap();
+        touch(&l.join("same.txt"), b"identical", 10);
+        touch(&r.join("same.txt"), b"identical", 5000);
+        touch(&l.join("edit.txt"), b"version 2", 10);
+        touch(&r.join("edit.txt"), b"version 1", 5000);
+        let run = |by_content| {
+            let mut items = Vec::new();
+            compare(&l, &r, by_content, &|| false, &mut |ev| {
+                if let SyncEvent::Item { rel, status, .. } = ev {
+                    items.push((rel, status));
+                }
+                true
+            });
+            items
+        };
+        assert_eq!(run(false).len(), 2);
+        assert_eq!(run(true), vec![("edit.txt".to_owned(), SyncStatus::LeftNewer)]);
+    }
+
+    #[test]
     fn stops_when_told() {
         let tmp = tempfile::tempdir().unwrap();
         let (l, r) = (tmp.path().join("l"), tmp.path().join("r"));
         fs::create_dir_all(&l).unwrap();
         fs::create_dir_all(&r).unwrap();
         fs::write(l.join("a"), b"x").unwrap();
-        assert!(!compare(&l, &r, &mut |_| false));
+        assert!(!compare(&l, &r, false, &|| false, &mut |_| false));
+        assert!(!compare(&l, &r, false, &|| true, &mut |_| true));
     }
 }
