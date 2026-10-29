@@ -35,6 +35,7 @@ const LABELS: Record<JobSpec["kind"], string> = {
   sync: msg("Synchronizing"),
   split: msg("Splitting"),
   join: msg("Combining"),
+  emptyTrash: msg("Emptying the Trash"),
   undo: msg("Undoing"),
 };
 
@@ -127,6 +128,7 @@ const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
   sync: msg("Synchronize"),
   split: msg("Split File"),
   join: msg("Combine Files"),
+  emptyTrash: msg("Empty Trash"),
 };
 
 /** Jobs that ran this long get a system notification when OXplorer isn't in front. */

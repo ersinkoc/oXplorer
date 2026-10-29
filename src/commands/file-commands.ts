@@ -8,8 +8,8 @@ import { currentFolder, refuseArchiveMembers, selectedEntries, writableFolder } 
 import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
 import { askPassword } from "@/features/ui/password-prompt";
-import { msg, t } from "@/i18n";
-import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
+import { msg, t, tn } from "@/i18n";
+import { CommandError, describeError, type FileEntry, unwrap } from "@/lib/ipc";
 import { isConvertibleImage } from "@/lib/media";
 import { basename, parent } from "@/lib/path";
 import { isRemotePath, remoteDirOf } from "@/lib/remote-path";
@@ -303,6 +303,33 @@ async function compress(format: ArchiveFormat, withPassword = false): Promise<vo
   await runJob({ kind: "compress", sources: sel, format, password });
 }
 
+/** Empty Trash: asks first, like Finder; the items can't be brought back. */
+async function emptyTrash(): Promise<void> {
+  const count = await commands.trashCount();
+  if (count.status === "error") {
+    toast.error(t("Couldn’t read the Trash: {reason}", { reason: describeError(count.error) }));
+    return;
+  }
+  if (count.data === 0) {
+    toast(t("The Trash is empty."));
+    return;
+  }
+  const ok = await ask(
+    tn(
+      count.data,
+      "Are you sure you want to permanently erase the item in the Trash?",
+      "Are you sure you want to permanently erase the {count} items in the Trash?",
+    ),
+    {
+      title: t("Empty Trash"),
+      kind: "warning",
+      okLabel: t("Empty Trash"),
+      cancelLabel: t("Cancel"),
+    },
+  );
+  if (ok) await runJob({ kind: "emptyTrash" }, { select: false });
+}
+
 /** Combine Files: joins the set the selected part belongs to, next to the parts. */
 async function combineParts(): Promise<void> {
   const sel = paths(selectedEntries());
@@ -504,6 +531,7 @@ export function registerFileCommands(): void {
         if (ok) await runJob({ kind: "delete", paths: sel }, { select: false });
       },
     },
+    { id: "file.emptyTrash", title: "Empty Trash…", run: emptyTrash },
     ...ARCHIVE_FORMATS.map(([format]) => ({
       id: `file.compress.${format}`,
       title: COMPRESS_TITLES[format],

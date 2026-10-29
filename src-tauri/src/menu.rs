@@ -44,6 +44,7 @@ const FILE: &[Item] = &[
     SEP,
     ("file.trash", "Move to Trash", Some("CmdOrCtrl+Backspace")),
     ("file.delete", "Delete Immediately…", Some("Alt+CmdOrCtrl+Backspace")),
+    ("file.emptyTrash", "Empty Trash…", Some("Shift+CmdOrCtrl+Backspace")),
     SEP,
     ("file.copyToOther", "Copy to Other Pane", Some("F5")),
     ("file.moveToOther", "Move to Other Pane", Some("F6")),

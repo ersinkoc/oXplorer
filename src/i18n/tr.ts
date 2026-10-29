@@ -104,6 +104,15 @@ export const tr: Readonly<Record<string, string>> = {
   Missing: "Eksik",
   "Couldn’t be read": "Okunamadı",
   "Show in Folder": "Klasörde Göster",
+  "Empty Trash…": "Çöp Sepetini Boşalt…",
+  "Empty Trash": "Çöp Sepetini Boşalt",
+  "Emptying the Trash": "Çöp Sepeti boşaltılıyor",
+  "Couldn’t read the Trash: {reason}": "Çöp Sepeti okunamadı: {reason}",
+  "The Trash is empty.": "Çöp Sepeti boş.",
+  "Are you sure you want to permanently erase the item in the Trash?":
+    "Çöp Sepeti’ndeki öğeyi kalıcı olarak silmek istediğinden emin misin?",
+  "Are you sure you want to permanently erase the {count} items in the Trash?":
+    "Çöp Sepeti’ndeki {count} öğeyi kalıcı olarak silmek istediğinden emin misin?",
   "Actual Size": "Gerçek Boyut",
   "Large (3000 px)": "Büyük (3000 px)",
   "Medium (1600 px)": "Orta (1600 px)",

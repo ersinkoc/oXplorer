@@ -74,6 +74,8 @@ pub enum JobSpec {
         first: String,
         dest_dir: String,
     },
+    /// Empty Trash: permanently deletes everything in the user's Trash.
+    EmptyTrash,
     /// Replays an `UndoAction` from an earlier job (undo and redo alike).
     Undo {
         action: UndoAction,

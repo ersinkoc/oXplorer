@@ -88,6 +88,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Sync { .. } => "Synchronize",
         JobSpec::Split { .. } => "Split File",
         JobSpec::Join { .. } => "Combine Files",
+        JobSpec::EmptyTrash => "Empty Trash",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -139,9 +140,23 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
             job.split(&validate_path(&source)?, &validate_path(&dest_dir)?, part_size);
         }
         JobSpec::Join { first, dest_dir } => job.join(&validate_path(&first)?, &validate_path(&dest_dir)?),
+        JobSpec::EmptyTrash => job.delete(trash_entries(&trash_dir()?)?),
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
     Ok(job.finish(label))
+}
+
+/// The user's Trash on the startup disk.
+pub fn trash_dir() -> Result<PathBuf, AppError> {
+    dirs::home_dir()
+        .map(|h| h.join(".Trash"))
+        .ok_or_else(|| AppError::Io { path: None, message: "no home folder".into() })
+}
+
+/// What's in a Trash folder (reading it needs Full Disk Access).
+pub fn trash_entries(dir: &Path) -> Result<Vec<PathBuf>, AppError> {
+    let read = fs::read_dir(dir).map_err(|e| AppError::from_io(&e, dir))?;
+    Ok(read.filter_map(Result::ok).map(|e| e.path()).collect())
 }
 
 fn validate_all(paths: &[String]) -> Result<Vec<PathBuf>, AppError> {
@@ -1012,6 +1027,19 @@ mod tests {
         let redo = undone.undo.unwrap();
         run(JobSpec::Undo { action: redo }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
         assert_eq!(read_tags(&f), vec![work, red]);
+    }
+
+    #[test]
+    fn empties_a_trash_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir(tmp.path().join("old folder")).unwrap();
+        fs::write(tmp.path().join("old folder/a.txt"), "x").unwrap();
+        fs::write(tmp.path().join("b.txt"), "y").unwrap();
+        let mut found = trash_entries(tmp.path()).unwrap();
+        found.sort();
+        assert_eq!(found, [tmp.path().join("b.txt"), tmp.path().join("old folder")]);
+        let missing = trash_entries(&tmp.path().join("nope")).unwrap_err();
+        assert!(matches!(missing, AppError::NotFound { .. }));
     }
 
     #[test]

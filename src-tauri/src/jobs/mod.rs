@@ -232,6 +232,18 @@ pub async fn find_duplicates(
     Ok(())
 }
 
+/// How many items are in the Trash (Empty Trash asks before erasing them).
+#[tauri::command]
+#[specta::specta]
+pub async fn trash_count() -> AppResult<u32> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let n = run::trash_entries(&run::trash_dir()?)?.len();
+        Ok(u32::try_from(n).unwrap_or(u32::MAX))
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
 /// Verify Checksums: checks the files the list at `path` names; results stream
 /// through `on_event`. Cancel with `cancel_job(id)`.
 #[tauri::command]

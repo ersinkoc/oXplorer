@@ -40,6 +40,7 @@
     "allow-find-duplicates",
     "allow-compare-folders",
     "allow-verify-checksums",
+    "allow-trash-count",
     "allow-convert-image",
     "allow-is-locked",
     "allow-archive-encrypted",

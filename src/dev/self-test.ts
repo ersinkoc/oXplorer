@@ -220,6 +220,14 @@ export async function runSelfTest(): Promise<void> {
       JSON.stringify(verified),
     );
 
+    // Empty Trash's count (never the job itself here: it would erase the real Trash).
+    const inTrash = await commands.trashCount();
+    step(
+      "trash count",
+      inTrash.status === "ok" || inTrash.error.kind === "permissionDenied",
+      JSON.stringify(inTrash),
+    );
+
     // Browsing the zip like a folder: list, copy a member out, open one, go back up.
     navigateTo(archivePath(zipPath));
     const inZip = archivePath(zipPath, "arc");

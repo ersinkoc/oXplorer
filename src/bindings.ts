@@ -56,6 +56,8 @@ export const commands = {
 	 *  through `on_event`. Cancel with `cancel_job(id)`.
 	 */
 	verifyChecksums: (id: string, path: string, onEvent: Channel<VerifyEvent>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("verify_checksums", { id, path, onEvent })),
+	/**  How many items are in the Trash (Empty Trash asks before erasing them). */
+	trashCount: () => typedError<number, AppError_Serialize>(__TAURI_INVOKE("trash_count")),
 	/**  Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels. */
 	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
 	/**  Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked"). */
@@ -498,6 +500,8 @@ password?: Password | null } |
 { kind: "split"; source: string; destDir: string; partSize: number } | 
 /**  Combine Files: joins `first` (`name.001`) and the parts after it into `dest_dir`. */
 { kind: "join"; first: string; destDir: string } | 
+/**  Empty Trash: permanently deletes everything in the user's Trash. */
+{ kind: "emptyTrash" } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
@@ -530,6 +534,8 @@ password: Password | null } |
 { kind: "split"; source: string; destDir: string; partSize: number } | 
 /**  Combine Files: joins `first` (`name.001`) and the parts after it into `dest_dir`. */
 { kind: "join"; first: string; destDir: string } | 
+/**  Empty Trash: permanently deletes everything in the user's Trash. */
+{ kind: "emptyTrash" } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
