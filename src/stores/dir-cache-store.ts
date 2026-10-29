@@ -15,7 +15,7 @@ import { isArchivePath } from "@/lib/archive-path";
 import { type AppError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
 import { isRemotePath } from "@/lib/remote-path";
-import { isSearchPath, parseSearchPath } from "@/lib/search-path";
+import { isSearchable, isSearchPath, parseSearchPath } from "@/lib/search-path";
 import { EMPTY_SEARCH, useSearchInfo } from "@/stores/search-store";
 
 export type DirStatus = "loading" | "ready" | "error";
@@ -94,7 +94,7 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
     get().stop(path);
     const spec = parseSearchPath(path);
     const info = useSearchInfo.getState();
-    if (!spec?.query.trim()) {
+    if (!spec || !isSearchable(spec)) {
       info.patch(path, { ...EMPTY_SEARCH });
       patch(path, { status: "ready", entries: [], error: null });
       return;

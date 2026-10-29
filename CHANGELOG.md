@@ -32,7 +32,7 @@ The first public build of OXplorer.
 
 ### Find
 
-- Filter a folder (⌘F) by name or patterns like `*.jpg; *.png`, search names, contents or Spotlight (⇧⌘F), Finder tags in the sidebar.
+- Filter a folder (⌘F) by name or patterns like `*.jpg; *.png`, search names, contents or Spotlight (⇧⌘F) with size and date filters (even without a name: "files over 1 GB"), Finder tags in the sidebar.
 - Command palette (⌘K) with your most used folders.
 - Go to Folder (⇧⌘G) completes folder names with Tab and the arrow keys.
 - Finder's Go shortcuts: Documents (⇧⌘O), Desktop (⇧⌘D), Downloads (⌥⌘L), Applications (⇧⌘A), Utilities (⇧⌘U).

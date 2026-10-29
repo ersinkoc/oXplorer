@@ -89,7 +89,7 @@ export const commands = {
 	/**  Ends the shell (SIGHUP via the closed terminal, then kill). */
 	ptyClose: (id: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pty_close", { id })),
 	/**  Starts a search; results stream through `on_event` and end with `Done`. */
-	searchStart: (id: string, spec: SearchSpec, onEvent: Channel<SearchEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("search_start", { id, spec, onEvent })),
+	searchStart: (id: string, spec: SearchSpec_Deserialize, onEvent: Channel<SearchEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("search_start", { id, spec, onEvent })),
 	searchCancel: (id: string) => __TAURI_INVOKE<void>("search_cancel", { id }),
 	/**  Finder's sidebar tags, for the sidebar's Tags section. */
 	favoriteTags: () => __TAURI_INVOKE<FinderTag[]>("favorite_tags"),
@@ -562,7 +562,9 @@ export type SearchMode =
 /**  Items carrying the Finder tag named by the query. */
 "tag";
 
-export type SearchSpec = {
+export type SearchSpec = SearchSpec_Serialize | SearchSpec_Deserialize;
+
+export type SearchSpec_Deserialize = {
 	scope: string,
 	query: string,
 	mode: SearchMode,
@@ -570,6 +572,24 @@ export type SearchSpec = {
 	/**  Content mode: the query is a regular expression, not literal text. */
 	regex: boolean,
 	includeHidden: boolean,
+	/**  Only files at least this many bytes (folders drop out). */
+	minSize?: number | null,
+	/**  Only items modified within this many days. */
+	modifiedWithinDays?: number | null,
+};
+
+export type SearchSpec_Serialize = {
+	scope: string,
+	query: string,
+	mode: SearchMode,
+	caseSensitive: boolean,
+	/**  Content mode: the query is a regular expression, not literal text. */
+	regex: boolean,
+	includeHidden: boolean,
+	/**  Only files at least this many bytes (folders drop out). */
+	minSize: number | null,
+	/**  Only items modified within this many days. */
+	modifiedWithinDays: number | null,
 };
 
 export type SizeInfo = {

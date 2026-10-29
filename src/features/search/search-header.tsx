@@ -4,7 +4,7 @@ import type { SearchMode, SearchSpec } from "@/bindings";
 import { navigateTo } from "@/commands/navigation";
 import { msg, useT } from "@/i18n";
 import { basename } from "@/lib/path";
-import { parseSearchPath, searchPath } from "@/lib/search-path";
+import { isSearchable, parseSearchPath, searchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { EMPTY_SEARCH, useSearchInfo } from "@/stores/search-store";
@@ -23,6 +23,22 @@ const MODES: { mode: SearchMode; label: string; hint: string }[] = [
     hint: msg("The Spotlight index: fast, includes kind:pdf and similar"),
   },
 ];
+
+const MB = 1024 * 1024;
+const SIZES = [
+  [null, msg("Any Size")],
+  [MB, msg("Over 1 MB")],
+  [10 * MB, msg("Over 10 MB")],
+  [100 * MB, msg("Over 100 MB")],
+  [1024 * MB, msg("Over 1 GB")],
+] as const;
+const DATES = [
+  [null, msg("Any Time")],
+  [1, msg("Today")],
+  [7, msg("Past Week")],
+  [30, msg("Past Month")],
+  [365, msg("Past Year")],
+] as const;
 
 /** Set right before re-running a search so the new header keeps keyboard focus. */
 let keepFocus = false;
@@ -156,8 +172,24 @@ export function SearchHeader({ pane, path }: { pane: PaneId; path: string }) {
             ))}
           </>
         )}
+        {!tag && (
+          <>
+            <Filter
+              label={t("Size")}
+              value={spec.minSize ?? null}
+              options={SIZES}
+              onChange={(minSize) => run({ minSize })}
+            />
+            <Filter
+              label={t("Modified")}
+              value={spec.modifiedWithinDays ?? null}
+              options={DATES}
+              onChange={(modifiedWithinDays) => run({ modifiedWithinDays })}
+            />
+          </>
+        )}
         <span role="status" className="ml-auto flex items-center gap-1.5 tabular-nums">
-          <Status info={info} count={count} hasQuery={!!spec.query.trim()} />
+          <Status info={info} count={count} hasQuery={isSearchable(spec)} />
           {info.running && (
             <button
               type="button"
@@ -172,6 +204,38 @@ export function SearchHeader({ pane, path }: { pane: PaneId; path: string }) {
         </span>
       </div>
     </div>
+  );
+}
+
+/** A compact select for one search filter; "any" is null. */
+function Filter({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: number | null;
+  options: readonly (readonly [number | null, string])[];
+  onChange: (value: number | null) => void;
+}) {
+  const { t } = useT();
+  // A value from an older search path that isn't offered still shows as itself.
+  const known = options.some(([v]) => v === value);
+  return (
+    <select
+      aria-label={label}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      className={`h-[18px] rounded border-0 bg-transparent px-1 text-[12px] hover:bg-hover ${value ? "text-fg" : ""}`}
+    >
+      {options.map(([v, text]) => (
+        <option key={text} value={v ?? ""}>
+          {t(text)}
+        </option>
+      ))}
+      {!known && value !== null && <option value={value}>{value}</option>}
+    </select>
   );
 }
 

@@ -15,6 +15,8 @@ fn spec(scope: &Path, mode: SearchMode, query: &str) -> SearchSpec {
         case_sensitive: false,
         regex: false,
         include_hidden: false,
+        min_size: None,
+        modified_within_days: None,
     }
 }
 
@@ -196,4 +198,25 @@ fn spotlight_finds_indexed_files() {
     // Tags: whatever the result, the query runs and finishes cleanly.
     let events = collect(&spec(apps, SearchMode::Tag, "Red"), control());
     assert_eq!(events.last().unwrap()["type"], "done");
+}
+
+#[test]
+fn filters_by_size_and_date_even_without_a_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let r = tmp.path();
+    fs::write(r.join("big.bin"), vec![0u8; 4096]).unwrap();
+    fs::write(r.join("small.bin"), b"x").unwrap();
+    fs::write(r.join("old big.bin"), vec![0u8; 4096]).unwrap();
+    let old = std::time::SystemTime::now() - Duration::from_secs(40 * 86_400);
+    fs::File::options().write(true).open(r.join("old big.bin")).unwrap().set_modified(old).unwrap();
+    fs::create_dir(r.join("folder")).unwrap();
+
+    let mut s = spec(r, SearchMode::Name, "");
+    s.min_size = Some(1000);
+    assert_eq!(result_names(&collect(&s, control())), ["big.bin", "old big.bin"]);
+    s.modified_within_days = Some(30);
+    assert_eq!(result_names(&collect(&s, control())), ["big.bin"]);
+    s.min_size = None;
+    s.query = "small".into();
+    assert_eq!(result_names(&collect(&s, control())), ["small.bin"]);
 }

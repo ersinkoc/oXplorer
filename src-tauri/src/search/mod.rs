@@ -48,6 +48,34 @@ pub struct SearchSpec {
     /// Content mode: the query is a regular expression, not literal text.
     pub regex: bool,
     pub include_hidden: bool,
+    /// Only files at least this many bytes (folders drop out).
+    #[serde(default)]
+    #[specta(type = Option<u32>)]
+    pub min_size: Option<u64>,
+    /// Only items modified within this many days.
+    #[serde(default)]
+    pub modified_within_days: Option<u32>,
+}
+
+impl SearchSpec {
+    fn has_filters(&self) -> bool {
+        self.min_size.is_some() || self.modified_within_days.is_some()
+    }
+
+    /// Size and date filters; the name or contents were matched already.
+    fn keeps(&self, entry: &FileEntry, now_ms: f64) -> bool {
+        if let Some(min) = self.min_size
+            && (entry.kind != crate::model::EntryKind::File || entry.size < min)
+        {
+            return false;
+        }
+        if let Some(days) = self.modified_within_days
+            && (entry.modified_ms as f64) < now_ms - f64::from(days) * 86_400_000.0
+        {
+            return false;
+        }
+        true
+    }
 }
 
 #[derive(Debug, Clone, Serialize, specta::Type)]
@@ -107,6 +135,8 @@ pub struct SearchManager {
 /// Groups hits into batches and enforces the result limit.
 struct Collector<'a> {
     channel: &'a Channel<SearchEvent>,
+    spec: &'a SearchSpec,
+    now_ms: f64,
     entries: Vec<FileEntry>,
     matches: Vec<ContentMatch>,
     last_flush: Instant,
@@ -127,6 +157,9 @@ impl Collector<'_> {
             return;
         }
         let Some(entry) = crate::dir::build_entry_for(&hit.path) else { return };
+        if !self.spec.keeps(&entry, self.now_ms) {
+            return;
+        }
         if let Some((line, text)) = hit.matched {
             self.matches.push(ContentMatch { path: entry.path.clone(), line, text });
         }
@@ -200,6 +233,10 @@ pub fn run(
 
     let mut out = Collector {
         channel,
+        spec,
+        now_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f64() * 1000.0),
         entries: Vec::new(),
         matches: Vec::new(),
         last_flush: Instant::now(),
@@ -235,7 +272,8 @@ pub async fn search_start(
     if !scope.is_dir() {
         return Err(AppError::NotADirectory { path: spec.scope });
     }
-    if spec.query.trim().is_empty() {
+    // A name search may be only filters ("files over 1 GB").
+    if spec.query.trim().is_empty() && !(spec.mode == SearchMode::Name && spec.has_filters()) {
         return Err(AppError::InvalidQuery { message: "the search is empty".into() });
     }
     let cancel = Arc::new(AtomicBool::new(false));

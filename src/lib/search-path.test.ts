@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { SearchSpec } from "@/bindings";
-import { isSearchPath, parseSearchPath, realFolder, searchPath, searchTitle } from "@/lib/search-path";
+import {
+  isSearchable,
+  isSearchPath,
+  parseSearchPath,
+  realFolder,
+  searchPath,
+  searchTitle,
+} from "@/lib/search-path";
 
 const spec: SearchSpec = {
   scope: "/Users/me/a b",
@@ -9,6 +16,8 @@ const spec: SearchSpec = {
   caseSensitive: true,
   regex: false,
   includeHidden: true,
+  minSize: 5_000_000,
+  modifiedWithinDays: 7,
 };
 
 describe("search paths", () => {
@@ -18,6 +27,15 @@ describe("search paths", () => {
     expect(parseSearchPath(path)).toEqual(spec);
     expect(realFolder(path)).toBe("/Users/me/a b");
     expect(realFolder("/x")).toBe("/x");
+  });
+
+  it("searches by name with only filters, but not contents", () => {
+    const bare = { ...spec, query: " ", minSize: null, modifiedWithinDays: null };
+    expect(isSearchable(bare)).toBe(false);
+    expect(isSearchable({ ...bare, mode: "name", minSize: 1 })).toBe(true);
+    expect(isSearchable({ ...bare, mode: "content", minSize: 1 })).toBe(false);
+    expect(parseSearchPath(searchPath(bare))?.minSize).toBeNull();
+    expect(parseSearchPath("search:?q=x&mode=name&in=%2F&min=-5&days=abc")?.minSize).toBeNull();
   });
 
   it("rejects malformed or relative searches", () => {

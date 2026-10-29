@@ -8,7 +8,7 @@ import { useApp } from "@/stores/app-store";
 /**
  * Search results live in a tab like a folder, under a virtual path that
  * encodes the search (so history, sessions and new tabs just work):
- * `search:?q=report&mode=name&in=%2FUsers%2Fme&cs=1&re=1&hidden=1`.
+ * `search:?q=report&mode=name&in=%2FUsers%2Fme&cs=1&re=1&hidden=1&min=1048576&days=7`.
  */
 const PREFIX = "search:?";
 const MODES: readonly SearchMode[] = ["name", "content", "spotlight", "tag"];
@@ -22,6 +22,8 @@ export function searchPath(spec: SearchSpec): string {
   if (spec.caseSensitive) p.set("cs", "1");
   if (spec.regex) p.set("re", "1");
   if (spec.includeHidden) p.set("hidden", "1");
+  if (spec.minSize) p.set("min", String(spec.minSize));
+  if (spec.modifiedWithinDays) p.set("days", String(spec.modifiedWithinDays));
   return PREFIX + p.toString();
 }
 
@@ -38,7 +40,19 @@ export function parseSearchPath(path: string): SearchSpec | null {
     caseSensitive: p.get("cs") === "1",
     regex: p.get("re") === "1",
     includeHidden: p.get("hidden") === "1",
+    minSize: positive(p.get("min")),
+    modifiedWithinDays: positive(p.get("days")),
   };
+}
+
+function positive(raw: string | null): number | null {
+  const n = Number(raw);
+  return raw && Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/** Whether there's something to search for: a query, or (by name) only size / date filters. */
+export function isSearchable(spec: SearchSpec): boolean {
+  return !!spec.query.trim() || (spec.mode === "name" && !!(spec.minSize || spec.modifiedWithinDays));
 }
 
 /** Search results and archive contents: shown like folders, but not on disk as such. */
