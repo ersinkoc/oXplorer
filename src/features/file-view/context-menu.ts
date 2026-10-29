@@ -5,6 +5,7 @@ import { runCommand } from "@/commands/registry";
 import { t } from "@/i18n";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
+import { isConvertibleImage } from "@/lib/media";
 import { isSearchPath, isVirtualPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useHistory } from "@/stores/history-store";
@@ -107,6 +108,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
         },
         { text: t("Duplicate"), command: "file.duplicate" },
         { text: t("Make Alias"), command: "file.makeAlias" },
+        ...(entries.some(isConvertibleImage)
+          ? [{ text: t("Convert Image…"), command: "file.convertImage" }]
+          : []),
         ...(entries.length > 1
           ? [
               {

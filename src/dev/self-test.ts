@@ -438,6 +438,15 @@ export async function runSelfTest(): Promise<void> {
       `diffs=${diffs.join()} copied=${syncCopy.status} undone=${unsynced.status === "error"}`,
     );
 
+    // Convert Image: an empty file isn't a picture, so nothing is made.
+    const conv = await commands.convertImage(nf1.path, "png", 640);
+    const convLeft = await commands.statPath(join(nfDir.path, "one.png"));
+    step(
+      "convert image refuses non-images",
+      conv.status === "error" && convLeft.status === "error",
+      JSON.stringify(conv.status === "error" ? conv.error : conv.data.name),
+    );
+
     // Get Info → Permissions.
     const chmod = await commands.setPermissions(nf1.path, 0o600);
     step(

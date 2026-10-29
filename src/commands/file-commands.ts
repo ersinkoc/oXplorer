@@ -9,6 +9,7 @@ import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
 import { msg, t } from "@/i18n";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
+import { isConvertibleImage } from "@/lib/media";
 import { basename, parent } from "@/lib/path";
 import { isRemotePath, remoteDirOf } from "@/lib/remote-path";
 import { isSearchPath } from "@/lib/search-path";
@@ -367,6 +368,20 @@ export function registerFileCommands(): void {
       },
     },
     { id: "file.makeAlias", title: "Make Alias", run: makeAliases },
+    {
+      id: "file.convertImage",
+      title: "Convert Image…",
+      run: () => {
+        const images = selectedEntries().filter(isConvertibleImage);
+        const sources = paths(images);
+        if (refuseArchiveMembers(sources) || refuseRemote(sources)) return;
+        if (sources.length === 0) {
+          toast(t("Select one or more pictures first."));
+          return;
+        }
+        useApp.getState().set({ convertPaths: sources });
+      },
+    },
     {
       id: "file.duplicate",
       title: "Duplicate",

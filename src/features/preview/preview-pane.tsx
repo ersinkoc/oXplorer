@@ -19,12 +19,12 @@ import {
 } from "@/lib/format";
 import { iconUrl, TAG_COLORS, thumbnailUrl } from "@/lib/icons";
 import type { FileEntry } from "@/lib/ipc";
+import { IMAGE_EXTENSIONS } from "@/lib/media";
 import { isRemotePath } from "@/lib/remote-path";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { useFolderSizes } from "@/stores/folder-size-store";
 import { useWorkspace } from "@/stores/workspace-store";
 
-const IMAGE = new Set("png jpg jpeg gif webp avif bmp ico svg heic heif tif tiff".split(" "));
 const VIDEO = new Set("mp4 m4v mov webm".split(" "));
 const AUDIO = new Set("mp3 m4a aac wav aif aiff flac ogg opus caf".split(" "));
 /** QuickLook renders these better than any in-app viewer. */
@@ -39,7 +39,7 @@ type Kind = "folder" | "image" | "video" | "audio" | "document" | "text";
 function previewKind(entry: FileEntry): Kind {
   if (isFolderLike(entry) || entry.kind === "package") return "folder";
   const ext = entry.extension?.toLowerCase() ?? "";
-  if (IMAGE.has(ext)) return "image";
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
   if (VIDEO.has(ext)) return "video";
   if (AUDIO.has(ext)) return "audio";
   if (DOCUMENT.has(ext) || entry.size > TEXT_MAX_BYTES) return "document";

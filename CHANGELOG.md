@@ -24,6 +24,7 @@ The first public build of OXplorer.
 - Rename many items at once, edit Finder tags.
 - New Folder with Selection (⌃⌘N), undone in one step.
 - Make Alias (⌃⌘A) creates a symbolic link next to the item.
+- Convert Image… makes JPEG, PNG, HEIF or TIFF copies of pictures, optionally scaled down, next to the originals (undo removes them).
 - Select by pattern (Select Matching…, `*.jpg; *.png`), Invert Selection, Deselect All (⌥⌘A).
 - Calculate Folder Sizes (⌥⌘S) shows folder totals in the list and sorts by them.
 - Find Duplicates… lists files with the same contents and moves the extra copies to the Trash.

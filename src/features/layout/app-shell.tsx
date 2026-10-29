@@ -1,4 +1,5 @@
 import { CompareFilesDialog } from "@/features/compare/compare-files-dialog";
+import { ConvertImageDialog } from "@/features/convert/convert-image-dialog";
 import { DragGhost } from "@/features/dnd/drag-ghost";
 import { useExternalDrop } from "@/features/dnd/use-external-drop";
 import { DuplicatesDialog } from "@/features/duplicates/duplicates-dialog";
@@ -47,6 +48,7 @@ export function AppShell() {
       <CompareFilesDialog />
       <DuplicatesDialog />
       <SyncDialog />
+      <ConvertImageDialog />
       <WhatsNewDialog />
       <DiskUsageDialog />
     </div>

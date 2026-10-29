@@ -2,6 +2,7 @@
 //! cooperative cancellation, and conflict prompts answered by the frontend.
 
 pub(crate) mod archive;
+pub mod convert;
 pub mod dupes;
 mod fsops;
 mod names;
@@ -410,6 +411,23 @@ pub async fn make_symlink(target: String, name: String) -> AppResult<FileEntry> 
     })
     .await
     .map_err(|e| AppError::Io { path: Some(target), message: e.to_string() })?
+}
+
+/// Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels.
+#[tauri::command]
+#[specta::specta]
+pub async fn convert_image(
+    path: String,
+    format: convert::ImageFormat,
+    max_size: Option<u32>,
+) -> AppResult<FileEntry> {
+    let src = validate_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = convert::convert(&src, format, max_size)?;
+        build_entry_for(&out).ok_or_else(|| AppError::NotFound { path: out.to_string_lossy().into_owned() })
+    })
+    .await
+    .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
 }
 
 #[cfg(test)]

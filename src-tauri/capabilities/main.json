@@ -39,6 +39,7 @@
     "allow-pause-job",
     "allow-find-duplicates",
     "allow-compare-folders",
+    "allow-convert-image",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-apps-for-path",

@@ -71,6 +71,8 @@ interface AppState extends Preferences {
   duplicatesPath: string | null;
   /** Synchronize Folders between these two folders. */
   syncPair: { left: string; right: string } | null;
+  /** Convert Image… for these pictures. */
+  convertPaths: string[] | null;
 
   set: (patch: Partial<AppState>) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -117,6 +119,7 @@ export const useApp = create<AppState>()((set) => ({
   compareFiles: null,
   duplicatesPath: null,
   syncPair: null,
+  convertPaths: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {

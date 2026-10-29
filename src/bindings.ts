@@ -51,6 +51,8 @@ export const commands = {
 	 *  `on_event`. Cancel with `cancel_job(id)`.
 	 */
 	compareFolders: (id: string, left: string, right: string, onEvent: Channel<SyncEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("compare_folders", { id, left, right, onEvent })),
+	/**  Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels. */
+	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */
@@ -397,6 +399,8 @@ export type GitStatus_Serialize = {
 	/**  The status walk hit the time limit; what's here may be incomplete. */
 	partial: boolean,
 };
+
+export type ImageFormat = "jpeg" | "png" | "heic" | "tiff";
 
 export type JobEvent = JobEvent_Serialize | JobEvent_Deserialize;
 
