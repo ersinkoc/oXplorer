@@ -299,6 +299,18 @@ pub async fn set_permissions(path: String, mode: u32) -> AppResult<FileEntry> {
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
 }
 
+/// Extract: whether a zip is encrypted, so the password can be asked for first.
+#[tauri::command]
+#[specta::specta]
+pub async fn archive_encrypted(path: String) -> AppResult<bool> {
+    let p = validate_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        archive::zip_encrypted(&p).map_err(|e| AppError::from_io(&e, &p))
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
 /// Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked").
 #[tauri::command]
 #[specta::specta]

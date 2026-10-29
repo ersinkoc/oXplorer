@@ -41,6 +41,7 @@
     "allow-compare-folders",
     "allow-convert-image",
     "allow-is-locked",
+    "allow-archive-encrypted",
     "allow-set-locked",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",

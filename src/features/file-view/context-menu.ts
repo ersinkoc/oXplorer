@@ -54,10 +54,14 @@ async function tagsSubmenu(entries: readonly FileEntry[]): Promise<Submenu> {
 async function compressSubmenu(): Promise<Submenu> {
   return Submenu.new({
     text: t("Compress"),
-    items: ARCHIVE_FORMATS.map(([format, label]) => ({
-      text: label === "zip" ? t("Zip Archive") : t("{format} Archive", { format: label }),
-      action: () => runCommand(`file.compress.${format}`),
-    })),
+    items: [
+      ...ARCHIVE_FORMATS.map(([format, label]) => ({
+        text: label === "zip" ? t("Zip Archive") : t("{format} Archive", { format: label }),
+        action: () => runCommand(`file.compress.${format}`),
+      })),
+      { item: "Separator" as const },
+      { text: t("Zip with Password…"), action: () => runCommand("file.compress.zipPassword") },
+    ],
   });
 }
 

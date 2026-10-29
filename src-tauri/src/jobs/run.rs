@@ -112,8 +112,12 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         }
         JobSpec::Trash { paths } => job.trash(validate_all(&paths)?),
         JobSpec::Delete { paths } => job.delete(validate_all(&paths)?),
-        JobSpec::Compress { sources, format } => job.compress(validate_all(&sources)?, format)?,
-        JobSpec::Extract { archives } => job.extract(validate_all(&archives)?),
+        JobSpec::Compress { sources, format, password } => {
+            job.compress(validate_all(&sources)?, format, password.as_ref().map(|p| p.0.as_str()))?;
+        }
+        JobSpec::Extract { archives, password } => {
+            job.extract(validate_all(&archives)?, password.as_ref().map(|p| p.0.as_str()));
+        }
         JobSpec::Download { sources, dest_dir } => job.download(&sources, &validate_path(&dest_dir)?),
         JobSpec::Upload { sources, dest_dir } => job.upload(&validate_all(&sources)?, &dest_dir),
         JobSpec::ExtractMembers { sources, dest_dir } => {
@@ -516,7 +520,12 @@ impl Runner<'_> {
         }
     }
 
-    fn compress(&mut self, sources: Vec<PathBuf>, format: archive::ArchiveFormat) -> Result<(), AppError> {
+    fn compress(
+        &mut self,
+        sources: Vec<PathBuf>,
+        format: archive::ArchiveFormat,
+        password: Option<&str>,
+    ) -> Result<(), AppError> {
         let parent = sources.first().and_then(|s| s.parent()).map(Path::to_path_buf);
         if sources.iter().any(|s| s.parent().map(Path::to_path_buf) != parent) {
             return Err(AppError::InvalidPath {
@@ -530,7 +539,7 @@ impl Runner<'_> {
         let result = {
             let r = &mut *self.r;
             let mut done = 0;
-            archive::compress(&sources, &dest, format, &mut |n| {
+            archive::compress(&sources, &dest, format, password, &mut |n| {
                 done += n;
                 r.progress(done, 0, &dest);
                 !r.cancelled()
@@ -542,7 +551,7 @@ impl Runner<'_> {
         Ok(())
     }
 
-    fn extract(&mut self, archives: Vec<PathBuf>) {
+    fn extract(&mut self, archives: Vec<PathBuf>, password: Option<&str>) {
         let units: Vec<u64> = archives.iter().map(|a| archive::work_units(a)).collect();
         self.r.planned(units.iter().sum(), u32::try_from(archives.len()).unwrap_or(u32::MAX));
         for (archive, total) in archives.iter().zip(units) {
@@ -553,7 +562,7 @@ impl Runner<'_> {
             let result = {
                 let r = &mut *self.r;
                 let mut done = before;
-                archive::extract(archive, &mut |n| {
+                archive::extract(archive, password, &mut |n| {
                     done += n;
                     r.progress(done, 0, archive);
                     !r.cancelled()

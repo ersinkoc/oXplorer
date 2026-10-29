@@ -31,10 +31,16 @@ pub enum JobSpec {
     Compress {
         sources: Vec<String>,
         format: ArchiveFormat,
+        /// Encrypts a zip (AES-256). Never logged or stored.
+        #[serde(default)]
+        password: Option<Password>,
     },
     /// Extracts each archive next to itself.
     Extract {
         archives: Vec<String>,
+        /// For encrypted zips.
+        #[serde(default)]
+        password: Option<Password>,
     },
     /// Downloads remote items (`remote:` paths) into a local folder.
     Download {
@@ -67,6 +73,17 @@ pub enum JobSpec {
 pub struct SyncCopy {
     pub source: String,
     pub dest: String,
+}
+
+/// An archive password: a plain string over IPC, never shown by `Debug`.
+#[derive(Clone, Deserialize, specta::Type)]
+#[serde(transparent)]
+pub struct Password(pub String);
+
+impl std::fmt::Debug for Password {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Password(…)")
+    }
 }
 
 /// Steps that reverse a finished job, in execution order. Running them is itself

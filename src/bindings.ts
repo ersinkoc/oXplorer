@@ -27,7 +27,7 @@ export const commands = {
 	 *  Starts a job and returns immediately; everything else arrives on `on_event`,
 	 *  ending with exactly one `Finished`.
 	 */
-	startJob: (id: string, spec: JobSpec, onEvent: Channel<JobEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("start_job", { id, spec, onEvent })),
+	startJob: (id: string, spec: JobSpec_Deserialize, onEvent: Channel<JobEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("start_job", { id, spec, onEvent })),
 	cancelJob: (id: string) => __TAURI_INVOKE<void>("cancel_job", { id }),
 	resolveConflict: (id: string, resolution: ConflictResolution) => __TAURI_INVOKE<void>("resolve_conflict", { id, resolution }),
 	/**  Total size of `paths` (recursively), cancellable via `cancel_job(id)`. */
@@ -55,6 +55,8 @@ export const commands = {
 	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
 	/**  Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked"). */
 	isLocked: (path: string) => typedError<boolean, AppError_Serialize>(__TAURI_INVOKE("is_locked", { path })),
+	/**  Extract: whether a zip is encrypted, so the password can be asked for first. */
+	archiveEncrypted: (path: string) => typedError<boolean, AppError_Serialize>(__TAURI_INVOKE("archive_encrypted", { path })),
 	/**  Locks or unlocks an item (the user immutable flag, like Finder). Returns the new state. */
 	setLocked: (path: string, locked: boolean) => typedError<boolean, AppError_Serialize>(__TAURI_INVOKE("set_locked", { path, locked })),
 	/**  Renames several items at once; all or nothing. */
@@ -458,15 +460,50 @@ export type JobOutcome_Serialize = {
 };
 
 /**  What the frontend asks for. Paths are absolute; `dest_dir` is a folder. */
-export type JobSpec = { kind: "copy"; sources: string[]; destDir: string } | { kind: "move"; sources: string[]; destDir: string } | 
+export type JobSpec = JobSpec_Serialize | JobSpec_Deserialize;
+
+/**  What the frontend asks for. Paths are absolute; `dest_dir` is a folder. */
+export type JobSpec_Deserialize = { kind: "copy"; sources: string[]; destDir: string } | { kind: "move"; sources: string[]; destDir: string } | 
 /**  Copies next to the original as "name copy". */
 { kind: "duplicate"; sources: string[] } | { kind: "trash"; paths: string[] } | 
 /**  Permanent; cannot be undone. */
 { kind: "delete"; paths: string[] } | 
 /**  Creates one archive of `sources` (siblings) next to them. */
-{ kind: "compress"; sources: string[]; format: ArchiveFormat } | 
+{ kind: "compress"; sources: string[]; format: ArchiveFormat; 
+/**  Encrypts a zip (AES-256). Never logged or stored. */
+password?: Password | null } | 
 /**  Extracts each archive next to itself. */
-{ kind: "extract"; archives: string[] } | 
+{ kind: "extract"; archives: string[]; 
+/**  For encrypted zips. */
+password?: Password | null } | 
+/**  Downloads remote items (`remote:` paths) into a local folder. */
+{ kind: "download"; sources: string[]; destDir: string } | 
+/**  Uploads local items into a remote folder (`remote:` path). */
+{ kind: "upload"; sources: string[]; destDir: string } | 
+/**  Copies members out of one archive (`archive:` paths) into a folder. */
+{ kind: "extractMembers"; sources: string[]; destDir: string } | 
+/**
+ *  Synchronize Folders: copies each item to its exact destination, replacing
+ *  (into the Trash) whatever is there.
+ */
+{ kind: "sync"; items: SyncCopy[] } | 
+/**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
+{ kind: "undo"; action: UndoAction };
+
+/**  What the frontend asks for. Paths are absolute; `dest_dir` is a folder. */
+export type JobSpec_Serialize = { kind: "copy"; sources: string[]; destDir: string } | { kind: "move"; sources: string[]; destDir: string } | 
+/**  Copies next to the original as "name copy". */
+{ kind: "duplicate"; sources: string[] } | { kind: "trash"; paths: string[] } | 
+/**  Permanent; cannot be undone. */
+{ kind: "delete"; paths: string[] } | 
+/**  Creates one archive of `sources` (siblings) next to them. */
+{ kind: "compress"; sources: string[]; format: ArchiveFormat; 
+/**  Encrypts a zip (AES-256). Never logged or stored. */
+password: Password | null } | 
+/**  Extracts each archive next to itself. */
+{ kind: "extract"; archives: string[]; 
+/**  For encrypted zips. */
+password: Password | null } | 
 /**  Downloads remote items (`remote:` paths) into a local folder. */
 { kind: "download"; sources: string[]; destDir: string } | 
 /**  Uploads local items into a remote folder (`remote:` path). */
@@ -514,6 +551,9 @@ export type MenuEntry_Serialize = {
 export type OpenRequested = {
 	count: number,
 };
+
+/**  An archive password: a plain string over IPC, never shown by `Debug`. */
+export type Password = string;
 
 export type PtyEvent = PtyEvent_Serialize | PtyEvent_Deserialize;
 

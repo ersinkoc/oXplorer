@@ -159,6 +159,32 @@ export async function runSelfTest(): Promise<void> {
     const inside = await commands.statPath(join(outDir, "inside.txt"));
     step("extract", outDir.endsWith("/arc 2") && inside.status === "ok", outDir);
 
+    // Zip with Password: encrypted, refused with the wrong password, opened with the right one.
+    const locked = await runJob(
+      { kind: "compress", sources: [arc.path], format: "zip", password: "s3cret pw" },
+      { history: "none" },
+    );
+    const lockedZip = locked?.created[0]?.path ?? "";
+    const encrypted = await commands.archiveEncrypted(lockedZip);
+    const wrongPw = await runJob(
+      { kind: "extract", archives: [lockedZip], password: "nope" },
+      { history: "none", select: false },
+    );
+    const rightPw = await runJob(
+      { kind: "extract", archives: [lockedZip], password: "s3cret pw" },
+      { history: "none", select: false },
+    );
+    const lockedOut = rightPw?.created[0]?.path ?? "";
+    const lockedInside = await commands.statPath(join(lockedOut, "inside.txt"));
+    step(
+      "password zip",
+      encrypted.status === "ok" &&
+        encrypted.data &&
+        (wrongPw?.failures.length ?? 0) === 1 &&
+        lockedInside.status === "ok",
+      `zip=${lockedZip} enc=${JSON.stringify(encrypted)} wrong=${JSON.stringify(wrongPw?.failures)} out=${lockedOut}`,
+    );
+
     // Browsing the zip like a folder: list, copy a member out, open one, go back up.
     navigateTo(archivePath(zipPath));
     const inZip = archivePath(zipPath, "arc");

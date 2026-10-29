@@ -15,6 +15,7 @@ import { usePreferenceEffects } from "@/features/settings/use-preference-effects
 import { Sidebar } from "@/features/sidebar/sidebar";
 import { SyncDialog } from "@/features/sync/sync-dialog";
 import { TerminalPanel } from "@/features/terminal/terminal-panel";
+import { PasswordPrompt } from "@/features/ui/password-prompt";
 import { DiskUsageDialog } from "@/features/usage/disk-usage-dialog";
 import { useLiveDirs } from "@/features/watch/use-live-dirs";
 import { Workspace } from "@/features/workspace/workspace";
@@ -49,6 +50,7 @@ export function AppShell() {
       <DuplicatesDialog />
       <SyncDialog />
       <ConvertImageDialog />
+      <PasswordPrompt />
       <WhatsNewDialog />
       <DiskUsageDialog />
     </div>

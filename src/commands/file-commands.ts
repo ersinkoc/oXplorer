@@ -7,6 +7,7 @@ import { transferSpec } from "@/commands/locations";
 import { currentFolder, refuseArchiveMembers, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
+import { askPassword } from "@/features/ui/password-prompt";
 import { msg, t } from "@/i18n";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
 import { isConvertibleImage } from "@/lib/media";
@@ -280,7 +281,7 @@ export function isArchive(entry: FileEntry): boolean {
 }
 
 /** Compresses the selection next to itself (Finder: one item → "name.zip", several → "Archive.zip"). */
-async function compress(format: ArchiveFormat): Promise<void> {
+async function compress(format: ArchiveFormat, withPassword = false): Promise<void> {
   const sel = paths(selectedEntries());
   if (sel.length === 0 || refuseArchiveMembers(sel) || refuseRemote(sel)) return;
   const folders = new Set(sel.map((p) => parent(p)));
@@ -288,7 +289,41 @@ async function compress(format: ArchiveFormat): Promise<void> {
     toast(t("Items from different folders can’t go into one archive."));
     return;
   }
-  await runJob({ kind: "compress", sources: sel, format });
+  const password = withPassword
+    ? await askPassword({
+        title: t("Zip with Password"),
+        message: t(
+          "The files are encrypted with AES-256. Finder’s Archive Utility can’t open such archives; OXplorer, Keka, The Unarchiver and 7-Zip can.",
+        ),
+        confirm: true,
+      })
+    : null;
+  if (withPassword && !password) return;
+  await runJob({ kind: "compress", sources: sel, format, password });
+}
+
+/** Extract Here: encrypted zips ask for their password first (one for all of them). */
+async function extractSelected(): Promise<void> {
+  const archives = selectedEntries()
+    .filter(isArchive)
+    .map((e) => e.path);
+  if (archives.length === 0) return;
+  const flags = await Promise.all(archives.map((a) => commands.archiveEncrypted(a)));
+  const locked = archives.filter((_, i) => {
+    const r = flags[i];
+    return r?.status === "ok" && r.data;
+  });
+  const plain = archives.filter((a) => !locked.includes(a));
+  if (plain.length > 0) await runJob({ kind: "extract", archives: plain });
+  if (locked.length === 0) return;
+  const password = await askPassword({
+    title:
+      locked.length === 1
+        ? t("“{name}” is encrypted", { name: basename(locked[0] ?? "") })
+        : t("Encrypted archives"),
+    message: t("Enter the password to extract it."),
+  });
+  if (password) await runJob({ kind: "extract", archives: locked, password });
 }
 
 /** Adds a tag to every item, or removes it when they all have it already. */
@@ -432,16 +467,8 @@ export function registerFileCommands(): void {
       title: COMPRESS_TITLES[format],
       run: () => compress(format),
     })),
-    {
-      id: "file.extract",
-      title: "Extract Here",
-      run: async () => {
-        const archives = selectedEntries()
-          .filter(isArchive)
-          .map((e) => e.path);
-        if (archives.length > 0) await runJob({ kind: "extract", archives });
-      },
-    },
+    { id: "file.compress.zipPassword", title: "Zip with Password…", run: () => compress("zip", true) },
+    { id: "file.extract", title: "Extract Here", run: extractSelected },
     {
       id: "file.getInfo",
       title: "Get Info",

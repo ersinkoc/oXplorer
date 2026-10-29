@@ -168,6 +168,7 @@ fn zip_time(meta: &fs::Metadata) -> Option<zip::DateTime> {
 fn write_zip(
     items: &[(PathBuf, String, fs::Metadata)],
     out: File,
+    password: Option<&str>,
     tick: &mut dyn FnMut(u64) -> bool,
 ) -> io::Result<()> {
     use zip::write::SimpleFileOptions;
@@ -185,8 +186,14 @@ fn write_zip(
         } else if ft.is_dir() {
             zip.add_directory(format!("{name}/"), opts).map_err(io::Error::other)?;
         } else if ft.is_file() {
-            zip.start_file(name, opts.large_file(meta.len() >= u64::from(u32::MAX)))
-                .map_err(io::Error::other)?;
+            let opts = opts.large_file(meta.len() >= u64::from(u32::MAX));
+            // AES-256 (WinZip AE-2): OXplorer, 7-Zip, Keka, The Unarchiver and bsdtar open it;
+            // Finder's Archive Utility and `unzip` can't.
+            let opts = match password {
+                Some(pw) => opts.with_aes_encryption(zip::AesMode::Aes256, pw),
+                None => opts,
+            };
+            zip.start_file(name, opts).map_err(io::Error::other)?;
             io::copy(&mut Progress { inner: File::open(path)?, tick: &mut *tick }, &mut zip)?;
         }
     }
@@ -217,10 +224,12 @@ fn write_tar<W: Write>(
 }
 
 /// Writes `sources` (siblings in one folder) into the archive `dest`.
+/// `password` encrypts a zip; other formats have no encryption.
 pub fn compress(
     sources: &[PathBuf],
     dest: &Path,
     format: ArchiveFormat,
+    password: Option<&str>,
     tick: &mut dyn FnMut(u64) -> bool,
 ) -> io::Result<()> {
     let base = sources.first().and_then(|s| s.parent()).unwrap_or(Path::new("/"));
@@ -237,7 +246,7 @@ pub fn compress(
     let result = (|| {
         let out = File::create_new(&temp)?;
         match format {
-            ArchiveFormat::Zip => write_zip(&items, out, tick)?,
+            ArchiveFormat::Zip => write_zip(&items, out, password, tick)?,
             ArchiveFormat::TarGz => {
                 let gz = flate2::write::GzEncoder::new(BufWriter::new(out), flate2::Compression::default());
                 write_tar(&items, gz, tick)?.finish()?.flush()?;
@@ -282,12 +291,17 @@ type Select<'a> = &'a dyn Fn(&Path) -> Option<PathBuf>;
 fn unzip(
     archive: &Path,
     staging: &Path,
+    password: Option<&str>,
     tick: &mut dyn FnMut(u64) -> bool,
     select: Select,
 ) -> io::Result<()> {
     let mut zip = zip::ZipArchive::new(BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
     for i in 0..zip.len() {
-        let mut entry = zip.by_index(i).map_err(io::Error::other)?;
+        let entry = match password {
+            Some(pw) => zip.by_index_decrypt(i, pw.as_bytes()),
+            None => zip.by_index(i),
+        };
+        let mut entry = entry.map_err(zip_error)?;
         let rel = entry
             .enclosed_name()
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive"))?;
@@ -324,6 +338,34 @@ fn unzip(
         }
     }
     Ok(())
+}
+
+/// A wrong or missing password reads as such, not as a generic zip error.
+fn zip_error(e: zip::result::ZipError) -> io::Error {
+    match e {
+        zip::result::ZipError::InvalidPassword => {
+            // Not PermissionDenied: that reads as a file-permission (or Full Disk Access) problem.
+            io::Error::new(io::ErrorKind::InvalidInput, "the password is wrong")
+        }
+        zip::result::ZipError::UnsupportedArchive(m) if m.contains("assword") => {
+            io::Error::new(io::ErrorKind::InvalidInput, "the archive needs a password")
+        }
+        other => io::Error::other(other),
+    }
+}
+
+/// Whether a zip has encrypted members (Extract asks for the password first).
+pub fn zip_encrypted(archive: &Path) -> io::Result<bool> {
+    if !matches!(kind_of(archive), Some((Kind::Zip, _))) {
+        return Ok(false);
+    }
+    let mut zip = zip::ZipArchive::new(BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
+    for i in 0..zip.len() {
+        if zip.by_index_raw(i).map_err(io::Error::other)?.encrypted() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn zip_to_system_time(t: zip::DateTime) -> Option<SystemTime> {
@@ -390,7 +432,11 @@ fn normalize_member(path: &Path) -> io::Result<PathBuf> {
 
 /// Extracts next to the archive like Archive Utility: a single top-level item
 /// lands as itself, anything else in a folder named after the archive.
-pub fn extract(archive: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<PathBuf> {
+pub fn extract(
+    archive: &Path,
+    password: Option<&str>,
+    tick: &mut dyn FnMut(u64) -> bool,
+) -> io::Result<PathBuf> {
     let (kind, suffix) = kind_of(archive)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a supported archive"))?;
     let dir = archive.parent().unwrap_or(Path::new("/"));
@@ -407,7 +453,7 @@ pub fn extract(archive: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<
 
     let result = (|| {
         match kind {
-            Kind::Zip => unzip(archive, &staging, tick, &|p| Some(p.to_path_buf()))?,
+            Kind::Zip => unzip(archive, &staging, password, tick, &|p| Some(p.to_path_buf()))?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
@@ -540,7 +586,7 @@ pub fn extract_members(
     };
     let result = (|| {
         match kind {
-            Kind::Zip => unzip(archive, &staging, tick, &select)?,
+            Kind::Zip => unzip(archive, &staging, None, tick, &select)?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
@@ -587,7 +633,7 @@ mod tests {
         let dest = archive_path(std::slice::from_ref(&src), format).unwrap();
         assert_eq!(dest.file_name().unwrap().to_string_lossy(), format!("project{}", format.extension()));
         let mut written = 0;
-        compress(std::slice::from_ref(&src), &dest, format, &mut |n| {
+        compress(std::slice::from_ref(&src), &dest, format, None, &mut |n| {
             written += n;
             true
         })
@@ -596,7 +642,7 @@ mod tests {
 
         // The original is still there, so the single top-level folder gets "project 2".
         let mut read = 0;
-        let out = extract(&dest, &mut |n| {
+        let out = extract(&dest, None, &mut |n| {
             read += n;
             true
         })
@@ -641,8 +687,8 @@ mod tests {
         fs::write(&b, "b").unwrap();
         let dest = archive_path(&[a.clone(), b.clone()], ArchiveFormat::Zip).unwrap();
         assert_eq!(dest, tmp.path().join("Archive.zip"));
-        compress(&[a, b], &dest, ArchiveFormat::Zip, &mut |_| true).unwrap();
-        let out = extract(&dest, &mut |_| true).unwrap();
+        compress(&[a, b], &dest, ArchiveFormat::Zip, None, &mut |_| true).unwrap();
+        let out = extract(&dest, None, &mut |_| true).unwrap();
         assert_eq!(out, tmp.path().join("Archive"));
         assert!(out.join("a.txt").exists() && out.join("b.txt").exists());
     }
@@ -652,13 +698,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let src = tree(tmp.path());
         let dest = archive_path(std::slice::from_ref(&src), ArchiveFormat::TarGz).unwrap();
-        let e =
-            compress(std::slice::from_ref(&src), &dest, ArchiveFormat::TarGz, &mut |_| false).unwrap_err();
+        let e = compress(std::slice::from_ref(&src), &dest, ArchiveFormat::TarGz, None, &mut |_| false)
+            .unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::Interrupted);
         assert!(!dest.exists());
 
-        compress(std::slice::from_ref(&src), &dest, ArchiveFormat::TarGz, &mut |_| true).unwrap();
-        let e = extract(&dest, &mut |_| false).unwrap_err();
+        compress(std::slice::from_ref(&src), &dest, ArchiveFormat::TarGz, None, &mut |_| true).unwrap();
+        let e = extract(&dest, None, &mut |_| false).unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::Interrupted);
         let names: Vec<_> = fs::read_dir(tmp.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(names.len(), 2, "{names:?}");
@@ -676,7 +722,7 @@ mod tests {
         z.start_file("../escape.txt", SimpleFileOptions::default()).unwrap();
         z.write_all(b"x").unwrap();
         z.finish().unwrap();
-        assert!(extract(&evil, &mut |_| true).is_err());
+        assert!(extract(&evil, None, &mut |_| true).is_err());
         assert!(!tmp.path().join("escape.txt").exists());
 
         let evil = tmp.path().join("evil2.zip");
@@ -685,7 +731,7 @@ mod tests {
         z.start_file("dir/planted.txt", SimpleFileOptions::default()).unwrap();
         z.write_all(b"x").unwrap();
         z.finish().unwrap();
-        assert!(extract(&evil, &mut |_| true).is_err());
+        assert!(extract(&evil, None, &mut |_| true).is_err());
         assert!(!outside.join("planted.txt").exists());
         // The staging folder is cleaned up.
         assert!(
@@ -703,7 +749,7 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let src = tree(tmp.path());
             let dest = archive_path(std::slice::from_ref(&src), format).unwrap();
-            compress(std::slice::from_ref(&src), &dest, format, &mut |_| true).unwrap();
+            compress(std::slice::from_ref(&src), &dest, format, None, &mut |_| true).unwrap();
 
             let list = members(&dest).unwrap();
             let names: Vec<&str> = list.iter().map(|m| m.path.as_str()).collect();
@@ -731,5 +777,34 @@ mod tests {
                     .starts_with('.'))
             );
         }
+    }
+
+    #[test]
+    fn password_zip_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("secret.txt");
+        fs::write(&src, b"top secret").unwrap();
+        let dest = tmp.path().join("secret.zip");
+        compress(std::slice::from_ref(&src), &dest, ArchiveFormat::Zip, Some("hunter2"), &mut |_| true)
+            .unwrap();
+        fs::remove_file(&src).unwrap();
+        assert!(zip_encrypted(&dest).unwrap());
+        // The contents aren't readable in the archive file itself.
+        assert!(!fs::read(&dest).unwrap().windows(10).any(|w| w == b"top secret"));
+
+        let missing = extract(&dest, None, &mut |_| true).unwrap_err();
+        assert_eq!(missing.to_string(), "the archive needs a password");
+        let wrong = extract(&dest, Some("nope"), &mut |_| true).unwrap_err();
+        assert_eq!(wrong.to_string(), "the password is wrong");
+        // Failed attempts leave nothing behind.
+        assert!(!src.exists());
+        assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 1);
+
+        let out = extract(&dest, Some("hunter2"), &mut |_| true).unwrap();
+        assert_eq!(fs::read(out).unwrap(), b"top secret");
+        // An ordinary zip isn't encrypted.
+        let plain = tmp.path().join("plain.zip");
+        compress(std::slice::from_ref(&dest), &plain, ArchiveFormat::Zip, None, &mut |_| true).unwrap();
+        assert!(!zip_encrypted(&plain).unwrap());
     }
 }

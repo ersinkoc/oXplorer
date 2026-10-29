@@ -35,6 +35,16 @@ export const tr: Readonly<Record<string, string>> = {
   "Over 1 GB": "1 GB üstü",
   "Any Time": "Her Zaman",
   "Any Kind": "Her Tür",
+  "Zip with Password": "Parolalı Zip",
+  "Zip with Password…": "Parolalı Zip…",
+  "The files are encrypted with AES-256. Finder’s Archive Utility can’t open such archives; OXplorer, Keka, The Unarchiver and 7-Zip can.":
+    "Dosyalar AES-256 ile şifrelenir. Finder’ın Arşiv İzlencesi bu arşivleri açamaz; OXplorer, Keka, The Unarchiver ve 7-Zip açabilir.",
+  "“{name}” is encrypted": "“{name}” şifreli",
+  "Encrypted archives": "Şifreli arşivler",
+  "Enter the password to extract it.": "Açmak için parolayı gir.",
+  Verify: "Doğrula",
+  "The passwords don’t match.": "Parolalar eşleşmiyor.",
+  OK: "Tamam",
   "This build doesn’t update itself; download the new version from GitHub.":
     "Bu sürüm kendini güncellemez; yeni sürümü GitHub'dan indir.",
   "Download…": "İndir…",
