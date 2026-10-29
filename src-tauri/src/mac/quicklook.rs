@@ -236,6 +236,15 @@ pub fn present(paths: &[PathBuf], index: usize, open: bool) {
         if !visible {
             panel.makeKeyAndOrderFront(None);
         }
+        // Looks for the controller now rather than on the next event.
+        panel.updateController();
+        if panel.dataSource().is_none() {
+            // No key window to search from (OXplorer isn't the active app): feed the
+            // panel directly; it takes the controller path once a window is key.
+            log::debug!("quick look: no controller, setting the data source directly");
+            panel.setDataSource(Some(ProtocolObject::from_ref(&*src)));
+            panel.setDelegate(Some(&src));
+        }
         panel.reloadData();
         panel.setCurrentPreviewItemIndex(index);
     }
