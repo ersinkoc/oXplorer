@@ -1,6 +1,7 @@
 name: Release
 
 # Push a tag like v0.1.0 to build a signed, notarized universal DMG and a draft release.
+# Without the Apple secrets the DMG is only ad-hoc signed (testers open it with right-click → Open).
 on:
   push:
     tags: ["v*"]
@@ -45,7 +46,9 @@ jobs:
           p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
+      # Without a certificate the build is ad-hoc signed and not notarized (a beta for testers).
       - name: Write App Store Connect key
+        if: ${{ env.HAS_CERT == 'true' }}
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: |
@@ -72,3 +75,5 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: OXplorer ${{ github.ref_name }}
           releaseDraft: true
+          # v0.1.0-beta.1 and the like are marked as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
