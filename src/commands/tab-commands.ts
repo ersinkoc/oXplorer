@@ -67,6 +67,13 @@ export function registerTabCommands(): void {
       },
     },
     {
+      id: "tab.reopen",
+      title: "Reopen Closed Tab",
+      run: () => {
+        if (!useWorkspace.getState().reopenClosedTab()) toast(t("No closed tabs to reopen."));
+      },
+    },
+    {
       id: "tab.openSelected",
       title: "Open in New Tab",
       run: () => {

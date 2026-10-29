@@ -132,6 +132,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Close Tab": "Sekmeyi Kapat",
   "Open in New Tab": "Yeni Sekmede Aç",
   "Open in New Window": "Yeni Pencerede Aç",
+  "Reopen Closed Tab": "Kapatılan Sekmeyi Yeniden Aç",
+  "No closed tabs to reopen.": "Yeniden açılacak kapatılmış sekme yok.",
   "Close Window": "Pencereyi Kapat",
   "Show Next Tab": "Sonraki Sekmeyi Göster",
   "Show Previous Tab": "Önceki Sekmeyi Göster",

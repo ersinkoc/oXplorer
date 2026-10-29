@@ -75,6 +75,8 @@ interface WorkspaceState {
   /** Moves a tab to `index` within `toPane` (the same or the other pane). */
   moveTab: (pane: PaneId, id: string, toPane: PaneId, index: number) => void;
   togglePin: (pane: PaneId, id: string) => void;
+  /** Brings back the most recently closed tab (⇧⌘T). Returns false if there is none. */
+  reopenClosedTab: () => boolean;
 }
 
 export function newTab(path: string, init: Partial<Omit<TabState, "path">> = {}): TabState {
@@ -109,11 +111,34 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
+/** Recently closed tabs, newest last, for ⇧⌘T. */
+interface ClosedTab {
+  pane: PaneId;
+  index: number;
+  path: string;
+  history: { stack: string[]; index: number };
+  view: { mode: ViewMode; sort: SortConfig };
+}
+const CLOSED_KEEP = 20;
+const closedTabs: ClosedTab[] = [];
+
 /** After removing tabs, activates the right neighbor of the old active tab (or the last tab). */
-function removeTabs(pane: PaneState, drop: (t: TabState, i: number) => boolean): void {
+function removeTabs(pane: PaneState, drop: (t: TabState, i: number) => boolean, id: PaneId): void {
   const activeIndex = pane.tabs.findIndex((t) => t.id === pane.activeTabId);
   const kept = pane.tabs.filter((t, i) => !drop(t, i));
   if (kept.length === 0) return;
+  pane.tabs.forEach((t, index) => {
+    if (kept.includes(t)) return;
+    // Plain copies: `t` is an Immer draft that's revoked after this update.
+    closedTabs.push({
+      pane: id,
+      index,
+      path: t.path,
+      history: { stack: [...t.history.stack], index: t.history.index },
+      view: { mode: t.view.mode, sort: { ...t.view.sort } },
+    });
+  });
+  closedTabs.splice(0, Math.max(0, closedTabs.length - CLOSED_KEEP));
   if (!kept.some((t) => t.id === pane.activeTabId)) {
     const right = pane.tabs.slice(activeIndex + 1).find((t) => kept.includes(t));
     pane.activeTabId = (right ?? kept.at(-1) ?? kept[0])?.id ?? pane.activeTabId;
@@ -220,14 +245,14 @@ export const useWorkspace = create<WorkspaceState>()(
 
     closeTab: (pane, id) => {
       if (get().panes[pane].tabs.length <= 1) return false;
-      set((s) => removeTabs(s.panes[pane], (t) => t.id === id));
+      set((s) => removeTabs(s.panes[pane], (t) => t.id === id, pane));
       return true;
     },
 
     closeOtherTabs: (pane, id) =>
       set((s) => {
         s.panes[pane].activeTabId = id;
-        removeTabs(s.panes[pane], (t) => t.id !== id && !t.pinned);
+        removeTabs(s.panes[pane], (t) => t.id !== id && !t.pinned, pane);
       }),
 
     closeTabsToRight: (pane, id) =>
@@ -235,8 +260,26 @@ export const useWorkspace = create<WorkspaceState>()(
         const p = s.panes[pane];
         const at = p.tabs.findIndex((t) => t.id === id);
         if (at < 0) return;
-        removeTabs(p, (t, i) => i > at && !t.pinned);
+        removeTabs(p, (t, i) => i > at && !t.pinned, pane);
       }),
+
+    reopenClosedTab: () => {
+      const closed = closedTabs.pop();
+      if (!closed) return false;
+      set((s) => {
+        // The right pane may be gone since; the tab then comes back on the left.
+        const paneId = closed.pane === "right" && !s.dualPane ? "left" : closed.pane;
+        const p = s.panes[paneId];
+        const tab = newTab(closed.path, {
+          history: closed.history,
+          view: { ...closed.view, filter: "" },
+        });
+        p.tabs.splice(Math.min(closed.index, p.tabs.length), 0, castDraft(tab));
+        p.activeTabId = tab.id;
+        s.activePane = paneId;
+      });
+      return true;
+    },
 
     activateTab: (pane, id) =>
       set((s) => {

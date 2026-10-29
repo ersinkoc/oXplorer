@@ -45,6 +45,7 @@ const FILE: &[Item] = &[
     ("file.moveToOther", "Move to Other Pane", Some("F6")),
     SEP,
     ("tab.close", "Close Tab", Some("CmdOrCtrl+W")),
+    ("tab.reopen", "Reopen Closed Tab", Some("Shift+CmdOrCtrl+T")),
     ("window.close", "Close Window", Some("Shift+CmdOrCtrl+W")),
 ];
 
