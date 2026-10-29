@@ -46,6 +46,11 @@ export const commands = {
 	pauseJob: (id: string, paused: boolean) => __TAURI_INVOKE<void>("pause_job", { id, paused }),
 	/**  Find Duplicates in `path`; groups stream through `on_event`. Cancel with `cancel_job(id)`. */
 	findDuplicates: (id: string, path: string, onEvent: Channel<DupEvent>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("find_duplicates", { id, path, onEvent })),
+	/**
+	 *  Synchronize Folders: differences between `left` and `right` stream through
+	 *  `on_event`. Cancel with `cancel_job(id)`.
+	 */
+	compareFolders: (id: string, left: string, right: string, onEvent: Channel<SyncEvent_Deserialize>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("compare_folders", { id, left, right, onEvent })),
 	/**  Renames several items at once; all or nothing. */
 	batchRename: (items: RenameItem[]) => typedError<BatchRenameOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("batch_rename", { items })),
 	/**  Puts files on the general pasteboard so Finder (and other apps) can paste them. */
@@ -455,6 +460,11 @@ export type JobSpec = { kind: "copy"; sources: string[]; destDir: string } | { k
 { kind: "upload"; sources: string[]; destDir: string } | 
 /**  Copies members out of one archive (`archive:` paths) into a folder. */
 { kind: "extractMembers"; sources: string[]; destDir: string } | 
+/**
+ *  Synchronize Folders: copies each item to its exact destination, replacing
+ *  (into the Trash) whatever is there.
+ */
+{ kind: "sync"; items: SyncCopy[] } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
@@ -577,6 +587,36 @@ export type SymlinkInfo = {
 	targetIsDir: boolean,
 	broken: boolean,
 };
+
+export type SyncCopy = {
+	source: string,
+	dest: string,
+};
+
+export type SyncEvent = SyncEvent_Serialize | SyncEvent_Deserialize;
+
+export type SyncEvent_Deserialize = 
+/**  Folders compared so far. */
+{ type: "progress"; folders: number } | { type: "item"; 
+/**  Path below both roots, "/"-separated. */
+rel: string; status: SyncStatus; left?: SyncSide | null; right?: SyncSide | null } | { type: "done"; items: number };
+
+export type SyncEvent_Serialize = 
+/**  Folders compared so far. */
+{ type: "progress"; folders: number } | { type: "item"; 
+/**  Path below both roots, "/"-separated. */
+rel: string; status: SyncStatus; left: SyncSide | null; right: SyncSide | null } | { type: "done"; items: number };
+
+/**  One side of a difference. */
+export type SyncSide = {
+	dir: boolean,
+	size: number,
+	modifiedMs: number | null,
+};
+
+export type SyncStatus = "leftOnly" | "rightOnly" | "leftNewer" | "rightNewer" | 
+/**  Same time, different size (or a file on one side and a folder on the other). */
+"differs";
 
 /**  The items after a tag edit, and how to put their tags back. */
 export type TagEditOutcome = TagEditOutcome_Serialize | TagEditOutcome_Deserialize;

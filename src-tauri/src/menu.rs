@@ -62,6 +62,7 @@ const WINDOW: &[Item] = &[
     SEP,
     ("pane.compare", "Compare Panes", None),
     ("pane.selectDifferences", "Select Differences", None),
+    ("pane.synchronize", "Synchronize Folders…", None),
     ("file.compareFiles", "Compare Files", None),
 ];
 

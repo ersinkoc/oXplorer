@@ -51,10 +51,22 @@ pub enum JobSpec {
         sources: Vec<String>,
         dest_dir: String,
     },
+    /// Synchronize Folders: copies each item to its exact destination, replacing
+    /// (into the Trash) whatever is there.
+    Sync {
+        items: Vec<SyncCopy>,
+    },
     /// Replays an `UndoAction` from an earlier job (undo and redo alike).
     Undo {
         action: UndoAction,
     },
+}
+
+#[derive(Debug, Clone, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncCopy {
+    pub source: String,
+    pub dest: String,
 }
 
 /// Steps that reverse a finished job, in execution order. Running them is itself

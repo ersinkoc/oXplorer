@@ -198,6 +198,25 @@ export function registerTabCommands(): void {
       },
     },
     {
+      id: "pane.synchronize",
+      title: "Synchronize Folders…",
+      run: () => {
+        const ws = useWorkspace.getState();
+        if (!ws.dualPane) {
+          toast(t("Open the second pane first (⌘U)."));
+          return;
+        }
+        const left = getActiveTab("left").path;
+        const right = getActiveTab("right").path;
+        if (isVirtualPath(left) || isVirtualPath(right)) {
+          toast(t("Synchronize works with folders on this Mac."));
+          return;
+        }
+        if (left === right) return;
+        useApp.getState().set({ syncPair: { left, right } });
+      },
+    },
+    {
       id: "pane.selectDifferences",
       title: "Select Differences",
       run: () => {

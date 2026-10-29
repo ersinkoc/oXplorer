@@ -12,6 +12,7 @@ import { BatchRenameDialog } from "@/features/rename/batch-rename-dialog";
 import { SelectMatchingDialog } from "@/features/selection/select-matching-dialog";
 import { usePreferenceEffects } from "@/features/settings/use-preference-effects";
 import { Sidebar } from "@/features/sidebar/sidebar";
+import { SyncDialog } from "@/features/sync/sync-dialog";
 import { TerminalPanel } from "@/features/terminal/terminal-panel";
 import { DiskUsageDialog } from "@/features/usage/disk-usage-dialog";
 import { useLiveDirs } from "@/features/watch/use-live-dirs";
@@ -45,6 +46,7 @@ export function AppShell() {
       <SelectMatchingDialog />
       <CompareFilesDialog />
       <DuplicatesDialog />
+      <SyncDialog />
       <WhatsNewDialog />
       <DiskUsageDialog />
     </div>

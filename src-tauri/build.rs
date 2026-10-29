@@ -15,6 +15,7 @@ const COMMANDS: &[&str] = &[
     "set_permissions",
     "pause_job",
     "find_duplicates",
+    "compare_folders",
     "pasteboard_write_files",
     "pasteboard_read_files",
     "apps_for_path",

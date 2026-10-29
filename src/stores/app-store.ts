@@ -69,6 +69,8 @@ interface AppState extends Preferences {
   syncBrowse: boolean;
   /** Folder searched in the Find Duplicates window. */
   duplicatesPath: string | null;
+  /** Synchronize Folders between these two folders. */
+  syncPair: { left: string; right: string } | null;
 
   set: (patch: Partial<AppState>) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
@@ -114,6 +116,7 @@ export const useApp = create<AppState>()((set) => ({
   syncBrowse: false,
   compareFiles: null,
   duplicatesPath: null,
+  syncPair: null,
 
   set: (patch) => set(patch),
   setPreference: (key, value) => {

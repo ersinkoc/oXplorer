@@ -32,6 +32,7 @@ const LABELS: Record<JobSpec["kind"], string> = {
   extractMembers: msg("Copying"),
   download: msg("Downloading"),
   upload: msg("Uploading"),
+  sync: msg("Synchronizing"),
   undo: msg("Undoing"),
 };
 
@@ -60,7 +61,8 @@ export async function runJob(
         current: "",
         conflict: null,
         paused: false,
-        pausable: spec.kind === "copy" || spec.kind === "move" || spec.kind === "duplicate",
+        pausable:
+          spec.kind === "copy" || spec.kind === "move" || spec.kind === "duplicate" || spec.kind === "sync",
       },
     },
   }));
@@ -120,6 +122,7 @@ const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
   extractMembers: msg("Copy"),
   download: msg("Download"),
   upload: msg("Upload"),
+  sync: msg("Synchronize"),
 };
 
 /** Jobs that ran this long get a system notification when OXplorer isn't in front. */

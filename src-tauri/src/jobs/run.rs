@@ -84,6 +84,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Compress { .. } => "Compress",
         JobSpec::Extract { .. } => "Extract",
         JobSpec::ExtractMembers { .. } | JobSpec::Download { .. } | JobSpec::Upload { .. } => "Copy",
+        JobSpec::Sync { .. } => "Synchronize",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -117,6 +118,15 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Upload { sources, dest_dir } => job.upload(&validate_all(&sources)?, &dest_dir),
         JobSpec::ExtractMembers { sources, dest_dir } => {
             job.extract_members(&sources, &validate_path(&dest_dir)?)?;
+        }
+        JobSpec::Sync { items } => {
+            let pairs = items
+                .iter()
+                .map(|i| Ok((validate_path(&i.source)?, validate_path(&i.dest)?)))
+                .collect::<Result<Vec<_>, AppError>>()?;
+            // The user already chose which side wins.
+            job.policy = Some(ConflictChoice::Replace);
+            job.transfer(pairs, Mode::Copy);
         }
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }

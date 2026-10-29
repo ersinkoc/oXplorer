@@ -5,6 +5,7 @@ import {
   commands,
   type DupEvent,
   type MeasureEvent,
+  type SyncEvent,
   type UsageEvent_Deserialize,
   type UsageEvent_Serialize,
   type UsageNode,
@@ -409,6 +410,32 @@ export async function runSelfTest(): Promise<void> {
       "merge folders",
       !!paused && merged.every((r) => r.status === "ok"),
       `paused=${!!paused} ${merged.map((r) => r.status).join(",")}`,
+    );
+
+    // Synchronize Folders: a file on one side only is copied over, and undo removes it.
+    const syncL = await unwrap(commands.createItem(folder.path, "mirror left", true));
+    const syncR = await unwrap(commands.createItem(folder.path, "mirror right", true));
+    await unwrap(commands.createItem(syncL.path, "only.txt", false));
+    const syncChannel = new Channel<SyncEvent>();
+    const diffs: string[] = [];
+    let syncDone = false;
+    syncChannel.onmessage = (ev) => {
+      if (ev.type === "item") diffs.push(`${ev.rel}:${ev.status}`);
+      if (ev.type === "done") syncDone = true;
+    };
+    await unwrap(commands.compareFolders(crypto.randomUUID(), syncL.path, syncR.path, syncChannel));
+    await waitFor(() => syncDone, 5000);
+    const synced = await runJob(
+      { kind: "sync", items: [{ source: join(syncL.path, "only.txt"), dest: join(syncR.path, "only.txt") }] },
+      { history: "none" },
+    );
+    const syncCopy = await commands.statPath(join(syncR.path, "only.txt"));
+    if (synced?.undo) await runJob({ kind: "undo", action: synced.undo }, { history: "none" });
+    const unsynced = await commands.statPath(join(syncR.path, "only.txt"));
+    step(
+      "synchronize folders + undo",
+      diffs.join() === "only.txt:leftOnly" && syncCopy.status === "ok" && unsynced.status === "error",
+      `diffs=${diffs.join()} copied=${syncCopy.status} undone=${unsynced.status === "error"}`,
     );
 
     // Get Info → Permissions.

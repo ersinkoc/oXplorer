@@ -7,6 +7,7 @@ mod fsops;
 mod names;
 mod rename;
 mod run;
+pub mod sync;
 mod types;
 
 use std::collections::{HashMap, HashSet};
@@ -156,7 +157,10 @@ pub fn start_job(
 ) -> AppResult<()> {
     let (cancel, conflict, paused) = jobs.register(&id)?;
     // Only local copies pause: archive and server streams would time out while held open.
-    let pausable = matches!(spec, JobSpec::Copy { .. } | JobSpec::Move { .. } | JobSpec::Duplicate { .. });
+    let pausable = matches!(
+        spec,
+        JobSpec::Copy { .. } | JobSpec::Move { .. } | JobSpec::Duplicate { .. } | JobSpec::Sync { .. }
+    );
     let paused = if pausable { paused } else { Arc::new(AtomicBool::new(false)) };
     let manager = Arc::clone(&jobs);
     std::thread::Builder::new()
@@ -214,6 +218,28 @@ pub async fn find_duplicates(
     let manager = Arc::clone(&jobs);
     tauri::async_runtime::spawn_blocking(move || {
         dupes::find(&root, &mut |ev| !cancel.load(Ordering::Relaxed) && on_event.send(ev).is_ok());
+        manager.unregister(&id);
+    });
+    Ok(())
+}
+
+/// Synchronize Folders: differences between `left` and `right` stream through
+/// `on_event`. Cancel with `cancel_job(id)`.
+#[tauri::command]
+#[specta::specta]
+pub async fn compare_folders(
+    jobs: State<'_, Arc<JobManager>>,
+    id: String,
+    left: String,
+    right: String,
+    on_event: Channel<sync::SyncEvent>,
+) -> AppResult<()> {
+    let left = validate_path(&left)?;
+    let right = validate_path(&right)?;
+    let (cancel, _, _) = jobs.register(&id)?;
+    let manager = Arc::clone(&jobs);
+    tauri::async_runtime::spawn_blocking(move || {
+        sync::compare(&left, &right, &mut |ev| !cancel.load(Ordering::Relaxed) && on_event.send(ev).is_ok());
         manager.unregister(&id);
     });
     Ok(())

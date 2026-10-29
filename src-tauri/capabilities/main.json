@@ -38,6 +38,7 @@
     "allow-set-permissions",
     "allow-pause-job",
     "allow-find-duplicates",
+    "allow-compare-folders",
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-apps-for-path",
