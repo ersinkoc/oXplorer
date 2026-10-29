@@ -17,6 +17,8 @@ export interface JobView {
   current: string;
   conflict: JobConflict | null;
   paused: boolean;
+  /** Local copy / move / duplicate (archive and server transfers can't be held open). */
+  pausable: boolean;
 }
 
 interface JobsState {

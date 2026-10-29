@@ -54,6 +54,7 @@ export const tr: Readonly<Record<string, string>> = {
   Synced: "Eşzamanlı",
   "Compare Files": "Dosyaları Karşılaştır",
   "The files are identical.": "Dosyalar aynı.",
+  "No differences in the part that was compared.": "Karşılaştırılan kısımda fark yok.",
   "1 line removed": "1 satır silindi",
   "{count} lines removed": "{count} satır silindi",
   "1 line added": "1 satır eklendi",

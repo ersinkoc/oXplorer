@@ -60,6 +60,7 @@ export async function runJob(
         current: "",
         conflict: null,
         paused: false,
+        pausable: spec.kind === "copy" || spec.kind === "move" || spec.kind === "duplicate",
       },
     },
   }));

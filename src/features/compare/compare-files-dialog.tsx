@@ -57,7 +57,9 @@ function useDiff(left: FileEntry, right: FileEntry): Result {
           a.truncated ? left.length - 1 : Number.POSITIVE_INFINITY,
           b.truncated ? right.length - 1 : Number.POSITIVE_INFINITY,
         );
-        const lines = diffLines(left.slice(0, cut), right.slice(0, cut));
+        // One long cut-off line leaves nothing whole to compare; compare what was read.
+        const end = cut >= 1 ? cut : undefined;
+        const lines = diffLines(left.slice(0, end), right.slice(0, end));
         setResult(
           lines
             ? { status: "done", lines, truncated: a.truncated || b.truncated }
@@ -96,7 +98,9 @@ function Body({ pair: [left, right], onClose }: { pair: [FileEntry, FileEntry]; 
         {result.status === "done" && (
           <p className="m-0 shrink-0 text-[12px] text-fg-muted">
             {added + removed === 0
-              ? t("The files are identical.")
+              ? result.truncated
+                ? t("No differences in the part that was compared.")
+                : t("The files are identical.")
               : `${tn(removed, "1 line removed", "{count} lines removed")}, ${tn(added, "1 line added", "{count} lines added")}`}
           </p>
         )}

@@ -51,7 +51,16 @@ export function registerAppCommands(): void {
     { id: "nav.desktop", title: "Desktop", run: () => goToLocation("desktop") },
     { id: "nav.downloads", title: "Downloads", run: () => goToLocation("downloads") },
     { id: "nav.applications", title: "Applications", run: () => goToLocation("applications") },
-    { id: "nav.utilities", title: "Utilities", run: () => navigateTo("/Applications/Utilities") },
+    {
+      id: "nav.utilities",
+      title: "Utilities",
+      run: async () => {
+        // Apple's utilities live in /System/Applications since macOS 10.15.
+        for (const path of ["/System/Applications/Utilities", "/Applications/Utilities"]) {
+          if ((await commands.statPath(path)).status === "ok") return navigateTo(path);
+        }
+      },
+    },
     { id: "nav.goToFolder", title: "Go to Folder…", run: () => useApp.getState().set({ editingPath: true }) },
 
     {

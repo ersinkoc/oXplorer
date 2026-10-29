@@ -1,5 +1,5 @@
 import { Channel } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { commands, type MeasureEvent, type SizeInfo } from "@/bindings";
 import { FileIcon } from "@/features/file-view/file-icon";
@@ -94,10 +94,23 @@ const BITS = [
 function PermissionsEditor({ path, initial }: { path: string; initial: number }) {
   const { t } = useT();
   const [mode, setMode] = useState(initial & 0o777);
-  const toggle = async (bit: number) => {
-    const r = await commands.setPermissions(path, mode ^ bit);
-    if (r.status === "ok") setMode(r.data.mode & 0o777);
-    else toast.error(describeError(toAppError(r.error)));
+  // Quick clicks build on each other and reach the disk in order.
+  const latest = useRef(initial & 0o777);
+  const queue = useRef(Promise.resolve());
+  const toggle = (bit: number) => {
+    latest.current ^= bit;
+    const next = latest.current;
+    setMode(next);
+    queue.current = queue.current.then(async () => {
+      const r = await commands.setPermissions(path, next);
+      if (r.status === "ok") return;
+      toast.error(describeError(toAppError(r.error)));
+      const now = await commands.statPath(path);
+      if (now.status === "ok") {
+        latest.current = now.data.mode & 0o777;
+        setMode(latest.current);
+      }
+    });
   };
   return (
     <div className="flex flex-col gap-0.5">
@@ -122,7 +135,7 @@ function PermissionsEditor({ path, initial }: { path: string; initial: number })
                     type="checkbox"
                     aria-label={`${t(who)} ${t(label)}`}
                     checked={(mode & (bit << shift)) !== 0}
-                    onChange={() => void toggle(bit << shift)}
+                    onChange={() => toggle(bit << shift)}
                   />
                 </td>
               ))}

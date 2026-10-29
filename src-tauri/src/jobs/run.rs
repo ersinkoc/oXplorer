@@ -240,7 +240,8 @@ impl Runner<'_> {
         }
 
         if let Ok(existing) = dst.symlink_metadata() {
-            let folders = meta.is_dir() && existing.is_dir();
+            // Packages (.app, .pages) are replaced or kept whole, never mixed.
+            let folders = meta.is_dir() && existing.is_dir() && !is_package(src) && !is_package(&dst);
             let choice = match self.policy {
                 _ if folders && self.merge_all => ConflictChoice::Merge,
                 Some(c) => c,
@@ -319,13 +320,14 @@ impl Runner<'_> {
     fn merge(&mut self, src: &Path, dst: &Path, mode: Mode) -> Result<bool, JobFailure> {
         let children: Vec<PathBuf> =
             fs::read_dir(src).map_err(|e| err(src, &e))?.flatten().map(|e| e.path()).collect();
-        let mut all = true;
+        let (mut all, mut any) = (true, false);
         for child in children {
             if self.should_stop() {
-                return Ok(false);
+                all = false;
+                break;
             }
             match self.transfer_one(&child, dst.join(child.file_name().unwrap_or_default()), mode) {
-                Ok(true) => {}
+                Ok(true) => any = true,
                 Ok(false) => all = false,
                 Err(f) => {
                     all = false;
@@ -333,11 +335,12 @@ impl Runner<'_> {
                 }
             }
         }
-        if mode == Mode::Move && all {
-            // Empty now; undo recreates it when moving the items back.
-            let _ = fs::remove_dir(src);
+        // Empty now; undo recreates it when moving the items back.
+        if mode == Mode::Move && all && fs::remove_dir(src).is_ok() {
+            self.removed.push(src.to_path_buf());
         }
-        Ok(true)
+        // Counts as skipped only if nothing went in.
+        Ok(any || all)
     }
 
     fn copy_tree(&mut self, src: &Path, dst: &Path) -> Result<(), JobFailure> {
@@ -750,6 +753,24 @@ mod tests {
         let out = run(JobSpec::Undo { action }, &mut Fake::new(ConflictChoice::Skip)).unwrap();
         assert_eq!(out.failures.len(), 1);
         assert_eq!(fs::read(root.join("box/a.txt")).unwrap(), b"old");
+    }
+
+    #[test]
+    fn merge_never_mixes_packages() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir_all(root.join("src/Thing.app/Contents")).unwrap();
+        fs::create_dir_all(root.join("dest/Thing.app/Contents")).unwrap();
+        fs::write(root.join("src/Thing.app/Contents/new"), b"").unwrap();
+        fs::write(root.join("dest/Thing.app/Contents/old"), b"").unwrap();
+        let out = run(
+            JobSpec::Copy { sources: vec![s(&root.join("src/Thing.app"))], dest_dir: s(&root.join("dest")) },
+            &mut Fake::new(ConflictChoice::Merge),
+        )
+        .unwrap();
+        assert!(out.failures.is_empty(), "{:?}", out.failures);
+        assert!(!root.join("dest/Thing.app/Contents/new").exists(), "bundles must not be mixed");
+        assert!(root.join("dest/Thing 2.app/Contents/new").exists());
     }
 
     #[test]

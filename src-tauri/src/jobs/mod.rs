@@ -154,6 +154,9 @@ pub fn start_job(
     on_event: Channel<JobEvent>,
 ) -> AppResult<()> {
     let (cancel, conflict, paused) = jobs.register(&id)?;
+    // Only local copies pause: archive and server streams would time out while held open.
+    let pausable = matches!(spec, JobSpec::Copy { .. } | JobSpec::Move { .. } | JobSpec::Duplicate { .. });
+    let paused = if pausable { paused } else { Arc::new(AtomicBool::new(false)) };
     let manager = Arc::clone(&jobs);
     std::thread::Builder::new()
         .name(format!("job-{id}"))
