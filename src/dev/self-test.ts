@@ -235,6 +235,32 @@ export async function runSelfTest(): Promise<void> {
       JSON.stringify(verified),
     );
 
+    // Create Checksum File, then verify the list it wrote: both files check out.
+    const sumsJob = await runJob(
+      { kind: "checksums", sources: [zipPath, joinedEntry?.path ?? ""], algorithm: "sha256" },
+      { history: "none", select: false },
+    );
+    const sums = sumsJob?.created[0];
+    const sumStatuses: string[] = [];
+    let sumsDone = false;
+    const sumsChannel = new Channel<VerifyEvent>();
+    sumsChannel.onmessage = (ev) => {
+      if (ev.type === "item") sumStatuses.push(ev.status);
+      if (ev.type === "done") sumsDone = true;
+    };
+    const sumsVerified = sums
+      ? await commands.verifyChecksums(crypto.randomUUID(), sums.path, sumsChannel)
+      : null;
+    await waitFor(() => sumsDone, 5000);
+    step(
+      "create checksum file",
+      sums?.name === "SHA256SUMS" &&
+        sumsVerified?.status === "ok" &&
+        sumStatuses.length === 2 &&
+        sumStatuses.every((st) => st === "ok"),
+      `list=${sums?.path} verified=${JSON.stringify(sumsVerified)} statuses=${sumStatuses}`,
+    );
+
     // Empty Trash's count (never the job itself here: it would erase the real Trash).
     const inTrash = await commands.trashCount();
     step(

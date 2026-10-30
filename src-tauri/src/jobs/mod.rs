@@ -168,6 +168,7 @@ pub fn start_job(
             | JobSpec::Sync { .. }
             | JobSpec::Split { .. }
             | JobSpec::Join { .. }
+            | JobSpec::Checksums { .. }
     );
     let paused = if pausable { paused } else { Arc::new(AtomicBool::new(false)) };
     let manager = Arc::clone(&jobs);

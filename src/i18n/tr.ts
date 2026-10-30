@@ -94,6 +94,20 @@ export const tr: Readonly<Record<string, string>> = {
   Split: "Böl",
   "Verify Checksums…": "Sağlama Toplamlarını Doğrula…",
   "Verify Checksums": "Sağlama Toplamlarını Doğrula",
+  "Create Checksum File…": "Sağlama Toplamı Dosyası Oluştur…",
+  "Create Checksum File": "Sağlama Toplamı Dosyası Oluştur",
+  Hashing: "Özet hesaplanıyor",
+  "Select the files to list (folders can’t be hashed).":
+    "Listelenecek dosyaları seç (klasörlerin özeti hesaplanamaz).",
+  "Select files from one folder.": "Tek bir klasördeki dosyaları seç.",
+  "SHA-256 (recommended)": "SHA-256 (önerilen)",
+  "Checksum of “{name}”": "“{name}” sağlama toplamı",
+  "Checksum of {count} file": "{count} dosyanın sağlama toplamı",
+  "Checksums of {count} files": "{count} dosyanın sağlama toplamları",
+  Algorithm: "Algoritma",
+  "Saves “{name}” in the same folder. Choose Verify Checksums… on it later to check the files.":
+    "“{name}” aynı klasöre kaydedilir. Dosyaları daha sonra denetlemek için onda Sağlama Toplamlarını Doğrula… komutunu seç.",
+  Create: "Oluştur",
   "Select a checksum list (such as SHA256SUMS or a .sha256 file).":
     "Bir sağlama toplamı listesi seç (SHA256SUMS ya da .sha256 dosyası gibi).",
   "Checksums in “{name}”": "“{name}” içindeki sağlama toplamları",

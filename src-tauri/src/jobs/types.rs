@@ -76,6 +76,11 @@ pub enum JobSpec {
     },
     /// Empty Trash: permanently deletes everything in the user's Trash.
     EmptyTrash,
+    /// Create Checksum File: hashes `sources` (files in one folder) into a list beside them.
+    Checksums {
+        sources: Vec<String>,
+        algorithm: super::verify::HashKind,
+    },
     /// Replays an `UndoAction` from an earlier job (undo and redo alike).
     Undo {
         action: UndoAction,

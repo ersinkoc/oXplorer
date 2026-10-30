@@ -1,19 +1,20 @@
 //! Verify Checksums: checks the files a checksum list names (`SHA256SUMS`,
 //! `file.iso.sha256`, `.md5`, …) against their hashes. Both the GNU format
 //! (`<hex>  name`, `<hex> *name`) and the BSD one (`SHA256 (name) = <hex>`)
-//! are read; the algorithm follows from the hash's length.
+//! are read; the algorithm follows from the hash's length. Create Checksum
+//! File writes the GNU format.
 
 use std::fs;
 use std::io::{self, Read as _};
 use std::path::{Component, Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
 /// Checksum lists are small; anything bigger isn't one.
 const MAX_LIST: u64 = 4 << 20;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub enum HashKind {
     Md5,
@@ -31,6 +32,17 @@ impl HashKind {
             128 => Some(Self::Sha512),
             _ => None,
         }
+    }
+
+    /// The list name tools use: `SHA256SUMS` for many files, `x.iso.sha256` for one.
+    fn list_name(self, single: Option<&str>) -> String {
+        let (sums, ext) = match self {
+            Self::Md5 => ("MD5SUMS", "md5"),
+            Self::Sha1 => ("SHA1SUMS", "sha1"),
+            Self::Sha256 => ("SHA256SUMS", "sha256"),
+            Self::Sha512 => ("SHA512SUMS", "sha512"),
+        };
+        single.map_or_else(|| sums.to_owned(), |name| format!("{name}.{ext}"))
     }
 }
 
@@ -110,29 +122,30 @@ fn resolve(dir: &Path, name: &str) -> Option<PathBuf> {
     rel.components().all(|c| matches!(c, Component::Normal(_) | Component::CurDir)).then(|| dir.join(rel))
 }
 
-fn hash_file<D: Digest>(path: &Path, stop: &dyn Fn() -> bool) -> io::Result<String> {
+/// `tick` gets byte counts and returns false to stop (`Interrupted`).
+fn hash_file<D: Digest>(path: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<String> {
     let mut file = fs::File::open(path)?;
     let mut hasher = D::new();
     let mut buf = vec![0u8; 1 << 20];
     loop {
-        if stop() {
-            return Err(io::ErrorKind::Interrupted.into());
-        }
         let n = file.read(&mut buf)?;
         if n == 0 {
             break;
         }
         hasher.update(&buf[..n]);
+        if !tick(n as u64) {
+            return Err(io::ErrorKind::Interrupted.into());
+        }
     }
     Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
-fn hash(kind: HashKind, path: &Path, stop: &dyn Fn() -> bool) -> io::Result<String> {
+fn hash(kind: HashKind, path: &Path, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<String> {
     match kind {
-        HashKind::Md5 => hash_file::<md5::Md5>(path, stop),
-        HashKind::Sha1 => hash_file::<sha1::Sha1>(path, stop),
-        HashKind::Sha256 => hash_file::<sha2::Sha256>(path, stop),
-        HashKind::Sha512 => hash_file::<sha2::Sha512>(path, stop),
+        HashKind::Md5 => hash_file::<md5::Md5>(path, tick),
+        HashKind::Sha1 => hash_file::<sha1::Sha1>(path, tick),
+        HashKind::Sha256 => hash_file::<sha2::Sha256>(path, tick),
+        HashKind::Sha512 => hash_file::<sha2::Sha512>(path, tick),
     }
 }
 
@@ -158,7 +171,8 @@ pub fn verify(
         let status = match &target {
             None => VerifyStatus::Unreadable,
             Some(p) if fs::symlink_metadata(p).is_err() => VerifyStatus::Missing,
-            Some(p) => match hash(e.kind, p, stop) {
+            Some(_) if stop() => break,
+            Some(p) => match hash(e.kind, p, &mut |_| !stop()) {
                 Ok(h) if h == e.hex => VerifyStatus::Ok,
                 Ok(_) => VerifyStatus::Mismatch,
                 Err(err) if err.kind() == io::ErrorKind::Interrupted => break,
@@ -172,6 +186,53 @@ pub fn verify(
     }
     emit(VerifyEvent::Done { cancelled: stop() });
     Ok(())
+}
+
+/// Create Checksum File: hashes `files` (all in one folder) and writes a list
+/// next to them under a free name. Nothing is written when cancelled or failed.
+pub fn create(files: &[PathBuf], kind: HashKind, tick: &mut dyn FnMut(u64) -> bool) -> io::Result<PathBuf> {
+    let Some(dir) = files.first().and_then(|f| f.parent()) else {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "choose the files to list"));
+    };
+    let mut text = String::new();
+    for file in files {
+        if file.parent() != Some(dir) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "the files must be in one folder"));
+        }
+        if !fs::metadata(file)?.is_file() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "only files can be listed"));
+        }
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        // A line break in a name would split its line in two.
+        if name.contains(['\n', '\r']) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "a name contains a line break"));
+        }
+        let hex = hash(kind, file, tick)?;
+        text.push_str(&format!("{hex}  {name}\n"));
+    }
+    let single = match files {
+        [one] => one.file_name().map(|n| n.to_string_lossy().into_owned()),
+        _ => None,
+    };
+    let name = kind.list_name(single.as_deref());
+    for _ in 0..100 {
+        let path = super::names::untitled(dir, &name, single.is_some());
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut f) => {
+                let written = io::Write::write_all(&mut f, text.as_bytes()).and_then(|()| f.sync_all());
+                return match written {
+                    Ok(()) => Ok(path),
+                    Err(e) => {
+                        let _ = fs::remove_file(&path);
+                        Err(e)
+                    }
+                };
+            }
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Err(io::ErrorKind::AlreadyExists.into())
 }
 
 #[cfg(test)]
@@ -235,6 +296,46 @@ mod tests {
                 ("good.txt".into(), VerifyStatus::Ok),
             ]
         );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn created_lists_verify() {
+        let dir = std::env::temp_dir().join(format!("ox-sums-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let a = dir.join("a b.txt");
+        let b = dir.join("b.bin");
+        fs::write(&a, "hello\n").unwrap();
+        fs::write(&b, [0u8, 1, 2]).unwrap();
+
+        let list = create(&[a.clone(), b.clone()], HashKind::Sha256, &mut |_| true).unwrap();
+        assert_eq!(list, dir.join("SHA256SUMS"));
+        let text = fs::read_to_string(&list).unwrap();
+        assert!(
+            text.starts_with("5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03  a b.txt\n")
+        );
+        // A second list doesn't replace the first.
+        let again = create(&[a.clone(), b.clone()], HashKind::Sha256, &mut |_| true).unwrap();
+        assert_eq!(again, dir.join("SHA256SUMS 2"));
+
+        let one = create(std::slice::from_ref(&b), HashKind::Md5, &mut |_| true).unwrap();
+        assert_eq!(one, dir.join("b.bin.md5"));
+
+        let mut statuses = Vec::new();
+        verify(&list, &|| false, &mut |ev| {
+            if let VerifyEvent::Item { status, .. } = ev {
+                statuses.push(status);
+            }
+            true
+        })
+        .unwrap();
+        assert_eq!(statuses, [VerifyStatus::Ok, VerifyStatus::Ok]);
+
+        // Cancelled: nothing written.
+        let e = create(&[a, b], HashKind::Sha1, &mut |_| false).unwrap_err();
+        assert_eq!(e.kind(), io::ErrorKind::Interrupted);
+        assert!(!dir.join("SHA1SUMS").exists());
         fs::remove_dir_all(&dir).unwrap();
     }
 }

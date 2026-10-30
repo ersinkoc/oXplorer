@@ -125,6 +125,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
         ...(one && isChecksumList(entries[0]?.name ?? "")
           ? [{ text: t("Verify Checksums…"), command: "file.verifyChecksums" }]
           : []),
+        ...(entries.every((e) => e.kind === "file") && !(one && isChecksumList(entries[0]?.name ?? ""))
+          ? [{ text: t("Create Checksum File…"), command: "file.createChecksums" }]
+          : []),
         ...(entries.length > 1
           ? [
               {

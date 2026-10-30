@@ -507,6 +507,8 @@ password?: Password | null } |
 { kind: "join"; first: string; destDir: string } | 
 /**  Empty Trash: permanently deletes everything in the user's Trash. */
 { kind: "emptyTrash" } | 
+/**  Create Checksum File: hashes `sources` (files in one folder) into a list beside them. */
+{ kind: "checksums"; sources: string[]; algorithm: HashKind } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 
@@ -541,6 +543,8 @@ password: Password | null } |
 { kind: "join"; first: string; destDir: string } | 
 /**  Empty Trash: permanently deletes everything in the user's Trash. */
 { kind: "emptyTrash" } | 
+/**  Create Checksum File: hashes `sources` (files in one folder) into a list beside them. */
+{ kind: "checksums"; sources: string[]; algorithm: HashKind } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
 { kind: "undo"; action: UndoAction };
 

@@ -473,6 +473,24 @@ export function registerFileCommands(): void {
       },
     },
     {
+      id: "file.createChecksums",
+      title: "Create Checksum File…",
+      run: () => {
+        const sel = selectedEntries();
+        const sources = paths(sel);
+        if (sel.length === 0 || sel.some((e) => e.kind !== "file")) {
+          toast(t("Select the files to list (folders can’t be hashed)."));
+          return;
+        }
+        if (refuseArchiveMembers(sources) || refuseRemote(sources)) return;
+        if (new Set(sources.map(parent)).size > 1) {
+          toast(t("Select files from one folder."));
+          return;
+        }
+        useApp.getState().set({ checksumPaths: sources });
+      },
+    },
+    {
       id: "file.convertImage",
       title: "Convert Image…",
       run: () => {

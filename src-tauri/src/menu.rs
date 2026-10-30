@@ -37,6 +37,7 @@ const FILE: &[Item] = &[
     ("file.split", "Split File…", None),
     ("file.combine", "Combine Files", None),
     ("file.verifyChecksums", "Verify Checksums…", None),
+    ("file.createChecksums", "Create Checksum File…", None),
     ("file.copyPath", "Copy Path", Some("Alt+CmdOrCtrl+C")),
     ("file.addToSidebar", "Add to Sidebar", Some("Ctrl+CmdOrCtrl+T")),
     ("file.compress.zip", "Compress", None),

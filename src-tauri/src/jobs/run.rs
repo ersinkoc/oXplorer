@@ -12,6 +12,7 @@ use super::split;
 use super::types::{
     ConflictChoice, ConflictResolution, JobFailure, JobOutcome, JobSpec, UndoAction, UndoStep,
 };
+use super::verify;
 use crate::dir::build_entry_for;
 use crate::error::AppError;
 use crate::security::{is_protected_root, validate_path};
@@ -89,6 +90,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Split { .. } => "Split File",
         JobSpec::Join { .. } => "Combine Files",
         JobSpec::EmptyTrash => "Empty Trash",
+        JobSpec::Checksums { .. } => "Create Checksum File",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -141,6 +143,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         }
         JobSpec::Join { first, dest_dir } => job.join(&validate_path(&first)?, &validate_path(&dest_dir)?),
         JobSpec::EmptyTrash => job.delete(trash_entries(&trash_dir()?)?),
+        JobSpec::Checksums { sources, algorithm } => job.checksums(&validate_all(&sources)?, algorithm),
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
     Ok(job.finish(label))
@@ -635,6 +638,25 @@ impl Runner<'_> {
         if let Some(out) = self.archive_result(first, result) {
             self.done_items = 1;
             self.log.push(Done::Created(out));
+        }
+    }
+
+    fn checksums(&mut self, files: &[PathBuf], kind: verify::HashKind) {
+        let total = files.iter().filter_map(|f| fs::metadata(f).ok()).map(|m| m.len()).sum();
+        self.r.planned(total, 1);
+        let Some(first) = files.first() else { return };
+        let result = {
+            let r = &mut *self.r;
+            let mut done = 0;
+            verify::create(files, kind, &mut |n| {
+                done += n;
+                r.progress(done, 0, first);
+                !r.cancelled()
+            })
+        };
+        if let Some(list) = self.archive_result(first, result) {
+            self.done_items = 1;
+            self.log.push(Done::Created(list));
         }
     }
 
