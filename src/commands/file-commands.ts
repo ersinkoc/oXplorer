@@ -330,6 +330,17 @@ async function emptyTrash(): Promise<void> {
   if (ok) await runJob({ kind: "emptyTrash" }, { select: false });
 }
 
+/** Rotate Left / Right: the selected pictures are turned in place (undo brings the originals back). */
+async function rotateSelected(clockwise: boolean): Promise<void> {
+  const images = paths(selectedEntries().filter(isConvertibleImage));
+  if (images.length === 0) {
+    toast(t("Select one or more pictures first."));
+    return;
+  }
+  if (refuseArchiveMembers(images) || refuseRemote(images)) return;
+  await runJob({ kind: "rotate", paths: images, clockwise }, { select: false });
+}
+
 /** Combine Files: joins the set the selected part belongs to, next to the parts. */
 async function combineParts(): Promise<void> {
   const sel = paths(selectedEntries());
@@ -490,6 +501,8 @@ export function registerFileCommands(): void {
         useApp.getState().set({ checksumPaths: sources });
       },
     },
+    { id: "file.rotateLeft", title: "Rotate Left", run: () => rotateSelected(false) },
+    { id: "file.rotateRight", title: "Rotate Right", run: () => rotateSelected(true) },
     {
       id: "file.convertImage",
       title: "Convert Image…",

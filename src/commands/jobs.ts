@@ -38,6 +38,7 @@ const LABELS: Record<JobSpec["kind"], string> = {
   join: msg("Combining"),
   emptyTrash: msg("Emptying the Trash"),
   checksums: msg("Hashing"),
+  rotate: msg("Rotating"),
   undo: msg("Undoing"),
 };
 
@@ -134,6 +135,7 @@ const NOUNS: Record<Exclude<JobSpec["kind"], "undo">, string> = {
   join: msg("Combine Files"),
   emptyTrash: msg("Empty Trash"),
   checksums: msg("Create Checksum File"),
+  rotate: msg("Rotate"),
 };
 
 /** Jobs that ran this long get a system notification when OXplorer isn't in front. */

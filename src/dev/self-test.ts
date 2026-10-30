@@ -89,8 +89,30 @@ export async function runSelfTest(): Promise<void> {
       step("asset denied before allow", !(await loadsImage(convertFileSrc(png))));
       await unwrap(commands.allowPreview(png));
       step("asset served after allow", await loadsImage(convertFileSrc(png)));
+      step("asset served with a version query", await loadsImage(`${convertFileSrc(png)}?v=1-2`));
       const folderDenied = await commands.allowPreview(dir);
       step("asset scope refuses folders", folderDenied.status === "error");
+
+      // Rotate Right in place, then undo: the original (from the Trash) is back.
+      const before = await unwrap(commands.statPath(png));
+      const turned = await runJob(
+        { kind: "rotate", paths: [png], clockwise: true },
+        { history: "none", select: false },
+      );
+      const after = await unwrap(commands.statPath(png));
+      const unturned = turned?.undo
+        ? await runJob({ kind: "undo", action: turned.undo }, { history: "none", select: false })
+        : null;
+      const restored = await unwrap(commands.statPath(png));
+      step(
+        "rotate image + undo",
+        turned?.failures.length === 0 &&
+          turned.undo?.steps.length === 2 &&
+          unturned?.failures.length === 0 &&
+          restored.size === before.size &&
+          restored.modifiedMs === before.modifiedMs,
+        `sizes ${before.size} → ${after.size} → ${restored.size} undo=${JSON.stringify(turned?.undo?.steps.map((st) => st.kind))}`,
+      );
     } else {
       step("preview image copy", false);
     }
@@ -555,6 +577,18 @@ export async function runSelfTest(): Promise<void> {
       "convert image refuses non-images",
       conv.status === "error" && convLeft.status === "error",
       JSON.stringify(conv.status === "error" ? conv.error : conv.data.name),
+    );
+
+    // Rotating something that isn't a picture fails and leaves it where it was.
+    const badTurn = await runJob(
+      { kind: "rotate", paths: [nf1.path], clockwise: false },
+      { history: "none", select: false },
+    );
+    const stillThere = await commands.statPath(nf1.path);
+    step(
+      "rotate refuses non-images",
+      badTurn?.failures.length === 1 && !badTurn.undo && stillThere.status === "ok",
+      JSON.stringify(badTurn?.failures),
     );
 
     // Get Info → Locked, then unlocked again (a locked file couldn't be cleaned up).

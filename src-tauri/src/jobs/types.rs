@@ -76,6 +76,12 @@ pub enum JobSpec {
     },
     /// Empty Trash: permanently deletes everything in the user's Trash.
     EmptyTrash,
+    /// Rotate Left / Right: each picture is replaced by a rotated one; the
+    /// original goes to the Trash so undo can bring it back.
+    Rotate {
+        paths: Vec<String>,
+        clockwise: bool,
+    },
     /// Create Checksum File: hashes `sources` (files in one folder) into a list beside them.
     Checksums {
         sources: Vec<String>,

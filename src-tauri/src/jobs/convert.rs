@@ -1,5 +1,6 @@
 //! Convert Image: a copy of a picture in another format and/or a smaller size,
-//! made by macOS's `sips`, next to the original.
+//! made by macOS's `sips`, next to the original. Rotate Left / Right writes a
+//! rotated picture the job then puts in the original's place.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -77,6 +78,37 @@ fn run_sips(src: &Path, tmp: &Path, format: ImageFormat, max_size: Option<u32>) 
         });
     }
     Ok(())
+}
+
+/// A rotated copy of `src` (clockwise or not) in a hidden file beside it, same
+/// format. The caller moves it into place; on error nothing is left behind.
+pub fn rotated(src: &Path, clockwise: bool) -> Result<PathBuf, AppError> {
+    let dir = src.parent().unwrap_or(Path::new("/"));
+    let stem = src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = src.extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = reserve_temp(dir, &stem, &ext).map_err(|e| AppError::from_io(&e, dir))?;
+    let out = Command::new(SIPS)
+        .arg("-r")
+        .arg(if clockwise { "90" } else { "270" })
+        .arg(src)
+        .arg("--out")
+        .arg(&tmp)
+        .output()
+        .map_err(|e| AppError::Io { path: Some(src.to_string_lossy().into_owned()), message: e.to_string() });
+    let written = std::fs::metadata(&tmp).is_ok_and(|m| m.len() > 0);
+    match out {
+        Ok(o) if o.status.success() && written => Ok(tmp),
+        result => {
+            let _ = std::fs::remove_file(&tmp);
+            let message = result
+                .as_ref()
+                .map_or_else(|_| String::new(), |o| String::from_utf8_lossy(&o.stderr).trim().to_owned());
+            Err(result.err().unwrap_or(AppError::Io {
+                path: Some(src.to_string_lossy().into_owned()),
+                message: if message.is_empty() { "the image couldn’t be rotated".into() } else { message },
+            }))
+        }
+    }
 }
 
 /// Creates an empty hidden file next to the original for sips to write into.
@@ -165,6 +197,22 @@ mod tests {
         let same = convert(&src, ImageFormat::Png, Some(100)).unwrap();
         assert_eq!(same, tmp.path().join("red 2.png"));
         assert_eq!(size(&same), (4, 2));
+    }
+
+    #[test]
+    fn rotates_into_a_hidden_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("red.png");
+        png(&src);
+        let right = rotated(&src, true).unwrap();
+        assert_eq!(right.parent(), Some(tmp.path()));
+        assert!(right.file_name().unwrap().to_string_lossy().starts_with(".red.oxconvert-"));
+        assert_eq!(size(&right), (2, 4));
+        assert_eq!(size(&src), (4, 2));
+        fs::write(tmp.path().join("notes.png"), b"hello").unwrap();
+        assert!(rotated(&tmp.path().join("notes.png"), false).is_err());
+        let left = fs::read_dir(tmp.path()).unwrap().flatten().count();
+        assert_eq!(left, 3);
     }
 
     #[test]

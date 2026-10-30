@@ -507,6 +507,11 @@ password?: Password | null } |
 { kind: "join"; first: string; destDir: string } | 
 /**  Empty Trash: permanently deletes everything in the user's Trash. */
 { kind: "emptyTrash" } | 
+/**
+ *  Rotate Left / Right: each picture is replaced by a rotated one; the
+ *  original goes to the Trash so undo can bring it back.
+ */
+{ kind: "rotate"; paths: string[]; clockwise: boolean } | 
 /**  Create Checksum File: hashes `sources` (files in one folder) into a list beside them. */
 { kind: "checksums"; sources: string[]; algorithm: HashKind } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
@@ -543,6 +548,11 @@ password: Password | null } |
 { kind: "join"; first: string; destDir: string } | 
 /**  Empty Trash: permanently deletes everything in the user's Trash. */
 { kind: "emptyTrash" } | 
+/**
+ *  Rotate Left / Right: each picture is replaced by a rotated one; the
+ *  original goes to the Trash so undo can bring it back.
+ */
+{ kind: "rotate"; paths: string[]; clockwise: boolean } | 
 /**  Create Checksum File: hashes `sources` (files in one folder) into a list beside them. */
 { kind: "checksums"; sources: string[]; algorithm: HashKind } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */

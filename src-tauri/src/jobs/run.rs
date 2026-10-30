@@ -91,6 +91,8 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Join { .. } => "Combine Files",
         JobSpec::EmptyTrash => "Empty Trash",
         JobSpec::Checksums { .. } => "Create Checksum File",
+        JobSpec::Rotate { clockwise: true, .. } => "Rotate Right",
+        JobSpec::Rotate { clockwise: false, .. } => "Rotate Left",
         JobSpec::Undo { action } => action.label.as_str(),
     }
     .to_owned();
@@ -143,6 +145,7 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         }
         JobSpec::Join { first, dest_dir } => job.join(&validate_path(&first)?, &validate_path(&dest_dir)?),
         JobSpec::EmptyTrash => job.delete(trash_entries(&trash_dir()?)?),
+        JobSpec::Rotate { paths, clockwise } => job.rotate(validate_all(&paths)?, clockwise),
         JobSpec::Checksums { sources, algorithm } => job.checksums(&validate_all(&sources)?, algorithm),
         JobSpec::Undo { action } => job.undo(action.steps)?,
     }
@@ -638,6 +641,37 @@ impl Runner<'_> {
         if let Some(out) = self.archive_result(first, result) {
             self.done_items = 1;
             self.log.push(Done::Created(out));
+        }
+    }
+
+    fn rotate(&mut self, paths: Vec<PathBuf>, clockwise: bool) {
+        self.r.planned(0, u32::try_from(paths.len()).unwrap_or(u32::MAX));
+        for p in paths {
+            if self.should_stop() {
+                break;
+            }
+            match super::convert::rotated(&p, clockwise) {
+                Ok(tmp) => self.replace_with(&p, &tmp),
+                Err(error) => {
+                    self.failures.push(JobFailure { path: p.to_string_lossy().into_owned(), error });
+                }
+            }
+            self.tick(0, 1, &p);
+        }
+    }
+
+    /// Puts `tmp` at `path`, the old item going to the Trash first (undo
+    /// trashes the new one and moves the old one back).
+    fn replace_with(&mut self, path: &Path, tmp: &Path) {
+        let result = fsops::trash(path).and_then(|trashed| {
+            self.log.push(Done::Trashed { from: path.to_path_buf(), to: trashed });
+            // A link never replaces something that took the name in the meantime.
+            fs::hard_link(tmp, path)
+        });
+        let _ = fs::remove_file(tmp);
+        match result {
+            Ok(()) => self.log.push(Done::Created(path.to_path_buf())),
+            Err(e) => self.failures.push(err(path, &e)),
         }
     }
 

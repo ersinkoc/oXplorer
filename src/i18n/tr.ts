@@ -108,6 +108,10 @@ export const tr: Readonly<Record<string, string>> = {
   "Saves “{name}” in the same folder. Choose Verify Checksums… on it later to check the files.":
     "“{name}” aynı klasöre kaydedilir. Dosyaları daha sonra denetlemek için onda Sağlama Toplamlarını Doğrula… komutunu seç.",
   Create: "Oluştur",
+  "Rotate Left": "Sola Döndür",
+  "Rotate Right": "Sağa Döndür",
+  Rotate: "Döndür",
+  Rotating: "Döndürülüyor",
   "Select a checksum list (such as SHA256SUMS or a .sha256 file).":
     "Bir sağlama toplamı listesi seç (SHA256SUMS ya da .sha256 dosyası gibi).",
   "Checksums in “{name}”": "“{name}” içindeki sağlama toplamları",

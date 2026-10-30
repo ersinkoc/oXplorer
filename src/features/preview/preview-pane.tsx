@@ -118,14 +118,16 @@ function useAllowedSrc(entry: FileEntry, enabled: boolean): string | null {
     let stale = false;
     const timer = setTimeout(() => {
       void commands.allowPreview(entry.path).then((r) => {
-        if (!stale && r.status === "ok") setSrc(convertFileSrc(entry.path));
+        // The version makes a picture changed in place (rotated, replaced) load again.
+        if (!stale && r.status === "ok")
+          setSrc(`${convertFileSrc(entry.path)}?v=${entry.modifiedMs}-${entry.size}`);
       });
     }, SETTLE_MS);
     return () => {
       stale = true;
       clearTimeout(timer);
     };
-  }, [entry.path, enabled]);
+  }, [entry.path, entry.modifiedMs, entry.size, enabled]);
   return src;
 }
 

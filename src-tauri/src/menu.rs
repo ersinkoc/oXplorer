@@ -34,6 +34,8 @@ const FILE: &[Item] = &[
     ("file.duplicate", "Duplicate", Some("CmdOrCtrl+D")),
     ("file.makeAlias", "Make Alias", Some("Ctrl+CmdOrCtrl+A")),
     ("file.convertImage", "Convert Image…", None),
+    ("file.rotateLeft", "Rotate Left", None),
+    ("file.rotateRight", "Rotate Right", None),
     ("file.split", "Split File…", None),
     ("file.combine", "Combine Files", None),
     ("file.verifyChecksums", "Verify Checksums…", None),

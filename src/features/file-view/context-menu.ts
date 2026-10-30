@@ -117,7 +117,11 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
         { text: t("Duplicate"), command: "file.duplicate" },
         { text: t("Make Alias"), command: "file.makeAlias" },
         ...(entries.some(isConvertibleImage)
-          ? [{ text: t("Convert Image…"), command: "file.convertImage" }]
+          ? [
+              { text: t("Convert Image…"), command: "file.convertImage" },
+              { text: t("Rotate Left"), command: "file.rotateLeft" },
+              { text: t("Rotate Right"), command: "file.rotateRight" },
+            ]
           : []),
         ...(one && firstPart(entries[0]?.path ?? "")
           ? [{ text: t("Combine Files"), command: "file.combine" }]
