@@ -109,6 +109,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Emptying the Trash": "Çöp Sepeti boşaltılıyor",
   "Couldn’t read the Trash: {reason}": "Çöp Sepeti okunamadı: {reason}",
   "The Trash is empty.": "Çöp Sepeti boş.",
+  "Enter the password to open its contents.": "İçeriğini açmak için parolayı gir.",
+  "The password is wrong. Try again.": "Parola yanlış. Yeniden dene.",
   "Are you sure you want to permanently erase the item in the Trash?":
     "Çöp Sepeti’ndeki öğeyi kalıcı olarak silmek istediğinden emin misin?",
   "Are you sure you want to permanently erase the {count} items in the Trash?":

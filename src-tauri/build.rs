@@ -18,6 +18,7 @@ const COMMANDS: &[&str] = &[
     "compare_folders",
     "verify_checksums",
     "trash_count",
+    "archive_unlock",
     "convert_image",
     "is_locked",
     "archive_encrypted",

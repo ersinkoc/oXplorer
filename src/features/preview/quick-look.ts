@@ -1,4 +1,5 @@
 import { commands, events } from "@/bindings";
+import { unlockArchiveOf } from "@/commands/archive-unlock";
 import { materialize } from "@/commands/locations";
 import { paneLayout } from "@/features/file-view/visible-order";
 import { move } from "@/lib/selection";
@@ -25,7 +26,10 @@ export function toggleQuickLook(): void {
   const { paths, index } = currentItems();
   if (paths.length === 0) return;
   owner = true;
-  void realPaths(paths).then((real) => commands.quickLook(real, index, true));
+  void (async () => {
+    if (!(await unlockArchiveOf(paths))) return;
+    await commands.quickLook(await realPaths(paths), index, true);
+  })();
 }
 
 /** Items inside an archive or on a server are copied to a temporary folder for Quick Look. */

@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { commands } from "@/bindings";
+import { unlockArchiveOf } from "@/commands/archive-unlock";
 import { materialize } from "@/commands/locations";
 import { t } from "@/i18n";
 import { archiveParent, archivePath, isArchiveName, isArchivePath } from "@/lib/archive-path";
@@ -154,6 +155,7 @@ export async function openEntries(entries: readonly FileEntry[]): Promise<void> 
     navigateTo(archivePath(first.path));
     return;
   }
+  if (!(await unlockArchiveOf(entries.filter((e) => !isFolderLike(e)).map((e) => e.path)))) return;
   for (const e of entries) {
     if (isFolderLike(e)) continue;
     try {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-archive-unlock"
+description = "Enables the archive_unlock command without any pre-configured scope."
+commands.allow = ["archive_unlock"]
+
+[[permission]]
+identifier = "deny-archive-unlock"
+description = "Denies the archive_unlock command without any pre-configured scope."
+commands.deny = ["archive_unlock"]

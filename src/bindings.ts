@@ -58,6 +58,11 @@ export const commands = {
 	verifyChecksums: (id: string, path: string, onEvent: Channel<VerifyEvent>) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("verify_checksums", { id, path, onEvent })),
 	/**  How many items are in the Trash (Empty Trash asks before erasing them). */
 	trashCount: () => typedError<number, AppError_Serialize>(__TAURI_INVOKE("trash_count")),
+	/**
+	 *  Unlocks an encrypted zip that's browsed like a folder: checks the password and
+	 *  keeps it in memory for this session, so its members can be read.
+	 */
+	archiveUnlock: (path: string, password: Password) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("archive_unlock", { path, password })),
 	/**  Convert Image: a copy of `path` in `format`, its longer side at most `max_size` pixels. */
 	convertImage: (path: string, format: ImageFormat, maxSize: number | null) => typedError<FileEntry_Serialize, AppError_Serialize>(__TAURI_INVOKE("convert_image", { path, format, maxSize })),
 	/**  Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked"). */

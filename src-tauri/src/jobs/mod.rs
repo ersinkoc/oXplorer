@@ -353,6 +353,19 @@ pub async fn archive_encrypted(path: String) -> AppResult<bool> {
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
 }
 
+/// Unlocks an encrypted zip that's browsed like a folder: checks the password and
+/// keeps it in memory for this session, so its members can be read.
+#[tauri::command]
+#[specta::specta]
+pub async fn archive_unlock(path: String, password: Password) -> AppResult<()> {
+    let p = validate_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        archive::unlock(&p, &password.0).map_err(|e| AppError::from_io(&e, &p))
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
 /// Get Info → Locked: whether the item has the user immutable flag (Finder's "Locked").
 #[tauri::command]
 #[specta::specta]

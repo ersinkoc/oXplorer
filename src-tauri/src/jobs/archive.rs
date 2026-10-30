@@ -354,6 +354,35 @@ fn zip_error(e: zip::result::ZipError) -> io::Error {
     }
 }
 
+/// Passwords of zips opened like folders this session, by archive path. Memory
+/// only: never written anywhere, gone when OXplorer quits.
+static PASSWORDS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<PathBuf, String>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn known_password(archive: &Path) -> Option<String> {
+    PASSWORDS.lock().ok()?.get(archive).cloned()
+}
+
+/// Checks `password` against the first encrypted member and, if it opens it,
+/// remembers it for reading members of `archive` (copying out, opening, Quick Look).
+pub fn unlock(archive: &Path, password: &str) -> io::Result<()> {
+    let mut zip = zip::ZipArchive::new(BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
+    let first = (0..zip.len())
+        .find(|&i| zip.by_index_raw(i).is_ok_and(|e| e.encrypted() && !e.is_dir()))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "the archive isn’t encrypted"))?;
+    let mut entry = zip.by_index_decrypt(first, password.as_bytes()).map_err(zip_error)?;
+    // Opening checks the password's verifier; reading a little catches the rare false match.
+    let mut buf = [0u8; 4096];
+    let _ = entry
+        .read(&mut buf)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "the password is wrong"))?;
+    drop(entry);
+    if let Ok(mut map) = PASSWORDS.lock() {
+        map.insert(archive.to_path_buf(), password.to_owned());
+    }
+    Ok(())
+}
+
 /// Whether a zip has encrypted members (Extract asks for the password first).
 pub fn zip_encrypted(archive: &Path) -> io::Result<bool> {
     if !matches!(kind_of(archive), Some((Kind::Zip, _))) {
@@ -586,7 +615,7 @@ pub fn extract_members(
     };
     let result = (|| {
         match kind {
-            Kind::Zip => unzip(archive, &staging, None, tick, &select)?,
+            Kind::Zip => unzip(archive, &staging, known_password(archive).as_deref(), tick, &select)?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
@@ -806,5 +835,28 @@ mod tests {
         let plain = tmp.path().join("plain.zip");
         compress(std::slice::from_ref(&dest), &plain, ArchiveFormat::Zip, None, &mut |_| true).unwrap();
         assert!(!zip_encrypted(&plain).unwrap());
+    }
+
+    #[test]
+    fn unlocked_zip_members_can_be_copied_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("note.txt");
+        fs::write(&src, b"members too").unwrap();
+        let zip = tmp.path().join("locked.zip");
+        compress(std::slice::from_ref(&src), &zip, ArchiveFormat::Zip, Some("pw 1"), &mut |_| true).unwrap();
+        let out = tmp.path().join("out");
+        fs::create_dir(&out).unwrap();
+        let names = ["note.txt".to_owned()];
+
+        let locked = extract_members(&zip, &names, &out, &mut |_| true).unwrap_err();
+        assert_eq!(locked.to_string(), "the archive needs a password");
+        assert_eq!(unlock(&zip, "wrong").unwrap_err().to_string(), "the password is wrong");
+        unlock(&zip, "pw 1").unwrap();
+        let made = extract_members(&zip, &names, &out, &mut |_| true).unwrap();
+        assert_eq!(fs::read(&made[0]).unwrap(), b"members too");
+        // Nothing to unlock in a plain zip.
+        let plain = tmp.path().join("plain.zip");
+        compress(std::slice::from_ref(&src), &plain, ArchiveFormat::Zip, None, &mut |_| true).unwrap();
+        assert!(unlock(&plain, "x").is_err());
     }
 }

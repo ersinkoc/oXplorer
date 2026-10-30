@@ -10,6 +10,7 @@ import {
   type JobSpec,
   type UndoAction,
 } from "@/bindings";
+import { unlockArchiveOf } from "@/commands/archive-unlock";
 import { msg, t, tn } from "@/i18n";
 import { describeError, type FileEntry, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
@@ -48,6 +49,8 @@ export async function runJob(
   spec: JobSpec,
   opts: { history?: HistoryMode; select?: boolean } = {},
 ): Promise<JobOutcome | null> {
+  // Copying out of an encrypted zip needs its password first.
+  if (spec.kind === "extractMembers" && !(await unlockArchiveOf(spec.sources))) return null;
   const id = crypto.randomUUID();
   const label = spec.kind === "undo" ? spec.action.label : LABELS[spec.kind];
   useJobs.setState((s) => ({

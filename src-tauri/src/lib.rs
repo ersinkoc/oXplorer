@@ -43,6 +43,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::compare_folders,
             jobs::verify_checksums,
             jobs::trash_count,
+            jobs::archive_unlock,
             jobs::convert_image,
             jobs::is_locked,
             jobs::archive_encrypted,

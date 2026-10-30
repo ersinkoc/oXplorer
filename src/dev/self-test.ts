@@ -186,6 +186,21 @@ export async function runSelfTest(): Promise<void> {
       `zip=${lockedZip} enc=${JSON.stringify(encrypted)} wrong=${JSON.stringify(wrongPw?.failures)} out=${lockedOut}`,
     );
 
+    // Browsing an encrypted zip: members open only after the archive is unlocked.
+    const lockedMember = archivePath(lockedZip, "arc/inside.txt");
+    const beforeUnlock = await commands.archiveOpenMember(lockedMember);
+    const badUnlock = await commands.archiveUnlock(lockedZip, "nope");
+    const goodUnlock = await commands.archiveUnlock(lockedZip, "s3cret pw");
+    const afterUnlock = await commands.archiveOpenMember(lockedMember);
+    step(
+      "unlock encrypted zip",
+      beforeUnlock.status === "error" &&
+        badUnlock.status === "error" &&
+        goodUnlock.status === "ok" &&
+        afterUnlock.status === "ok",
+      JSON.stringify({ beforeUnlock, badUnlock, goodUnlock, afterUnlock }),
+    );
+
     // Split File / Combine Files: the joined copy matches the original byte count.
     const zipStat = await commands.statPath(zipPath);
     const zipSize = zipStat.status === "ok" ? zipStat.data.size : 0;
