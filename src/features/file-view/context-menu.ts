@@ -104,6 +104,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
         { text: t("Move to Trash"), command: "file.trash" },
         "-",
         { text: t("Get Info"), command: "file.getInfo" },
+        { text: t("Change Dates…"), command: "file.changeDates" },
         ...(entries.some((e) => e.kind === "dir")
           ? [{ text: t("Calculate Folder Sizes"), command: "view.calculateSizes" }]
           : []),

@@ -595,5 +595,18 @@ export function registerFileCommands(): void {
         useApp.getState().set({ infoPaths: sel.length > 0 ? sel : [currentFolder()] });
       },
     },
+    {
+      id: "file.changeDates",
+      title: "Change Dates…",
+      run: () => {
+        const sel = selectedEntries();
+        if (sel.length === 0) {
+          toast(t("Select the items to change first."));
+          return;
+        }
+        if (refuseArchiveMembers(paths(sel)) || refuseRemote(paths(sel))) return;
+        useApp.getState().set({ datesEntries: [...sel] });
+      },
+    },
   ]);
 }

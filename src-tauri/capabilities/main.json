@@ -49,6 +49,7 @@
     "allow-pasteboard-write-files",
     "allow-pasteboard-read-files",
     "allow-pasteboard-save",
+    "allow-set-dates",
     "allow-apps-for-path",
     "allow-open-with",
     "allow-drag-preview",

@@ -48,6 +48,12 @@ enum Done {
         path: PathBuf,
         before: Vec<crate::model::FinderTag>,
     },
+    /// Dates were changed; these restore them.
+    Dated {
+        path: PathBuf,
+        modified_ms: i64,
+        created_ms: Option<i64>,
+    },
 }
 
 struct Runner<'a> {
@@ -495,6 +501,20 @@ impl Runner<'_> {
                     }
                     self.tick(0, 1, &p);
                 }
+                UndoStep::Dates { path, modified_ms, created_ms } => {
+                    let p = validate_path(&path)?;
+                    let result = fsops::dates(&p).and_then(|before| {
+                        fsops::set_dates(&p, Some(modified_ms), created_ms)?;
+                        Ok(before)
+                    });
+                    match result {
+                        Ok((m, c)) => {
+                            self.log.push(Done::Dated { path: p.clone(), modified_ms: m, created_ms: c });
+                        }
+                        Err(e) => self.failures.push(err(&p, &e)),
+                    }
+                    self.tick(0, 1, &p);
+                }
                 UndoStep::Move { from, to } => {
                     let (from, to) = (validate_path(&from)?, validate_path(&to)?);
                     if to.symlink_metadata().is_ok() {
@@ -787,15 +807,19 @@ impl Runner<'_> {
                     UndoStep::Move { from: s(to), to: s(from) }
                 }
                 Done::Tagged { path, before } => UndoStep::Tags { path: s(path), tags: before.clone() },
+                Done::Dated { path, modified_ms, created_ms } => {
+                    UndoStep::Dates { path: s(path), modified_ms: *modified_ms, created_ms: *created_ms }
+                }
             })
             .collect();
         let created = self
             .log
             .iter()
             .filter_map(|d| match d {
-                Done::Created(p) | Done::Moved { to: p, .. } | Done::Tagged { path: p, .. } => {
-                    build_entry_for(p)
-                }
+                Done::Created(p)
+                | Done::Moved { to: p, .. }
+                | Done::Tagged { path: p, .. }
+                | Done::Dated { path: p, .. } => build_entry_for(p),
                 Done::Trashed { .. } => None,
             })
             .collect();

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-dates"
+description = "Enables the set_dates command without any pre-configured scope."
+commands.allow = ["set_dates"]
+
+[[permission]]
+identifier = "deny-set-dates"
+description = "Denies the set_dates command without any pre-configured scope."
+commands.deny = ["set_dates"]

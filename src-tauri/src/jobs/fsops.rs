@@ -101,6 +101,34 @@ pub fn copy_dir_metadata(src: &Path, dst: &Path) -> io::Result<()> {
     if rc == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
 }
 
+/// Modified and created times in epoch ms (created may be unknown).
+pub fn dates(path: &Path) -> io::Result<(i64, Option<i64>)> {
+    let meta = fs::metadata(path)?;
+    let ms = |t: std::time::SystemTime| {
+        t.duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+    };
+    Ok((meta.modified().map(ms)?, meta.created().ok().map(ms)))
+}
+
+/// Sets the modified and/or created time (epoch ms) of a file or folder.
+pub fn set_dates(path: &Path, modified_ms: Option<i64>, created_ms: Option<i64>) -> io::Result<()> {
+    use std::os::darwin::fs::FileTimesExt as _;
+    let at = |ms: i64| {
+        let ms = u64::try_from(ms)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "dates before 1970"))?;
+        Ok::<_, io::Error>(std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms))
+    };
+    let mut times = fs::FileTimes::new();
+    if let Some(ms) = modified_ms {
+        times = times.set_modified(at(ms)?);
+    }
+    if let Some(ms) = created_ms {
+        times = times.set_created(at(ms)?);
+    }
+    fs::File::open(path)?.set_times(times)
+}
+
 pub fn same_device(a: &Path, b: &Path) -> bool {
     match (fs::symlink_metadata(a), fs::metadata(b)) {
         (Ok(a), Ok(b)) => a.dev() == b.dev(),

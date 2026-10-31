@@ -1,5 +1,6 @@
 import { CompareFilesDialog } from "@/features/compare/compare-files-dialog";
 import { ConvertImageDialog } from "@/features/convert/convert-image-dialog";
+import { ChangeDatesDialog } from "@/features/dates/change-dates-dialog";
 import { DragGhost } from "@/features/dnd/drag-ghost";
 import { useExternalDrop } from "@/features/dnd/use-external-drop";
 import { DuplicatesDialog } from "@/features/duplicates/duplicates-dialog";
@@ -56,6 +57,7 @@ export function AppShell() {
       <SplitFileDialog />
       <VerifyDialog />
       <CreateChecksumsDialog />
+      <ChangeDatesDialog />
       <PasswordPrompt />
       <WhatsNewDialog />
       <DiskUsageDialog />

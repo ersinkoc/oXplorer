@@ -21,6 +21,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+pub use fsops::{dates, set_dates};
 use tauri::State;
 use tauri::ipc::Channel;
 pub use types::*;

@@ -30,6 +30,7 @@ const FILE: &[Item] = &[
     ("file.revealInFinder", "Show in Finder", Some("Alt+CmdOrCtrl+R")),
     SEP,
     ("file.getInfo", "Get Info", Some("CmdOrCtrl+I")),
+    ("file.changeDates", "Change Dates…", None),
     ("file.rename", "Rename", None),
     ("file.duplicate", "Duplicate", Some("CmdOrCtrl+D")),
     ("file.makeAlias", "Make Alias", Some("Ctrl+CmdOrCtrl+A")),

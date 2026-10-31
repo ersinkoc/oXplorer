@@ -129,6 +129,14 @@ pub enum UndoStep {
     Move { from: String, to: String },
     /// Give an item exactly these Finder tags (reverses a tag edit).
     Tags { path: String, tags: Vec<FinderTag> },
+    /// Give an item these dates back (reverses Change Dates).
+    Dates {
+        path: String,
+        #[specta(type = u32)]
+        modified_ms: i64,
+        #[specta(type = Option<u32>)]
+        created_ms: Option<i64>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, specta::Type)]

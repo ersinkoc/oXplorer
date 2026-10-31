@@ -163,10 +163,10 @@ pub async fn quick_look_visible(app: AppHandle) -> bool {
     tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(false)).await.unwrap_or(false)
 }
 
-/// The items after a tag edit, and how to put their tags back.
+/// The items after an edit (tags, dates), and how to undo it.
 #[derive(Debug, Clone, serde::Serialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
-pub struct TagEditOutcome {
+pub struct EditOutcome {
     pub entries: Vec<crate::model::FileEntry>,
     pub undo: crate::jobs::UndoAction,
 }
@@ -178,7 +178,7 @@ pub async fn edit_tags(
     paths: Vec<String>,
     add: Vec<crate::model::FinderTag>,
     remove: Vec<String>,
-) -> AppResult<TagEditOutcome> {
+) -> AppResult<EditOutcome> {
     let paths = validate_all(&paths)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut entries = Vec::new();
@@ -192,7 +192,42 @@ pub async fn edit_tags(
                     .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })?,
             );
         }
-        Ok(TagEditOutcome { entries, undo: crate::jobs::UndoAction { label: "Tags".into(), steps } })
+        Ok(EditOutcome { entries, undo: crate::jobs::UndoAction { label: "Tags".into(), steps } })
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
+/// Change Dates: sets the modified and/or created date (epoch ms) of each item.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_dates(
+    paths: Vec<String>,
+    modified_ms: Option<f64>,
+    created_ms: Option<f64>,
+) -> AppResult<EditOutcome> {
+    let paths = validate_all(&paths)?;
+    // Epoch ms arrive as JS numbers; whole milliseconds are all we keep.
+    #[allow(clippy::cast_possible_truncation)]
+    let ms = |v: Option<f64>| v.filter(|v| v.is_finite()).map(|v| v.round() as i64);
+    let (modified_ms, created_ms) = (ms(modified_ms), ms(created_ms));
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut entries = Vec::new();
+        let mut steps = Vec::new();
+        for p in &paths {
+            let (m, c) = crate::jobs::dates(p).map_err(|e| AppError::from_io(&e, p))?;
+            crate::jobs::set_dates(p, modified_ms, created_ms).map_err(|e| AppError::from_io(&e, p))?;
+            steps.push(crate::jobs::UndoStep::Dates {
+                path: p.to_string_lossy().into_owned(),
+                modified_ms: m,
+                created_ms: c,
+            });
+            entries.push(
+                crate::dir::build_entry_for(p)
+                    .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })?,
+            );
+        }
+        Ok(EditOutcome { entries, undo: crate::jobs::UndoAction { label: "Change Dates".into(), steps } })
     })
     .await
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
@@ -213,5 +248,34 @@ mod tests {
         assert_eq!(fs::read_to_string(&text).unwrap(), "hi");
         let png = save_content(tmp.path(), pasteboard::Content::Png(vec![1, 2])).unwrap();
         assert_eq!(png, tmp.path().join("Pasted Image.png"));
+    }
+
+    #[test]
+    fn dates_change_and_come_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let f = tmp.path().join("a.txt");
+        fs::write(&f, b"x").unwrap();
+        let before = crate::jobs::dates(&f).unwrap();
+        let path = f.to_string_lossy().into_owned();
+        // 2001-02-03 04:05:06 UTC and 2000-01-01.
+        let out = tauri::async_runtime::block_on(set_dates(
+            vec![path.clone()],
+            Some(981_173_106_000.0),
+            Some(946_684_800_000.0),
+        ))
+        .unwrap();
+        assert_eq!(out.entries[0].modified_ms, 981_173_106_000);
+        assert_eq!(crate::jobs::dates(&f).unwrap(), (981_173_106_000, Some(946_684_800_000)));
+        let crate::jobs::UndoStep::Dates { modified_ms, created_ms, .. } = out.undo.steps[0].clone() else {
+            panic!("not a dates step")
+        };
+        crate::jobs::set_dates(&f, Some(modified_ms), created_ms).unwrap();
+        assert_eq!(crate::jobs::dates(&f).unwrap(), before);
+        // Only the modified date: the created one stays (macOS moves it back
+        // only when the modified date would come before it).
+        crate::jobs::set_dates(&f, Some(2_000_000_000_000), None).unwrap();
+        assert_eq!(crate::jobs::dates(&f).unwrap(), (2_000_000_000_000, before.1));
+        crate::jobs::set_dates(&f, Some(1_000_000_000_000), None).unwrap();
+        assert_eq!(crate::jobs::dates(&f).unwrap(), (1_000_000_000_000, Some(1_000_000_000_000)));
     }
 }

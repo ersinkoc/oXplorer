@@ -26,6 +26,7 @@ The first public build of OXplorer.
 - Create Checksum File… hashes the selected files into `SHA256SUMS` (or `name.sha256` for one file; MD5, SHA-1 and SHA-512 too) beside them, never replacing an existing list; the job can be cancelled, paused and undone.
 - Rotate Left / Rotate Right (File menu and the item menu for pictures) turn pictures in place; the original goes to the Trash, so Undo brings it back. The preview pane reloads a picture that changed in place.
 - ⌘V with a copied picture or text (and no files) on the clipboard saves it into the folder as “Pasted Image.png” / “Pasted Text.txt” and starts renaming it; Undo removes it.
+- Change Dates… (File menu and the item menu) sets the modified and/or created date of the selected items, with a Now button; Undo puts the old dates back.
 - Empty Trash… (⇧⌘⌫) permanently erases what's in the Trash after asking, as in Finder.
 - Rename many items at once, edit Finder tags.
 - Open With works on a folder too: editors and terminals that open folders, plus Terminal.

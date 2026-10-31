@@ -82,12 +82,14 @@ export const commands = {
 	 *  file in `dir`. None when the clipboard holds neither.
 	 */
 	pasteboardSave: (dir: string) => typedError<FileEntry_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("pasteboard_save", { dir })),
+	/**  Change Dates: sets the modified and/or created date (epoch ms) of each item. */
+	setDates: (paths: string[], modifiedMs: number | null, createdMs: number | null) => typedError<EditOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("set_dates", { paths, modifiedMs, createdMs })),
 	appsForPath: (path: string) => typedError<AppInfo[], AppError_Serialize>(__TAURI_INVOKE("apps_for_path", { path })),
 	openWith: (app: string, paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_with", { app, paths })),
 	/**  Writes the icon of `path` to a cache file for the native drag image and returns its path. */
 	dragPreview: (path: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("drag_preview", { path })),
 	/**  Adds and removes Finder tags on each item; returns the updated entries. */
-	editTags: (paths: string[], add: FinderTag[], remove: string[]) => typedError<TagEditOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("edit_tags", { paths, add, remove })),
+	editTags: (paths: string[], add: FinderTag[], remove: string[]) => typedError<EditOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("edit_tags", { paths, add, remove })),
 	/**
 	 *  Opens the Quick Look panel on `paths` at `index`. With `open: false` it only
 	 *  follows the selection while the panel is already showing.
@@ -235,13 +237,13 @@ export type BatchRenameOutcome = BatchRenameOutcome_Serialize | BatchRenameOutco
 export type BatchRenameOutcome_Deserialize = {
 	/**  The renamed items, in request order. */
 	entries: FileEntry_Deserialize[],
-	undo?: UndoAction | null,
+	undo?: UndoAction_Deserialize | null,
 };
 
 export type BatchRenameOutcome_Serialize = {
 	/**  The renamed items, in request order. */
 	entries: FileEntry_Serialize[],
-	undo: UndoAction | null,
+	undo: UndoAction_Serialize | null,
 };
 
 export type ConflictChoice = "replace" | "skip" | "keepBoth" | "stop" | 
@@ -321,6 +323,21 @@ export type DupEvent =
 { type: "progress"; scanned: number; hashed: number } | 
 /**  Files with identical contents, sorted by path. */
 { type: "group"; size: number; paths: string[] } | { type: "done"; groups: number };
+
+/**  The items after an edit (tags, dates), and how to undo it. */
+export type EditOutcome = EditOutcome_Serialize | EditOutcome_Deserialize;
+
+/**  The items after an edit (tags, dates), and how to undo it. */
+export type EditOutcome_Deserialize = {
+	entries: FileEntry_Deserialize[],
+	undo: UndoAction_Deserialize,
+};
+
+/**  The items after an edit (tags, dates), and how to undo it. */
+export type EditOutcome_Serialize = {
+	entries: FileEntry_Serialize[],
+	undo: UndoAction_Serialize,
+};
 
 export type EntryKind = "file" | "dir" | 
 /**  A directory macOS presents as a single document (`.app`, `.bundle`, …). */
@@ -461,7 +478,7 @@ export type JobOutcome_Deserialize = {
 	created: FileEntry_Deserialize[],
 	/**  Top-level paths that no longer exist (moved away, trashed, deleted). */
 	removed: string[],
-	undo?: UndoAction | null,
+	undo?: UndoAction_Deserialize | null,
 	failures: JobFailure_Deserialize[],
 	skipped: number,
 	cancelled: boolean,
@@ -472,7 +489,7 @@ export type JobOutcome_Serialize = {
 	created: FileEntry_Serialize[],
 	/**  Top-level paths that no longer exist (moved away, trashed, deleted). */
 	removed: string[],
-	undo: UndoAction | null,
+	undo: UndoAction_Serialize | null,
 	failures: JobFailure_Serialize[],
 	skipped: number,
 	cancelled: boolean,
@@ -520,7 +537,7 @@ password?: Password | null } |
 /**  Create Checksum File: hashes `sources` (files in one folder) into a list beside them. */
 { kind: "checksums"; sources: string[]; algorithm: HashKind } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
-{ kind: "undo"; action: UndoAction };
+{ kind: "undo"; action: UndoAction_Deserialize };
 
 /**  What the frontend asks for. Paths are absolute; `dest_dir` is a folder. */
 export type JobSpec_Serialize = { kind: "copy"; sources: string[]; destDir: string } | { kind: "move"; sources: string[]; destDir: string } | 
@@ -561,7 +578,7 @@ password: Password | null } |
 /**  Create Checksum File: hashes `sources` (files in one folder) into a list beside them. */
 { kind: "checksums"; sources: string[]; algorithm: HashKind } | 
 /**  Replays an `UndoAction` from an earlier job (undo and redo alike). */
-{ kind: "undo"; action: UndoAction };
+{ kind: "undo"; action: UndoAction_Serialize };
 
 export type MeasureEvent = { type: "progress"; size: SizeInfo } | { type: "done"; size: SizeInfo };
 
@@ -748,21 +765,6 @@ export type SyncStatus = "leftOnly" | "rightOnly" | "leftNewer" | "rightNewer" |
 /**  Same time, different size (or a file on one side and a folder on the other). */
 "differs";
 
-/**  The items after a tag edit, and how to put their tags back. */
-export type TagEditOutcome = TagEditOutcome_Serialize | TagEditOutcome_Deserialize;
-
-/**  The items after a tag edit, and how to put their tags back. */
-export type TagEditOutcome_Deserialize = {
-	entries: FileEntry_Deserialize[],
-	undo: UndoAction,
-};
-
-/**  The items after a tag edit, and how to put their tags back. */
-export type TagEditOutcome_Serialize = {
-	entries: FileEntry_Serialize[],
-	undo: UndoAction,
-};
-
 export type TaggedPath = {
 	path: string,
 	tags: FinderTag[],
@@ -779,18 +781,47 @@ export type TextPreview = {
  *  Steps that reverse a finished job, in execution order. Running them is itself
  *  a job whose outcome carries the steps to redo it.
  */
-export type UndoAction = {
+export type UndoAction = UndoAction_Serialize | UndoAction_Deserialize;
+
+/**
+ *  Steps that reverse a finished job, in execution order. Running them is itself
+ *  a job whose outcome carries the steps to redo it.
+ */
+export type UndoAction_Deserialize = {
 	label: string,
-	steps: UndoStep[],
+	steps: UndoStep_Deserialize[],
 };
 
-export type UndoStep = 
+/**
+ *  Steps that reverse a finished job, in execution order. Running them is itself
+ *  a job whose outcome carries the steps to redo it.
+ */
+export type UndoAction_Serialize = {
+	label: string,
+	steps: UndoStep_Serialize[],
+};
+
+export type UndoStep = UndoStep_Serialize | UndoStep_Deserialize;
+
+export type UndoStep_Deserialize = 
 /**  Move the item to the Trash (reverses a copy/creation). */
 { kind: "trash"; path: string } | 
 /**  Move an item back (reverses a move, rename, or trashing). */
 { kind: "move"; from: string; to: string } | 
 /**  Give an item exactly these Finder tags (reverses a tag edit). */
-{ kind: "tags"; path: string; tags: FinderTag[] };
+{ kind: "tags"; path: string; tags: FinderTag[] } | 
+/**  Give an item these dates back (reverses Change Dates). */
+{ kind: "dates"; path: string; modified_ms: number; created_ms?: number | null };
+
+export type UndoStep_Serialize = 
+/**  Move the item to the Trash (reverses a copy/creation). */
+{ kind: "trash"; path: string } | 
+/**  Move an item back (reverses a move, rename, or trashing). */
+{ kind: "move"; from: string; to: string } | 
+/**  Give an item exactly these Finder tags (reverses a tag edit). */
+{ kind: "tags"; path: string; tags: FinderTag[] } | 
+/**  Give an item these dates back (reverses Change Dates). */
+{ kind: "dates"; path: string; modified_ms: number; created_ms: number | null };
 
 export type UsageEvent = UsageEvent_Serialize | UsageEvent_Deserialize;
 

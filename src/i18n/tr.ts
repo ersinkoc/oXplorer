@@ -112,6 +112,16 @@ export const tr: Readonly<Record<string, string>> = {
   "Rotate Right": "Sağa Döndür",
   Rotate: "Döndür",
   Rotating: "Döndürülüyor",
+  "Change Dates…": "Tarihleri Değiştir…",
+  "Change Dates": "Tarihleri Değiştir",
+  "Select the items to change first.": "Önce değiştirilecek öğeleri seç.",
+  "Dates of “{name}”": "“{name}” tarihleri",
+  "Dates of {count} item": "{count} öğenin tarihleri",
+  "Dates of {count} items": "{count} öğenin tarihleri",
+  Now: "Şimdi",
+  "The created date can’t be later than the modified date.":
+    "Oluşturulma tarihi değiştirilme tarihinden sonra olamaz.",
+  Change: "Değiştir",
   "Couldn’t paste the clipboard as a file.": "Pano içeriği dosya olarak yapıştırılamadı.",
   "Select a checksum list (such as SHA256SUMS or a .sha256 file).":
     "Bir sağlama toplamı listesi seç (SHA256SUMS ya da .sha256 dosyası gibi).",

@@ -599,6 +599,24 @@ export async function runSelfTest(): Promise<void> {
       JSON.stringify(badTurn?.failures),
     );
 
+    // Change Dates, then undo: the old modified date comes back.
+    const datedBefore = await unwrap(commands.statPath(nf1.path));
+    const dated = await commands.setDates([nf1.path], 981_173_106_000, 946_684_800_000);
+    const undated =
+      dated.status === "ok"
+        ? await runJob({ kind: "undo", action: dated.data.undo }, { history: "none", select: false })
+        : null;
+    const datedAfter = await unwrap(commands.statPath(nf1.path));
+    step(
+      "change dates + undo",
+      dated.status === "ok" &&
+        dated.data.entries[0]?.modifiedMs === 981_173_106_000 &&
+        dated.data.entries[0]?.createdMs === 946_684_800_000 &&
+        undated?.failures.length === 0 &&
+        datedAfter.modifiedMs === datedBefore.modifiedMs,
+      `${JSON.stringify(dated.status === "ok" ? dated.data.entries[0]?.modifiedMs : dated.error)} → ${datedAfter.modifiedMs}/${datedBefore.modifiedMs}`,
+    );
+
     // Get Info → Locked, then unlocked again (a locked file couldn't be cleaned up).
     const lockOn = await commands.setLocked(nf1.path, true);
     const lockedNow = await commands.isLocked(nf1.path);
