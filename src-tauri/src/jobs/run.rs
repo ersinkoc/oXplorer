@@ -129,8 +129,9 @@ pub fn run(spec: JobSpec, reporter: &mut dyn Reporter) -> Result<JobOutcome, App
         JobSpec::Compress { sources, format, password } => {
             job.compress(validate_all(&sources)?, format, password.as_ref().map(|p| p.0.as_str()))?;
         }
-        JobSpec::Extract { archives, password } => {
-            job.extract(validate_all(&archives)?, password.as_ref().map(|p| p.0.as_str()));
+        JobSpec::Extract { archives, password, dest_dir } => {
+            let dest = dest_dir.as_deref().map(validate_path).transpose()?;
+            job.extract(validate_all(&archives)?, password.as_ref().map(|p| p.0.as_str()), dest.as_deref());
         }
         JobSpec::Download { sources, dest_dir } => job.download(&sources, &validate_path(&dest_dir)?),
         JobSpec::Upload { sources, dest_dir } => job.upload(&validate_all(&sources)?, &dest_dir),
@@ -599,7 +600,7 @@ impl Runner<'_> {
         Ok(())
     }
 
-    fn extract(&mut self, archives: Vec<PathBuf>, password: Option<&str>) {
+    fn extract(&mut self, archives: Vec<PathBuf>, password: Option<&str>, dest: Option<&Path>) {
         let units: Vec<u64> = archives.iter().map(|a| archive::work_units(a)).collect();
         self.r.planned(units.iter().sum(), u32::try_from(archives.len()).unwrap_or(u32::MAX));
         for (archive, total) in archives.iter().zip(units) {
@@ -610,7 +611,8 @@ impl Runner<'_> {
             let result = {
                 let r = &mut *self.r;
                 let mut done = before;
-                archive::extract(archive, password, &mut |n| {
+                let dir = dest.unwrap_or_else(|| archive.parent().unwrap_or(Path::new("/")));
+                archive::extract_to(archive, dir, password, &mut |n| {
                     done += n;
                     r.progress(done, 0, archive);
                     !r.cancelled()

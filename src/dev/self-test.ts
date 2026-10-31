@@ -181,6 +181,18 @@ export async function runSelfTest(): Promise<void> {
     const outDir = unzipped?.created[0]?.path ?? "";
     const inside = await commands.statPath(join(outDir, "inside.txt"));
     step("extract", outDir.endsWith("/arc 2") && inside.status === "ok", outDir);
+    const elsewhere = await unwrap(commands.createItem(dir, "extract-here", true));
+    const unzippedThere = await runJob(
+      { kind: "extract", archives: [zipPath], destDir: elsewhere.path },
+      { history: "none", select: false },
+    );
+    const thereDir = unzippedThere?.created[0]?.path ?? "";
+    const insideThere = await commands.statPath(join(thereDir, "inside.txt"));
+    step(
+      "extract to another folder",
+      thereDir === join(elsewhere.path, "arc") && insideThere.status === "ok",
+      thereDir,
+    );
 
     // Zip with Password: encrypted, refused with the wrong password, opened with the right one.
     const locked = await runJob(

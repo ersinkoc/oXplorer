@@ -112,6 +112,9 @@ export const tr: Readonly<Record<string, string>> = {
   "Rotate Right": "Sağa Döndür",
   Rotate: "Döndür",
   Rotating: "Döndürülüyor",
+  "Extract to Other Pane": "Diğer Panele Çıkar",
+  "Archives can only be extracted into a folder on this Mac.":
+    "Arşivler yalnızca bu Mac’teki bir klasöre çıkarılabilir.",
   "Change Dates…": "Tarihleri Değiştir…",
   "Change Dates": "Tarihleri Değiştir",
   "Select the items to change first.": "Önce değiştirilecek öğeleri seç.",

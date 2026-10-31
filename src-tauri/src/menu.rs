@@ -45,6 +45,7 @@ const FILE: &[Item] = &[
     ("file.addToSidebar", "Add to Sidebar", Some("Ctrl+CmdOrCtrl+T")),
     ("file.compress.zip", "Compress", None),
     ("file.extract", "Extract Here", None),
+    ("file.extractToOther", "Extract to Other Pane", Some("Alt+F9")),
     SEP,
     ("file.trash", "Move to Trash", Some("CmdOrCtrl+Backspace")),
     ("file.delete", "Delete Immediately…", Some("Alt+CmdOrCtrl+Backspace")),

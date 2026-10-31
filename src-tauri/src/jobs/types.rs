@@ -41,6 +41,9 @@ pub enum JobSpec {
         /// For encrypted zips.
         #[serde(default)]
         password: Option<Password>,
+        /// Where to extract; next to each archive when absent.
+        #[serde(default)]
+        dest_dir: Option<String>,
     },
     /// Downloads remote items (`remote:` paths) into a local folder.
     Download {

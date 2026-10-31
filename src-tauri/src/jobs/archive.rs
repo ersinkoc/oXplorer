@@ -459,16 +459,26 @@ fn normalize_member(path: &Path) -> io::Result<PathBuf> {
     Ok(out)
 }
 
-/// Extracts next to the archive like Archive Utility: a single top-level item
-/// lands as itself, anything else in a folder named after the archive.
+/// Extracts next to the archive (tests use this; jobs pick the folder).
+#[cfg(test)]
 pub fn extract(
     archive: &Path,
     password: Option<&str>,
     tick: &mut dyn FnMut(u64) -> bool,
 ) -> io::Result<PathBuf> {
+    extract_to(archive, archive.parent().unwrap_or(Path::new("/")), password, tick)
+}
+
+/// Extracts into `dir` like Archive Utility: a single top-level item lands as
+/// itself, anything else in a folder named after the archive.
+pub fn extract_to(
+    archive: &Path,
+    dir: &Path,
+    password: Option<&str>,
+    tick: &mut dyn FnMut(u64) -> bool,
+) -> io::Result<PathBuf> {
     let (kind, suffix) = kind_of(archive)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a supported archive"))?;
-    let dir = archive.parent().unwrap_or(Path::new("/"));
     let name = archive.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let stem = &name[..name.len() - suffix.len()];
     let staging = unique(dir, &format!(".{stem}.oxextract"), "");
@@ -720,6 +730,27 @@ mod tests {
         let out = extract(&dest, None, &mut |_| true).unwrap();
         assert_eq!(out, tmp.path().join("Archive"));
         assert!(out.join("a.txt").exists() && out.join("b.txt").exists());
+    }
+
+    #[test]
+    fn extracts_into_another_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tree(tmp.path());
+        let dest = archive_path(std::slice::from_ref(&src), ArchiveFormat::Zip).unwrap();
+        compress(std::slice::from_ref(&src), &dest, ArchiveFormat::Zip, None, &mut |_| true).unwrap();
+        let other = tmp.path().join("other");
+        fs::create_dir(&other).unwrap();
+        let out = extract_to(&dest, &other, None, &mut |_| true).unwrap();
+        assert_eq!(out, other.join("project"));
+        assert_eq!(fs::read_to_string(out.join("a.txt")).unwrap(), "alpha");
+        // Nothing staged was left in either folder.
+        assert_eq!(fs::read_dir(&other).unwrap().count(), 1);
+        assert!(
+            !fs::read_dir(tmp.path())
+                .unwrap()
+                .flatten()
+                .any(|e| e.file_name().to_string_lossy().contains("oxextract"))
+        );
     }
 
     #[test]

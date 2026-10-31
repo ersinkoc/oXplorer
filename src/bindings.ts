@@ -511,7 +511,9 @@ password?: Password | null } |
 /**  Extracts each archive next to itself. */
 { kind: "extract"; archives: string[]; 
 /**  For encrypted zips. */
-password?: Password | null } | 
+password?: Password | null; 
+/**  Where to extract; next to each archive when absent. */
+destDir?: string | null } | 
 /**  Downloads remote items (`remote:` paths) into a local folder. */
 { kind: "download"; sources: string[]; destDir: string } | 
 /**  Uploads local items into a remote folder (`remote:` path). */
@@ -552,7 +554,9 @@ password: Password | null } |
 /**  Extracts each archive next to itself. */
 { kind: "extract"; archives: string[]; 
 /**  For encrypted zips. */
-password: Password | null } | 
+password: Password | null; 
+/**  Where to extract; next to each archive when absent. */
+destDir: string | null } | 
 /**  Downloads remote items (`remote:` paths) into a local folder. */
 { kind: "download"; sources: string[]; destDir: string } | 
 /**  Uploads local items into a remote folder (`remote:` path). */

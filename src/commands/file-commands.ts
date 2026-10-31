@@ -21,7 +21,7 @@ import { copyText, cutText, deleteToLineStart, focusedTextField, pasteText, undo
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { useHistory } from "@/stores/history-store";
-import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
+import { getActiveTab, otherPane, useWorkspace } from "@/stores/workspace-store";
 
 function report(err: unknown, fallback: string): void {
   toast.error(err instanceof CommandError ? err.message : fallback);
@@ -370,19 +370,39 @@ async function combineParts(): Promise<void> {
   await runJob({ kind: "join", first, destDir: parent(first) ?? "/" });
 }
 
-/** Extract Here: encrypted zips ask for their password first (one for all of them). */
-async function extractSelected(): Promise<void> {
+/** The other pane's folder for Extract to Other Pane, or null (and says why). */
+function otherPaneFolder(): string | null {
+  const { dualPane, activePane } = useWorkspace.getState();
+  if (!dualPane) {
+    toast(t("Open the second pane first (⌘U)."));
+    return null;
+  }
+  const dir = writableFolder(otherPane(activePane));
+  if (dir && isRemotePath(dir)) {
+    toast(t("Archives can only be extracted into a folder on this Mac."));
+    return null;
+  }
+  return dir;
+}
+
+/**
+ * Extract Here, or into `destDir` (Extract to Other Pane): encrypted zips ask
+ * for their password first (one for all of them).
+ */
+async function extractSelected(destDir?: string | null): Promise<void> {
+  if (destDir === null) return;
   const archives = selectedEntries()
     .filter(isArchive)
     .map((e) => e.path);
   if (archives.length === 0) return;
+  if (refuseArchiveMembers(archives) || refuseRemote(archives)) return;
   const flags = await Promise.all(archives.map((a) => commands.archiveEncrypted(a)));
   const locked = archives.filter((_, i) => {
     const r = flags[i];
     return r?.status === "ok" && r.data;
   });
   const plain = archives.filter((a) => !locked.includes(a));
-  if (plain.length > 0) await runJob({ kind: "extract", archives: plain });
+  if (plain.length > 0) await runJob({ kind: "extract", archives: plain, destDir });
   if (locked.length === 0) return;
   const password = await askPassword({
     title:
@@ -391,7 +411,7 @@ async function extractSelected(): Promise<void> {
         : t("Encrypted archives"),
     message: t("Enter the password to extract it."),
   });
-  if (password) await runJob({ kind: "extract", archives: locked, password });
+  if (password) await runJob({ kind: "extract", archives: locked, password, destDir });
 }
 
 /** Adds a tag to every item, or removes it when they all have it already. */
@@ -586,7 +606,12 @@ export function registerFileCommands(): void {
       run: () => compress(format),
     })),
     { id: "file.compress.zipPassword", title: "Zip with Password…", run: () => compress("zip", true) },
-    { id: "file.extract", title: "Extract Here", run: extractSelected },
+    { id: "file.extract", title: "Extract Here", run: () => extractSelected() },
+    {
+      id: "file.extractToOther",
+      title: "Extract to Other Pane",
+      run: () => extractSelected(otherPaneFolder()),
+    },
     {
       id: "file.getInfo",
       title: "Get Info",

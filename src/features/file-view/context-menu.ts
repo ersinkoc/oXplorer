@@ -155,6 +155,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
                     : t("Extract {count} Archives Here", { count: archives }),
                 command: "file.extract",
               },
+              { text: t("Extract to Other Pane"), command: "file.extractToOther", enabled: dual },
             ]
           : []),
         "-",
