@@ -283,6 +283,14 @@ export async function runSelfTest(): Promise<void> {
       `list=${sums?.path} verified=${JSON.stringify(sumsVerified)} statuses=${sumStatuses}`,
     );
 
+    // Paste as file: registered and allowed; a relative folder is refused before the clipboard is read.
+    const pastedBad = await commands.pasteboardSave("not/absolute");
+    step(
+      "paste as file refuses bad folders",
+      pastedBad.status === "error" && pastedBad.error.kind === "invalidPath",
+      JSON.stringify(pastedBad),
+    );
+
     // Empty Trash's count (never the job itself here: it would erase the real Trash).
     const inTrash = await commands.trashCount();
     step(

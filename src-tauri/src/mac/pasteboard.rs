@@ -4,8 +4,11 @@ use std::path::{Path, PathBuf};
 
 use objc2::rc::{Retained, autoreleasepool};
 use objc2::runtime::ProtocolObject;
-use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardTypeFileURL, NSPasteboardWriting};
-use objc2_foundation::{NSArray, NSString, NSURL};
+use objc2_app_kit::{
+    NSBitmapImageFileType, NSBitmapImageRep, NSPasteboard, NSPasteboardItem, NSPasteboardTypeFileURL,
+    NSPasteboardTypePNG, NSPasteboardTypeString, NSPasteboardTypeTIFF, NSPasteboardWriting,
+};
+use objc2_foundation::{NSArray, NSDictionary, NSString, NSURL};
 
 pub fn write_files(paths: &[PathBuf]) -> bool {
     autoreleasepool(|_| {
@@ -41,6 +44,36 @@ pub fn read_files() -> Vec<PathBuf> {
                 Some(PathBuf::from(url.path()?.to_string()))
             })
             .collect()
+    })
+}
+
+/// Clipboard content that isn't files: a picture (as PNG) or text.
+pub enum Content {
+    Png(Vec<u8>),
+    Text(String),
+}
+
+/// A picture or text on the pasteboard, picture first (screenshots, Preview's
+/// Copy); TIFF pictures are re-encoded as PNG.
+pub fn read_content() -> Option<Content> {
+    autoreleasepool(|_| {
+        let pb = NSPasteboard::generalPasteboard();
+        // SAFETY: valid, immutable framework constants.
+        let (png, tiff, string) =
+            unsafe { (NSPasteboardTypePNG, NSPasteboardTypeTIFF, NSPasteboardTypeString) };
+        if let Some(data) = pb.dataForType(png) {
+            return Some(Content::Png(data.to_vec()));
+        }
+        if let Some(data) = pb.dataForType(tiff)
+            && let Some(rep) = NSBitmapImageRep::imageRepWithData(&data)
+            // SAFETY: an empty properties dictionary is always valid.
+            && let Some(out) =
+                unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new()) }
+        {
+            return Some(Content::Png(out.to_vec()));
+        }
+        let text = pb.stringForType(string)?.to_string();
+        (!text.is_empty()).then_some(Content::Text(text))
     })
 }
 

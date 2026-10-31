@@ -77,6 +77,11 @@ export const commands = {
 	pasteboardWriteFiles: (paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("pasteboard_write_files", { paths })),
 	/**  Files on the general pasteboard that still exist. */
 	pasteboardReadFiles: () => __TAURI_INVOKE<string[]>("pasteboard_read_files"),
+	/**
+	 *  ⌘V without files on the clipboard: a copied picture or text becomes a new
+	 *  file in `dir`. None when the clipboard holds neither.
+	 */
+	pasteboardSave: (dir: string) => typedError<FileEntry_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("pasteboard_save", { dir })),
 	appsForPath: (path: string) => typedError<AppInfo[], AppError_Serialize>(__TAURI_INVOKE("apps_for_path", { path })),
 	openWith: (app: string, paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_with", { app, paths })),
 	/**  Writes the icon of `path` to a cache file for the native drag image and returns its path. */

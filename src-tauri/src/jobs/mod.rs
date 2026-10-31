@@ -5,7 +5,7 @@ pub(crate) mod archive;
 pub mod convert;
 pub mod dupes;
 mod fsops;
-mod names;
+pub(crate) mod names;
 mod rename;
 mod run;
 mod split;

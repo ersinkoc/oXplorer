@@ -84,6 +84,53 @@ pub async fn drag_preview(app: AppHandle, path: String) -> AppResult<String> {
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
 }
 
+/// Writes clipboard content into `dir` as a new file (`Pasted Image.png`,
+/// `Pasted Text.txt`, or the next free variant); never replaces anything.
+fn save_content(dir: &std::path::Path, content: pasteboard::Content) -> std::io::Result<PathBuf> {
+    let (name, bytes) = match content {
+        pasteboard::Content::Png(bytes) => ("Pasted Image.png", bytes),
+        pasteboard::Content::Text(text) => ("Pasted Text.txt", text.into_bytes()),
+    };
+    for _ in 0..100 {
+        let path = crate::jobs::names::untitled(dir, name, true);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut f) => {
+                let written = std::io::Write::write_all(&mut f, &bytes).and_then(|()| f.sync_all());
+                return match written {
+                    Ok(()) => Ok(path),
+                    Err(e) => {
+                        let _ = fs::remove_file(&path);
+                        Err(e)
+                    }
+                };
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::ErrorKind::AlreadyExists.into())
+}
+
+/// ⌘V without files on the clipboard: a copied picture or text becomes a new
+/// file in `dir`. None when the clipboard holds neither.
+#[tauri::command]
+#[specta::specta]
+pub async fn pasteboard_save(app: AppHandle, dir: String) -> AppResult<Option<crate::model::FileEntry>> {
+    let dir_path = validate_path(&dir)?;
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let _ = tx.send(pasteboard::read_content());
+    })
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(content) = rx.recv().ok().flatten() else { return Ok(None) };
+        let path = save_content(&dir_path, content).map_err(|e| AppError::from_io(&e, &dir_path))?;
+        Ok(crate::dir::build_entry_for(&path))
+    })
+    .await
+    .map_err(|e| AppError::Io { path: Some(dir), message: e.to_string() })?
+}
+
 /// Opens the Quick Look panel on `paths` at `index`. With `open: false` it only
 /// follows the selection while the panel is already showing.
 #[tauri::command]
@@ -149,4 +196,22 @@ pub async fn edit_tags(
     })
     .await
     .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pasted_content_gets_a_free_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let text = save_content(tmp.path(), pasteboard::Content::Text("hi".into())).unwrap();
+        assert_eq!(text, tmp.path().join("Pasted Text.txt"));
+        assert_eq!(fs::read_to_string(&text).unwrap(), "hi");
+        let again = save_content(tmp.path(), pasteboard::Content::Text("yo".into())).unwrap();
+        assert_eq!(again, tmp.path().join("Pasted Text 2.txt"));
+        assert_eq!(fs::read_to_string(&text).unwrap(), "hi");
+        let png = save_content(tmp.path(), pasteboard::Content::Png(vec![1, 2])).unwrap();
+        assert_eq!(png, tmp.path().join("Pasted Image.png"));
+    }
 }

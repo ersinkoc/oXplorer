@@ -51,6 +51,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             jobs::batch_rename,
             integration::pasteboard_write_files,
             integration::pasteboard_read_files,
+            integration::pasteboard_save,
             integration::apps_for_path,
             integration::open_with,
             integration::drag_preview,

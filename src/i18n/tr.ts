@@ -112,6 +112,7 @@ export const tr: Readonly<Record<string, string>> = {
   "Rotate Right": "Sağa Döndür",
   Rotate: "Döndür",
   Rotating: "Döndürülüyor",
+  "Couldn’t paste the clipboard as a file.": "Pano içeriği dosya olarak yapıştırılamadı.",
   "Select a checksum list (such as SHA256SUMS or a .sha256 file).":
     "Bir sağlama toplamı listesi seç (SHA256SUMS ya da .sha256 dosyası gibi).",
   "Checksums in “{name}”": "“{name}” içindeki sağlama toplamları",

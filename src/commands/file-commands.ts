@@ -51,11 +51,14 @@ async function toPasteboard(cut: boolean): Promise<void> {
 /** Pastes files from the general pasteboard (ours or Finder's) into the current folder. */
 export async function pasteFiles(forceMove: boolean): Promise<void> {
   const sources = await commands.pasteboardReadFiles();
-  if (sources.length === 0) return;
-  const { clipboard } = useApp.getState();
-  const wasCut = !!clipboard?.cut && sameSet(clipboard.paths, sources);
   const destDir = writableFolder();
   if (!destDir) return;
+  if (sources.length === 0) {
+    if (!forceMove && !isRemotePath(destDir)) await pasteAsFile(destDir);
+    return;
+  }
+  const { clipboard } = useApp.getState();
+  const wasCut = !!clipboard?.cut && sameSet(clipboard.paths, sources);
   if (isRemotePath(destDir)) {
     const spec = transferSpec(sources, destDir, "copy");
     if (spec) await runJob(spec);
@@ -66,6 +69,20 @@ export async function pasteFiles(forceMove: boolean): Promise<void> {
     if (wasCut) useApp.getState().set({ clipboard: null });
   } else {
     await runJob({ kind: "copy", sources, destDir });
+  }
+}
+
+/** A copied picture or text pasted into a folder becomes a new file, ready to rename. */
+async function pasteAsFile(dir: string): Promise<void> {
+  try {
+    const entry = await unwrap(commands.pasteboardSave(dir));
+    if (!entry) return;
+    applyFsChanges([entry], []);
+    recordUndo({ label: msg("Paste"), steps: [{ kind: "trash", path: entry.path }] });
+    useWorkspace.getState().setSelection(selectOne(entry.path));
+    useApp.getState().set({ renaming: entry.path });
+  } catch (err) {
+    report(err, t("Couldn’t paste the clipboard as a file."));
   }
 }
 

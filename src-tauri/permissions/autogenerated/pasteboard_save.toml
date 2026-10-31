@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pasteboard-save"
+description = "Enables the pasteboard_save command without any pre-configured scope."
+commands.allow = ["pasteboard_save"]
+
+[[permission]]
+identifier = "deny-pasteboard-save"
+description = "Denies the pasteboard_save command without any pre-configured scope."
+commands.deny = ["pasteboard_save"]

@@ -25,6 +25,7 @@ const COMMANDS: &[&str] = &[
     "set_locked",
     "pasteboard_write_files",
     "pasteboard_read_files",
+    "pasteboard_save",
     "apps_for_path",
     "open_with",
     "drag_preview",
