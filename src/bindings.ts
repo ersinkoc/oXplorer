@@ -84,6 +84,10 @@ export const commands = {
 	pasteboardSave: (dir: string) => typedError<FileEntry_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("pasteboard_save", { dir })),
 	/**  Change Dates: sets the modified and/or created date (epoch ms) of each item. */
 	setDates: (paths: string[], modifiedMs: number | null, createdMs: number | null) => typedError<EditOutcome_Serialize, AppError_Serialize>(__TAURI_INVOKE("set_dates", { paths, modifiedMs, createdMs })),
+	/**  Whether the clipboard holds a picture or text ⌘V can save as a file. */
+	pasteboardHasContent: () => __TAURI_INVOKE<boolean>("pasteboard_has_content"),
+	/**  Set Desktop Picture: the picture at `path` on every screen. */
+	setDesktopPicture: (path: string) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("set_desktop_picture", { path })),
 	appsForPath: (path: string) => typedError<AppInfo[], AppError_Serialize>(__TAURI_INVOKE("apps_for_path", { path })),
 	openWith: (app: string, paths: string[]) => typedError<null, AppError_Serialize>(__TAURI_INVOKE("open_with", { app, paths })),
 	/**  Writes the icon of `path` to a cache file for the native drag image and returns its path. */

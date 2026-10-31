@@ -15,6 +15,28 @@ pub struct AppInfo {
     pub is_default: bool,
 }
 
+/// Set Desktop Picture: `path` on every screen, like Finder's item menu.
+/// Must run on the main thread.
+pub fn set_desktop_picture(path: &Path) -> Result<(), String> {
+    let Some(mtm) = objc2::MainThreadMarker::new() else { return Err("not on the main thread".into()) };
+    autoreleasepool(|_| {
+        let ws = NSWorkspace::sharedWorkspace();
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+        for screen in &objc2_app_kit::NSScreen::screens(mtm) {
+            // SAFETY: an empty options dictionary is always valid.
+            unsafe {
+                ws.setDesktopImageURL_forScreen_options_error(
+                    &url,
+                    &screen,
+                    &objc2_foundation::NSDictionary::new(),
+                )
+            }
+            .map_err(|e| e.localizedDescription().to_string())?;
+        }
+        Ok(())
+    })
+}
+
 pub fn apps_for(path: &Path) -> Vec<AppInfo> {
     autoreleasepool(|_| {
         let ws = NSWorkspace::sharedWorkspace();

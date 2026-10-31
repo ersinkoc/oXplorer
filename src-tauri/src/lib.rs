@@ -53,6 +53,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             integration::pasteboard_read_files,
             integration::pasteboard_save,
             integration::set_dates,
+            integration::pasteboard_has_content,
+            integration::set_desktop_picture,
             integration::apps_for_path,
             integration::open_with,
             integration::drag_preview,

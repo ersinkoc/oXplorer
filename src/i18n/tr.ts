@@ -113,6 +113,9 @@ export const tr: Readonly<Record<string, string>> = {
   Rotate: "Döndür",
   Rotating: "Döndürülüyor",
   "Extract to Other Pane": "Diğer Panele Çıkar",
+  "Set Desktop Picture": "Masaüstü Resmi Olarak Ayarla",
+  "Select one picture first.": "Önce bir resim seç.",
+  "Couldn’t set the desktop picture.": "Masaüstü resmi ayarlanamadı.",
   "Archives can only be extracted into a folder on this Mac.":
     "Arşivler yalnızca bu Mac’teki bir klasöre çıkarılabilir.",
   "Change Dates…": "Tarihleri Değiştir…",

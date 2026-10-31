@@ -538,6 +538,21 @@ export function registerFileCommands(): void {
         useApp.getState().set({ checksumPaths: sources });
       },
     },
+    {
+      id: "file.setDesktopPicture",
+      title: "Set Desktop Picture",
+      run: async () => {
+        const sel = selectedEntries();
+        const [image] = sel;
+        if (sel.length !== 1 || !image || !isConvertibleImage(image)) {
+          toast(t("Select one picture first."));
+          return;
+        }
+        if (refuseArchiveMembers([image.path]) || refuseRemote([image.path])) return;
+        const r = await commands.setDesktopPicture(image.path);
+        if (r.status === "error") report(new CommandError(r.error), t("Couldn’t set the desktop picture."));
+      },
+    },
     { id: "file.rotateLeft", title: "Rotate Left", run: () => rotateSelected(false) },
     { id: "file.rotateRight", title: "Rotate Right", run: () => rotateSelected(true) },
     {

@@ -122,6 +122,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
               { text: t("Convert Image…"), command: "file.convertImage" },
               { text: t("Rotate Left"), command: "file.rotateLeft" },
               { text: t("Rotate Right"), command: "file.rotateRight" },
+              ...(one ? [{ text: t("Set Desktop Picture"), command: "file.setDesktopPicture" }] : []),
             ]
           : []),
         ...(one && firstPart(entries[0]?.path ?? "")
@@ -180,7 +181,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
 
 /** Native menu for right-clicking empty space in a folder. */
 export async function showBackgroundMenu(): Promise<void> {
-  const canPaste = (await commands.pasteboardReadFiles()).length > 0;
+  // Files, or a picture / text that ⌘V saves as a new file.
+  const canPaste =
+    (await commands.pasteboardReadFiles()).length > 0 || (await commands.pasteboardHasContent());
   const { showHidden } = useApp.getState();
   const { foldersFirst } = getActiveTab().view.sort;
   const { undo } = useHistory.getState();

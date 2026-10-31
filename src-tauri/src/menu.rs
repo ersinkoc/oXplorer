@@ -37,6 +37,7 @@ const FILE: &[Item] = &[
     ("file.convertImage", "Convert Image…", None),
     ("file.rotateLeft", "Rotate Left", None),
     ("file.rotateRight", "Rotate Right", None),
+    ("file.setDesktopPicture", "Set Desktop Picture", None),
     ("file.split", "Split File…", None),
     ("file.combine", "Combine Files", None),
     ("file.verifyChecksums", "Verify Checksums…", None),

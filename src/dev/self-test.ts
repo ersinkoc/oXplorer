@@ -303,6 +303,14 @@ export async function runSelfTest(): Promise<void> {
       JSON.stringify(pastedBad),
     );
 
+    // Set Desktop Picture: only refusals here (a real picture would change the user's wallpaper).
+    const noPicture = await commands.setDesktopPicture(join(dir, "no such picture.png"));
+    step(
+      "desktop picture refuses missing files",
+      noPicture.status === "error" && noPicture.error.kind === "notFound",
+      JSON.stringify(noPicture),
+    );
+
     // Empty Trash's count (never the job itself here: it would erase the real Trash).
     const inTrash = await commands.trashCount();
     step(

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-pasteboard-has-content"
+description = "Enables the pasteboard_has_content command without any pre-configured scope."
+commands.allow = ["pasteboard_has_content"]
+
+[[permission]]
+identifier = "deny-pasteboard-has-content"
+description = "Denies the pasteboard_has_content command without any pre-configured scope."
+commands.deny = ["pasteboard_has_content"]

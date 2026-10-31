@@ -50,6 +50,8 @@
     "allow-pasteboard-read-files",
     "allow-pasteboard-save",
     "allow-set-dates",
+    "allow-pasteboard-has-content",
+    "allow-set-desktop-picture",
     "allow-apps-for-path",
     "allow-open-with",
     "allow-drag-preview",

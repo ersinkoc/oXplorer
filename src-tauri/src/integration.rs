@@ -111,6 +111,32 @@ fn save_content(dir: &std::path::Path, content: pasteboard::Content) -> std::io:
     Err(std::io::ErrorKind::AlreadyExists.into())
 }
 
+/// Whether the clipboard holds a picture or text ⌘V can save as a file.
+#[tauri::command]
+#[specta::specta]
+pub fn pasteboard_has_content() -> bool {
+    pasteboard::has_content()
+}
+
+/// Set Desktop Picture: the picture at `path` on every screen.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_desktop_picture(app: AppHandle, path: String) -> AppResult<()> {
+    let p = validate_path(&path)?;
+    if !p.is_file() {
+        return Err(AppError::NotFound { path });
+    }
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let _ = tx.send(apps::set_desktop_picture(&p));
+    })
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?;
+    let result = tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(Err("no answer".into())))
+        .await
+        .map_err(|e| AppError::Io { path: None, message: e.to_string() })?;
+    result.map_err(|message| AppError::Io { path: Some(path), message })
+}
+
 /// ⌘V without files on the clipboard: a copied picture or text becomes a new
 /// file in `dir`. None when the clipboard holds neither.
 #[tauri::command]

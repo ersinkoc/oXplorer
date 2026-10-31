@@ -28,6 +28,7 @@ The first public build of OXplorer.
 - ⌘V with a copied picture or text (and no files) on the clipboard saves it into the folder as “Pasted Image.png” / “Pasted Text.txt” and starts renaming it; Undo removes it.
 - Change Dates… (File menu and the item menu) sets the modified and/or created date of the selected items, with a Now button; Undo puts the old dates back.
 - Extract to Other Pane (⌥F9; File menu and the item menu for archives) extracts the selected archives into the folder open in the other pane.
+- Set Desktop Picture (File menu and the item menu for one picture) puts it on every screen. Right-clicking empty space offers Paste when the clipboard holds a picture or text.
 - Empty Trash… (⇧⌘⌫) permanently erases what's in the Trash after asking, as in Finder.
 - Rename many items at once, edit Finder tags.
 - Open With works on a folder too: editors and terminals that open folders, plus Terminal.

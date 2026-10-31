@@ -27,6 +27,8 @@ const COMMANDS: &[&str] = &[
     "pasteboard_read_files",
     "pasteboard_save",
     "set_dates",
+    "pasteboard_has_content",
+    "set_desktop_picture",
     "apps_for_path",
     "open_with",
     "drag_preview",

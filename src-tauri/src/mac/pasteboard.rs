@@ -77,6 +77,15 @@ pub fn read_content() -> Option<Content> {
     })
 }
 
+/// Whether ⌘V would paste a picture or text (types only; nothing is read).
+pub fn has_content() -> bool {
+    autoreleasepool(|_| {
+        // SAFETY: valid, immutable framework constants.
+        let types = unsafe { [NSPasteboardTypePNG, NSPasteboardTypeTIFF, NSPasteboardTypeString] };
+        NSPasteboard::generalPasteboard().availableTypeFromArray(&NSArray::from_slice(&types)).is_some()
+    })
+}
+
 pub fn exists_all(paths: &[PathBuf]) -> bool {
     paths.iter().all(|p| Path::new(p).symlink_metadata().is_ok())
 }
