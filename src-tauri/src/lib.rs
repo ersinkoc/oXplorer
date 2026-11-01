@@ -139,6 +139,17 @@ fn log_panics() {
     }));
 }
 
+/// Dev builds keep their settings, session, logs and single-instance lock apart
+/// from an installed OXplorer (`com.ecostack.oxplorer.dev`), so `tauri dev` and
+/// the self-test never touch the real app's state.
+fn context() -> tauri::Context<tauri::Wry> {
+    let mut ctx = tauri::generate_context!();
+    if cfg!(debug_assertions) {
+        ctx.config_mut().identifier.push_str(".dev");
+    }
+    ctx
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     log_panics();
@@ -199,7 +210,7 @@ pub fn run() {
             app.manage(std::sync::Arc::new(usage::UsageScans::default()));
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building OXplorer")
         .run(|app, event| {
             // Folders dropped on the Dock icon or sent with `open -a OXplorer <dir>`.
