@@ -27,9 +27,15 @@ A modern, open-source, dual-pane file manager for macOS — Finder's look and fe
 
 ## Install
 
-Download the latest beta DMG from the [Releases page](https://github.com/ersinkoc/oXplorer/releases) (macOS 14+, Apple Silicon and Intel) and drag OXplorer to Applications.
+In Terminal (macOS 14+, Apple Silicon and Intel):
 
-Betas aren't signed with an Apple Developer ID yet, so macOS blocks the first launch: right-click OXplorer → **Open** (or System Settings → Privacy & Security → **Open Anyway**), or run `xattr -dr com.apple.quarantine /Applications/OXplorer.app`. **Check for Updates…** tells you when a newer beta is out.
+```bash
+curl -fsSL https://raw.githubusercontent.com/ersinkoc/oXplorer/main/install.sh | sh
+```
+
+It installs the newest release, beta included, into `/Applications`. Run it again to update. You can set `OXPLORER_VERSION=0.1.0-beta.2` to install a specific release, or `OXPLORER_DEST=~/Applications` to install without an administrator password. Betas aren't signed with an Apple Developer ID yet. Apps downloaded with `curl` open without the "unidentified developer" prompt.
+
+You can also download the DMG from the [Releases page](https://github.com/ersinkoc/oXplorer/releases) and drag OXplorer to Applications. macOS then blocks the first launch: right-click OXplorer → **Open** (or System Settings → Privacy & Security → **Open Anyway**), or run `xattr -dr com.apple.quarantine /Applications/OXplorer.app`. **Check for Updates…** tells you when a newer beta is out.
 
 Signed releases will also come through Homebrew (`packaging/homebrew/oxplorer.rb`) and update themselves. You can always build from source (below).
 
