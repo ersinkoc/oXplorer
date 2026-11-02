@@ -141,16 +141,18 @@ fn log_panics() {
 
 /// Dev builds run as `net.oxog.oxplorer.dev`: their settings, session, logs and
 /// single-instance lock stay apart from an installed OXplorer, so `tauri dev`
-/// and the self-test never touch the real app’s state.
+/// and the self-test never touch the real appâs state.
 fn context() -> tauri::Context<tauri::Wry> {
     let mut ctx = tauri::generate_context!();
     if cfg!(debug_assertions) {
         ctx.config_mut().identifier.push_str(".dev");
-        // The self-test runs out of sight: its windows never show or take focus.
+        // The self-test runs out of sight: its windows never show or take focus, and
+        // WebKit mustn’t suspend their hidden pages.
         if self_test() {
             for w in &mut ctx.config_mut().app.windows {
                 w.visible = false;
                 w.focus = false;
+                w.background_throttling = Some(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
             }
         }
     }

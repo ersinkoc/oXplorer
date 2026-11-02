@@ -13,10 +13,16 @@ import { useApp } from "@/stores/app-store";
 
 /** View → Disk Usage: a treemap of what takes space under a folder. */
 export function DiskUsageDialog() {
+  const { t } = useT();
   const root = useApp((s) => s.diskUsagePath);
   const close = () => useApp.getState().set({ diskUsagePath: null });
   return (
-    <Dialog open={!!root} onClose={close} label="Disk Usage" className="h-[78vh] w-[86vw] max-w-[1200px]">
+    <Dialog
+      open={!!root}
+      onClose={close}
+      label={t("Disk Usage")}
+      className="h-[78vh] w-[86vw] max-w-[1200px]"
+    >
       {root && <Body key={root} root={root} onClose={close} />}
     </Dialog>
   );

@@ -771,6 +771,49 @@ export async function runSelfTest(): Promise<void> {
     const completed = await unwrap(commands.completePath(folder.path, "SY"));
     step("path completion", completed.join("|") === "sync a|sync b", completed.join("|"));
 
+    // Every dialog opens with content, fits the window and goes away when closed.
+    const fileA = await unwrap(commands.statPath(renamed.path));
+    const fileB = await unwrap(commands.statPath(join(dir, "note copy.txt")));
+    const dialogs: [string, Parameters<ReturnType<typeof useApp.getState>["set"]>[0]][] = [
+      ["info", { infoPaths: [fileA.path] }],
+      ["batch rename", { batchRename: [fileA, fileB] }],
+      ["select matching", { selectMatching: "select" }],
+      ["compare files", { compareFiles: [fileA, fileB] }],
+      ["convert image", { convertPaths: [fileA.path] }],
+      ["split file", { splitFile: { path: fileA.path, size: 1 } }],
+      ["create checksums", { checksumPaths: [fileA.path] }],
+      ["change dates", { datesEntries: [fileA] }],
+      ["what's new", { whatsNewOpen: true }],
+      ["palette", { paletteOpen: true }],
+    ];
+    const badDialogs: string[] = [];
+    for (const [name, patch] of dialogs) {
+      useApp.getState().set(patch);
+      const shown = await waitFor(() => document.querySelectorAll("dialog[open]").length === 1, 2000);
+      const el = document.querySelector<HTMLDialogElement>("dialog[open]");
+      const r = el?.getBoundingClientRect();
+      const fits = !!r && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+      const filled = (el?.textContent?.trim().length ?? 0) > 0;
+      // Reset every field the patch set, which closes the dialog.
+      useApp
+        .getState()
+        .set(
+          Object.fromEntries(
+            Object.keys(patch).map((k) => [
+              k,
+              typeof patch[k as keyof typeof patch] === "boolean" ? false : null,
+            ]),
+          ),
+        );
+      const hidden = await waitFor(
+        () => !document.querySelector("dialog[open]") && !!el && getComputedStyle(el).display === "none",
+        2000,
+      );
+      if (!(shown && fits && filled && hidden))
+        badDialogs.push(`${name}(shown=${shown} fits=${fits} filled=${filled} hidden=${hidden})`);
+    }
+    step("dialogs open, fit and close", badDialogs.length === 0, badDialogs.join(" "));
+
     await unwrap(commands.openWindow(folder.path));
     const win = await waitForAsync(() => WebviewWindow.getByLabel("window-2"), 5000);
     await sleep(2500);
