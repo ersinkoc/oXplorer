@@ -1,6 +1,6 @@
 [package]
 name = "oxplorer"
-version = "0.1.0-beta.6"
+version = "0.1.0-beta.7"
 description = "OXplorer — modern dual-pane file manager for macOS"
 authors = ["Ersin / OXOGNET OÜ"]
 license = "MIT"

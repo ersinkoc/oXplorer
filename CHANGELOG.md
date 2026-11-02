@@ -78,3 +78,4 @@ The first public build of OXplorer.
 
 - The app's identifier is now `net.oxog.oxplorer` (its settings live in `~/Library/Application Support/net.oxog.oxplorer`). Builds up to 0.1.0-beta.4 used `com.ecostack.oxplorer`: tabs and settings start fresh, and Full Disk Access has to be granted again.
 - `curl -fsSL https://raw.githubusercontent.com/ersinkoc/oXplorer/main/install.sh | sh` installs the newest release without Gatekeeper prompts.
+- From 0.1.0-beta.7 on, builds carry a stable signature, so Full Disk Access granted once stays granted through updates (earlier betas asked again after every install). Grant it one more time after moving to beta.7.
