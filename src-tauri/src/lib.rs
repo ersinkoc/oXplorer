@@ -139,13 +139,13 @@ fn log_panics() {
     }));
 }
 
-/// Dev builds keep their settings, session, logs and single-instance lock apart
-/// from an installed OXplorer (`com.ecostack.oxplorer.dev`), so `tauri dev` and
-/// the self-test never touch the real app's state.
+/// Dev builds run as `net.oxog.oxplorer.dev`: their settings, session, logs and
+/// single-instance lock stay apart from an installed OXplorer, so `tauri dev`
+/// and the self-test never touch the real app’s state.
 fn context() -> tauri::Context<tauri::Wry> {
     let mut ctx = tauri::generate_context!();
     if cfg!(debug_assertions) {
-        ctx.config_mut().identifier.push_str(".dev");
+        "net.oxog.oxplorer.dev".clone_into(&mut ctx.config_mut().identifier);
     }
     ctx
 }
