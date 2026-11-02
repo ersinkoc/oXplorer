@@ -44,6 +44,12 @@ export async function runSelfTest(): Promise<void> {
   const step = (name: string, ok: boolean, detail = "") =>
     void (ok ? info(`selftest ok: ${name} ${detail}`) : logError(`selftest FAIL: ${name} ${detail}`));
   try {
+    // Closed dialogs stay out of sight, whatever display class they're given.
+    const shownClosed = Array.from(document.querySelectorAll("dialog:not([open])"))
+      .filter((d) => getComputedStyle(d).display !== "none")
+      .map((d) => d.getAttribute("aria-label"));
+    step("closed dialogs hidden", shownClosed.length === 0, shownClosed.join(", "));
+
     const folder = await unwrap(commands.createItem(dir, "selftest folder", true));
     const note = await unwrap(commands.createItem(dir, "note.txt", false));
     step("create", folder.kind === "dir" && note.name === "note.txt");

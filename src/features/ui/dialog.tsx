@@ -36,7 +36,9 @@ export function Dialog({
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className={`m-auto rounded-xl border border-border bg-bg p-0 text-fg shadow-2xl backdrop:bg-black/25 ${className ?? ""}`}
+      // `not-open:hidden`: a display class (`flex`) passed in would otherwise
+      // override the browser's `display: none` for a closed dialog.
+      className={`m-auto rounded-xl border border-border bg-bg p-0 text-fg shadow-2xl backdrop:bg-black/25 not-open:hidden ${className ?? ""}`}
     >
       {open && children}
     </dialog>
