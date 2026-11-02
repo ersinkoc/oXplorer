@@ -2,7 +2,7 @@
 # Builds the Finder Sync extension (universal) into src-tauri/target/finder/OXplorerFinder.appex.
 # Runs before bundling (tauri.conf.json → build.beforeBundleCommand); the bundle embeds it
 # under Contents/PlugIns. Signs with $APPLE_SIGNING_IDENTITY when that identity is in the
-# keychain (release), otherwise ad hoc (local builds).
+# keychain (release; a self-signed certificate works too), otherwise ad hoc (local builds).
 set -eu
 cd "$(dirname "$0")/.."
 SRC=extensions/finder-sync
@@ -26,12 +26,12 @@ lipo -create "$OUT/obj/OXplorerFinder-arm64" "$OUT/obj/OXplorerFinder-x86_64" -o
 sed "s/VERSION/$VERSION/g" "$SRC/Info.plist" > "$APPEX/Contents/Info.plist"
 
 IDENTITY=-
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && security find-identity -v -p codesigning | grep -q "$APPLE_SIGNING_IDENTITY"; then
+if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q "$APPLE_SIGNING_IDENTITY"; then
   IDENTITY="$APPLE_SIGNING_IDENTITY"
 fi
-# Notarization needs a secure timestamp; ad hoc signatures can't have one.
-TIMESTAMP=--timestamp
-[ "$IDENTITY" = "-" ] && TIMESTAMP=--timestamp=none
+# Only notarized (Developer ID) builds need a secure timestamp.
+TIMESTAMP=--timestamp=none
+case "$IDENTITY" in "Developer ID"*) TIMESTAMP=--timestamp ;; esac
 codesign --force --sign "$IDENTITY" --options runtime "$TIMESTAMP" \
   --entitlements "$SRC/OXplorerFinder.entitlements" "$APPEX"
 echo "Finder extension: $APPEX (signed: $IDENTITY)"

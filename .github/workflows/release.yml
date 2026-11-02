@@ -30,15 +30,20 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Required secrets (Apple Developer account):
-      #   APPLE_CERTIFICATE            base64 of the "Developer ID Application" .p12
+      # Signing secrets:
+      #   APPLE_CERTIFICATE            base64 of a code-signing .p12: "Developer ID Application" for
+      #                                notarized releases, or a self-signed certificate for betas
       #   APPLE_CERTIFICATE_PASSWORD   password of that .p12
-      #   APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: OXOGNET OÜ (TEAMID)"
-      #   APPLE_API_ISSUER / APPLE_API_KEY / APPLE_API_KEY_P8   App Store Connect API key for notarization
+      #   APPLE_SIGNING_IDENTITY       its name, e.g. "Developer ID Application: OXOGNET OÜ (TEAMID)"
+      #   APPLE_API_ISSUER / APPLE_API_KEY / APPLE_API_KEY_P8   App Store Connect API key for
+      #                                notarization (only with a Developer ID certificate)
       #   TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)                  updater key from `tauri signer generate`;
       #                                                         its public key goes into tauri.conf.json
-      # The Finder extension is built and signed before Tauri bundles (beforeBundleCommand),
-      # so the Developer ID certificate must already be in a keychain at that point.
+      # Any stable certificate keeps macOS privacy grants (Full Disk Access) across updates: they
+      # follow the signature's designated requirement, which for an ad-hoc build is the hash of
+      # that one build. The certificate is imported here (Tauri then signs with the identity
+      # by name), because the Finder extension is built and signed before Tauri bundles
+      # (beforeBundleCommand) and Tauri's own import only accepts trusted certificates.
       - name: Import signing certificate
         if: ${{ env.HAS_CERT == 'true' }}
         uses: apple-actions/import-codesign-certs@v3
@@ -47,28 +52,26 @@ jobs:
           p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
       # Without a certificate the build is ad-hoc signed and not notarized (a beta for testers).
-      # Tauri tries to sign (and fails) when these variables exist even empty, so
-      # they're only set when there is a certificate.
+      # Tauri tries to sign or notarize (and fails) when these variables exist even empty, so
+      # they're only set when there's something to use them for.
       - name: Signing and notarization settings
         if: ${{ env.HAS_CERT == 'true' }}
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
-          mkdir -p ~/private_keys
-          echo "$APPLE_API_KEY_P8" > ~/private_keys/AuthKey.p8
-          {
-            echo "APPLE_API_KEY_PATH=$HOME/private_keys/AuthKey.p8"
-            echo "APPLE_CERTIFICATE=$APPLE_CERTIFICATE"
-            echo "APPLE_CERTIFICATE_PASSWORD=$APPLE_CERTIFICATE_PASSWORD"
-            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY"
-            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
-            echo "APPLE_API_KEY=$APPLE_API_KEY"
-          } >> "$GITHUB_ENV"
+          echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          if [ -n "$APPLE_API_KEY" ]; then
+            mkdir -p ~/private_keys
+            echo "$APPLE_API_KEY_P8" > ~/private_keys/AuthKey.p8
+            {
+              echo "APPLE_API_KEY_PATH=$HOME/private_keys/AuthKey.p8"
+              echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+              echo "APPLE_API_KEY=$APPLE_API_KEY"
+            } >> "$GITHUB_ENV"
+          fi
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -86,3 +89,16 @@ jobs:
           releaseDraft: true
           # v0.1.0-beta.1 and the like are marked as pre-releases.
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+      # A certificate-signed build must carry a certificate-based designated requirement
+      # (not a per-build cdhash), or privacy grants would reset with every update again.
+      - name: Check signature
+        run: |
+          APP=src-tauri/target/universal-apple-darwin/release/bundle/macos/OXplorer.app
+          codesign --verify --deep --strict "$APP"
+          REQ=$(codesign -dr - "$APP" 2>&1 | tail -1)
+          echo "$REQ"
+          codesign -dr - "$APP/Contents/PlugIns/OXplorerFinder.appex" 2>&1 | tail -1
+          if [ "$HAS_CERT" = "true" ]; then
+            case "$REQ" in *certificate*) ;; *) echo "::error::not signed with the certificate"; exit 1 ;; esac
+          fi
