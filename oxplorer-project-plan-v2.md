@@ -504,7 +504,7 @@ interface TabState {
 ### 6.3 Native icons and thumbnails
 
 - `NSWorkspace.iconForFile:` → NSImage → PNG (16/32/64/128 @2x). **LRU cache** keyed by extension and UTI. Folders, .app bundles and custom icons are per-file.
-- Image, video and PDF thumbnails: `QLThumbnailGenerator` (objc2-quick-look-thumbnailing); the result is written to a disk cache (`~/Library/Caches/com.ecostack.oxplorer/thumbs`, key = path + mtime + size).
+- Image, video and PDF thumbnails: `QLThumbnailGenerator` (objc2-quick-look-thumbnailing); the result is written to a disk cache (`~/Library/Caches/net.oxog.oxplorer/thumbs`, key = path + mtime + size).
 - Frontend: `<img src={convertFileSrc(`${size}/${encodeURIComponent(path)}`, 'oxthumb')} loading="lazy">`
 - Rust: `register_asynchronous_uri_scheme_protocol("oxthumb", …)`. The work is done on a thread pool, and the response is `image/png`.
 

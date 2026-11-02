@@ -1,5 +1,5 @@
 import { Channel, convertFileSrc } from "@tauri-apps/api/core";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWebviewWindow, WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { info, error as logError } from "@tauri-apps/plugin-log";
 import {
   commands,
@@ -484,13 +484,16 @@ export async function runSelfTest(): Promise<void> {
     const git = await commands.gitStatus(dir);
     step("git status outside a repo", git.status === "ok" && git.data === null);
 
-    // Native Quick Look panel opens and closes through the controller hooks.
-    await unwrap(commands.quickLook([renamed.path], 0, true));
-    await sleep(800);
-    const shown = await commands.quickLookVisible();
-    await unwrap(commands.quickLookClose());
-    await sleep(400);
-    step("quick look panel", shown && !(await commands.quickLookVisible()), `shown=${shown}`);
+    // Native Quick Look panel opens and closes through the controller hooks. The
+    // panel is a real on-screen window, so it's only tried when the test window shows.
+    if (await getCurrentWebviewWindow().isVisible()) {
+      await unwrap(commands.quickLook([renamed.path], 0, true));
+      await sleep(800);
+      const shown = await commands.quickLookVisible();
+      await unwrap(commands.quickLookClose());
+      await sleep(400);
+      step("quick look panel", shown && !(await commands.quickLookVisible()), `shown=${shown}`);
+    }
 
     // New Folder with Selection, then undo puts everything back.
     const nfDir = await unwrap(commands.createItem(folder.path, "nf", true));

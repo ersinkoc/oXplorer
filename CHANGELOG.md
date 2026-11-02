@@ -73,3 +73,8 @@ The first public build of OXplorer.
 
 - Appearance, Turkish and English, terminal options and customizable shortcuts (⌘,).
 - Check for Updates… also works in beta builds: it points to a newer release on GitHub.
+
+### Install
+
+- The app's identifier is now `net.oxog.oxplorer` (its settings live in `~/Library/Application Support/net.oxog.oxplorer`). Builds up to 0.1.0-beta.4 used `com.ecostack.oxplorer`: tabs and settings start fresh, and Full Disk Access has to be granted again.
+- `curl -fsSL https://raw.githubusercontent.com/ersinkoc/oXplorer/main/install.sh | sh` installs the newest release without Gatekeeper prompts.

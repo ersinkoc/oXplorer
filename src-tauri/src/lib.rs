@@ -145,9 +145,28 @@ fn log_panics() {
 fn context() -> tauri::Context<tauri::Wry> {
     let mut ctx = tauri::generate_context!();
     if cfg!(debug_assertions) {
-        "net.oxog.oxplorer.dev".clone_into(&mut ctx.config_mut().identifier);
+        ctx.config_mut().identifier.push_str(".dev");
+        // The self-test runs out of sight: its windows never show or take focus.
+        if self_test() {
+            for w in &mut ctx.config_mut().app.windows {
+                w.visible = false;
+                w.focus = false;
+            }
+        }
     }
     ctx
+}
+
+/// Remembers window sizes and places; the self-test's hidden windows stay hidden.
+fn window_state() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use tauri_plugin_window_state::StateFlags;
+    let flags = if self_test() { StateFlags::all() - StateFlags::VISIBLE } else { StateFlags::all() };
+    tauri_plugin_window_state::Builder::new().with_state_flags(flags).build()
+}
+
+/// Dev build started with `OX_SELFTEST_DIR`.
+fn self_test() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("OX_SELFTEST_DIR").is_some()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -172,7 +191,7 @@ pub fn run() {
                 .level(if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info })
                 .build(),
         )
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(window_state())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_os::init())
@@ -200,6 +219,10 @@ pub fn run() {
         .manage(menu::MenuConfig::default())
         .setup(move |app| {
             builder.mount_events(app);
+            if self_test() {
+                // No Dock icon and no activation, so the user's front app keeps focus.
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
             if let Some(window) = app.get_webview_window("main") {
                 mac::quicklook::install(app.handle(), &window);
             }

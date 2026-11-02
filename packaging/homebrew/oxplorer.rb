@@ -17,10 +17,10 @@ cask "oxplorer" do
   app "OXplorer.app"
 
   zap trash: [
-    "~/Library/Application Support/com.ecostack.oxplorer",
-    "~/Library/Caches/com.ecostack.oxplorer",
-    "~/Library/Logs/com.ecostack.oxplorer",
-    "~/Library/WebKit/com.ecostack.oxplorer",
-    "~/Library/Saved Application State/com.ecostack.oxplorer.savedState",
+    "~/Library/Application Support/net.oxog.oxplorer",
+    "~/Library/Caches/net.oxog.oxplorer",
+    "~/Library/Logs/net.oxog.oxplorer",
+    "~/Library/WebKit/net.oxog.oxplorer",
+    "~/Library/Saved Application State/net.oxog.oxplorer.savedState",
   ]
 end
