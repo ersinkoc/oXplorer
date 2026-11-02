@@ -6,7 +6,7 @@
 > **Project Type:** macOS Desktop Application — File Manager
 > **Goal:** A modern, dual-pane file manager similar to Windows Explorer
 > **License:** MIT (Open Source)
-> **Developer:** Ersin / ECOSTACK TECHNOLOGY OÜ
+> **Developer:** Ersin / OXOGNET OÜ
 
 ---
 

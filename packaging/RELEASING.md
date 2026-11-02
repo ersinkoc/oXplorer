@@ -6,7 +6,7 @@ One-time setup (repository secrets, Settings → Secrets and variables → Actio
 | --- | --- |
 | `APPLE_CERTIFICATE` | base64 of the "Developer ID Application" `.p12` |
 | `APPLE_CERTIFICATE_PASSWORD` | password of that `.p12` |
-| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: ECOSTACK TECHNOLOGY OU (TEAMID)` |
+| `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: OXOGNET OÜ (TEAMID)` |
 | `APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_P8` | App Store Connect API key, for notarization |
 | `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | update-signing key (below) |
 

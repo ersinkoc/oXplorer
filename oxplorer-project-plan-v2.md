@@ -5,7 +5,7 @@
 > **Project Name:** OXplorer (Open eXplorer)
 > **Type:** macOS desktop application — dual-pane, tabbed file manager with an integrated terminal
 > **License:** MIT
-> **Developer:** Ersin / ECOSTACK TECHNOLOGY OÜ
+> **Developer:** Ersin / OXOGNET OÜ
 > **Plan revision:** v2 — 2026-10-27 (all versions verified against npm / crates.io on this date)
 
 ---

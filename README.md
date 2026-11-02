@@ -54,4 +54,4 @@ Architecture, decisions and the roadmap live in [oxplorer-project-plan-v2.md](ox
 
 ## License
 
-MIT © ECOSTACK TECHNOLOGY OÜ
+MIT © [OXOGNET OÜ](https://oxog.net)

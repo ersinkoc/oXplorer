@@ -33,7 +33,7 @@ jobs:
       # Required secrets (Apple Developer account):
       #   APPLE_CERTIFICATE            base64 of the "Developer ID Application" .p12
       #   APPLE_CERTIFICATE_PASSWORD   password of that .p12
-      #   APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: ECOSTACK TECHNOLOGY OU (TEAMID)"
+      #   APPLE_SIGNING_IDENTITY       e.g. "Developer ID Application: OXOGNET OÜ (TEAMID)"
       #   APPLE_API_ISSUER / APPLE_API_KEY / APPLE_API_KEY_P8   App Store Connect API key for notarization
       #   TAURI_SIGNING_PRIVATE_KEY(_PASSWORD)                  updater key from `tauri signer generate`;
       #                                                         its public key goes into tauri.conf.json
