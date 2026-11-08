@@ -6,6 +6,7 @@ import { runJob } from "@/commands/jobs";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
 import { formatLocale } from "@/i18n/locale";
+import { batcher } from "@/lib/batch";
 import { formatDate, formatSize } from "@/lib/format";
 import { basename } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -79,28 +80,36 @@ function useComparison(left: string, right: string, byContent: boolean): Scan {
     latest.current = id;
     // Results of an earlier run (the other mode) mustn't show while this one starts.
     setScan(fresh(key, id));
-    const channel = new Channel<SyncEvent>();
     const current = (s: Scan) => (s.run === id ? s : fresh(key, id));
-    channel.onmessage = (ev) =>
+    const events = batcher<SyncEvent>((batch) =>
       setScan((prev) => {
         if (latest.current !== id) return prev;
-        const s = current(prev);
-        return ev.type === "item"
-          ? {
-              ...s,
-              items: [
-                ...s.items,
-                { rel: ev.rel, status: ev.status, left: ev.left ?? null, right: ev.right ?? null },
-              ],
-            }
-          : ev.type === "progress"
-            ? { ...s, folders: ev.folders }
-            : { ...s, done: true };
-      });
+        const items: SyncItem[] = [];
+        let next = current(prev);
+        for (const ev of batch) {
+          if (ev.type === "item")
+            items.push({ rel: ev.rel, status: ev.status, left: ev.left ?? null, right: ev.right ?? null });
+          else if (ev.type === "progress") next = { ...next, folders: ev.folders };
+          else next = { ...next, done: true };
+        }
+        return items.length > 0 ? { ...next, items: [...next.items, ...items] } : next;
+      }),
+    );
+    const channel = new Channel<SyncEvent>();
+    channel.onmessage = (ev) => {
+      events.push(ev);
+      if (ev.type === "done") events.flush();
+    };
     void commands.compareFolders(id, left, right, byContent, channel).then((r) => {
-      if (r.status === "error" && latest.current === id) setScan((s) => ({ ...current(s), done: true }));
+      if (r.status === "error" && latest.current === id) {
+        events.flush();
+        setScan((s) => ({ ...current(s), done: true }));
+      }
     });
-    return () => void commands.cancelJob(id);
+    return () => {
+      events.cancel();
+      void commands.cancelJob(id);
+    };
   }, [left, right, byContent, key]);
   return state.key === key ? state : fresh(key);
 }

@@ -13,6 +13,8 @@ export interface SearchInfo {
 interface SearchState {
   searches: Record<string, SearchInfo>;
   patch: (path: string, next: Partial<SearchInfo>) => void;
+  /** Drops the info of searches whose results were forgotten. */
+  forget: (paths: readonly string[]) => void;
 }
 
 export const EMPTY_SEARCH: SearchInfo = { matches: new Map(), scanned: 0, running: false, outcome: null };
@@ -22,4 +24,12 @@ export const useSearchInfo = create<SearchState>()((set) => ({
   searches: {},
   patch: (path, next) =>
     set((s) => ({ searches: { ...s.searches, [path]: { ...(s.searches[path] ?? EMPTY_SEARCH), ...next } } })),
+  forget: (paths) => {
+    if (!paths.some((p) => p in useSearchInfo.getState().searches)) return;
+    set((s) => {
+      const searches = { ...s.searches };
+      for (const p of paths) delete searches[p];
+      return { searches };
+    });
+  },
 }));

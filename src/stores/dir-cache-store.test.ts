@@ -18,7 +18,7 @@ vi.mock("@/bindings", () => ({
   },
 }));
 
-const { useDirCache } = await import("@/stores/dir-cache-store");
+const { SPARE, useDirCache } = await import("@/stores/dir-cache-store");
 
 const entry = (dir: string, name: string) => ({ path: `${dir}/${name}`, name, kind: "file" }) as never;
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -54,4 +54,27 @@ it("drops the changes queued for a listing that failed", async () => {
   channels[base + 1]?.onmessage({ type: "done" });
   await settle();
   expect(names("/e")).toEqual(["x"]);
+});
+
+it("forgets listings no tab needs, keeping the most recent ones and running loads", async () => {
+  const list = async (dir: string) => {
+    const at = channels.length;
+    void useDirCache.getState().load(dir);
+    channels[at]?.onmessage({ type: "batch", entries: [entry(dir, "f")] });
+    channels[at]?.onmessage({ type: "done" });
+    await settle();
+  };
+  await list("/kept");
+  for (let i = 0; i < SPARE + 5; i++) await list(`/old/${i}`);
+  void useDirCache.getState().load("/running");
+
+  useDirCache.getState().prune(new Set(["/kept"]));
+  const dirs = useDirCache.getState().dirs;
+  expect(dirs["/kept"]).toBeDefined();
+  expect(dirs["/running"]?.status).toBe("loading");
+  // The oldest go: "/d", "/e" and the first few of "/old".
+  expect(dirs["/d"]).toBeUndefined();
+  expect(dirs["/old/0"]).toBeUndefined();
+  expect(dirs[`/old/${SPARE + 4}`]).toBeDefined();
+  expect(Object.keys(dirs)).toHaveLength(SPARE + 1);
 });

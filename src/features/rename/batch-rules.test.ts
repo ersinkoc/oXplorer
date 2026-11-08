@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewRenames, siblingKey, splitExtension } from "@/features/rename/batch-rules";
+import { findPattern, previewRenames, siblingKey, splitExtension } from "@/features/rename/batch-rules";
 
 const files = ["IMG_001.jpg", "IMG_002.jpg", "notes.txt"].map((name) => ({
   path: `/d/${name}`,
@@ -91,5 +91,14 @@ describe("batch rename rules", () => {
       new Set([siblingKey("/a", "a.txt"), siblingKey("/b", "a.txt")]),
     );
     expect(twoFolders.map((p) => p.problem)).toEqual([null, null]);
+  });
+
+  it("reports a bad regex without the engine's English prefix", () => {
+    const bad = findPattern({ kind: "replace", find: "(a", replace: "", regex: true, caseSensitive: false });
+    expect(typeof bad).toBe("string");
+    expect(bad).not.toMatch(/Invalid regular expression/i);
+    expect(
+      findPattern({ kind: "replace", find: "(a", replace: "", regex: false, caseSensitive: false }),
+    ).toBeInstanceOf(RegExp);
   });
 });

@@ -6,6 +6,7 @@ import { navigateTo } from "@/commands/navigation";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { useT } from "@/i18n";
 import { formatLocale } from "@/i18n/locale";
+import { batcher } from "@/lib/batch";
 import { formatSize } from "@/lib/format";
 import { basename, parent, tildify } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -44,19 +45,33 @@ function useDuplicates(path: string): [Scan, (update: (groups: Group[]) => Group
   const [scan, setScan] = useState<Scan>({ groups: [], scanned: 0, hashed: 0, done: false });
   useEffect(() => {
     const id = crypto.randomUUID();
+    const events = batcher<DupEvent>((batch) =>
+      setScan((s) => {
+        const groups: Group[] = [];
+        let next = s;
+        for (const ev of batch) {
+          if (ev.type === "group") groups.push({ size: ev.size, paths: ev.paths });
+          else if (ev.type === "progress") next = { ...next, scanned: ev.scanned, hashed: ev.hashed };
+          else next = { ...next, done: true };
+        }
+        return groups.length > 0 ? { ...next, groups: [...next.groups, ...groups] } : next;
+      }),
+    );
     const channel = new Channel<DupEvent>();
-    channel.onmessage = (ev) =>
-      setScan((s) =>
-        ev.type === "group"
-          ? { ...s, groups: [...s.groups, { size: ev.size, paths: ev.paths }] }
-          : ev.type === "progress"
-            ? { ...s, scanned: ev.scanned, hashed: ev.hashed }
-            : { ...s, done: true },
-      );
+    channel.onmessage = (ev) => {
+      events.push(ev);
+      if (ev.type === "done") events.flush();
+    };
     void commands.findDuplicates(id, path, channel).then((r) => {
-      if (r.status === "error") setScan((s) => ({ ...s, done: true }));
+      if (r.status === "error") {
+        events.flush();
+        setScan((s) => ({ ...s, done: true }));
+      }
     });
-    return () => void commands.cancelJob(id);
+    return () => {
+      events.cancel();
+      void commands.cancelJob(id);
+    };
   }, [path]);
   const update = (fn: (groups: Group[]) => Group[]) => setScan((s) => ({ ...s, groups: fn(s.groups) }));
   return [scan, update];

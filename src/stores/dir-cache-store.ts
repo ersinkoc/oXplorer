@@ -36,7 +36,15 @@ interface DirCacheState {
   applyToSearches: (created: readonly FileEntry[], removed: readonly string[]) => void;
   /** Applies a watcher delta; changes that land mid-listing are replayed after it. */
   applyChange: (change: DirChanged) => void;
+  /**
+   * Forgets listings that aren't in `keep`, apart from the {@link SPARE} most
+   * recently loaded ones (Back/Forward stays instant). Running loads stay.
+   */
+  prune: (keep: ReadonlySet<string>) => void;
 }
+
+/** Listings kept beyond the ones open tabs need. */
+export const SPARE = 50;
 
 /** Sets Finder tags (streamed after a listing completes) on the matching entries. */
 export function applyTags(
@@ -67,12 +75,21 @@ const FLUSH_MS = 400;
 /** Ids of running searches by path, for cancelling. */
 const searchIds = new Map<string, string>();
 
-/** Monotonic per-path load ids; a newer load makes older channels' messages no-ops. */
+/** Latest load id per path; a newer load makes older channels' messages no-ops. */
 const loadIds = new Map<string, number>();
+/** Ids are never reused, even after a path was pruned. */
+let lastLoadId = 0;
 /** Watcher deltas received while a path was still being listed. */
 const deferred = new Map<string, DirChanged[]>();
 /** Folders with a local listing in flight (a reload keeps `status` at "ready"). */
 const listing = new Set<string>();
+/** Paths in the order they were last loaded, oldest first. */
+const recent = new Set<string>();
+
+function touch(path: string): void {
+  recent.delete(path);
+  recent.add(path);
+}
 
 export const useDirCache = create<DirCacheState>()((set, get) => {
   /** An archive's or a server's folder: listed in one go. */
@@ -80,7 +97,7 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
     path: string,
     list: () => Promise<{ status: "ok"; data: FileEntry[] } | { status: "error"; error: AppError }>,
   ): Promise<void> => {
-    const id = (loadIds.get(path) ?? 0) + 1;
+    const id = ++lastLoadId;
     loadIds.set(path, id);
     if (!get().dirs[path]) patch(path, { status: "loading", entries: [], error: null });
     try {
@@ -155,10 +172,11 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
     dirs: {},
 
     load: async (path) => {
+      touch(path);
       if (isSearchPath(path)) return runSearch(path);
       if (isArchivePath(path)) return listVirtual(path, () => commands.archiveList(path));
       if (isRemotePath(path)) return listVirtual(path, () => commands.remoteList(path));
-      const id = (loadIds.get(path) ?? 0) + 1;
+      const id = ++lastLoadId;
       loadIds.set(path, id);
       const current = () => loadIds.get(path) === id;
       listing.add(path);
@@ -290,6 +308,31 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
           deferred.set(change.dir, [...(deferred.get(change.dir) ?? []), change]);
         if (dir.status === "ready") patch(change.dir, { entries: applyDelta(dir.entries, change) });
       }
+    },
+
+    prune: (keep) => {
+      const spare = new Set([...recent].filter((p) => !keep.has(p)).slice(-SPARE));
+      const { dirs } = get();
+      const drop = Object.keys(dirs).filter(
+        (p) =>
+          !keep.has(p) &&
+          !spare.has(p) &&
+          !listing.has(p) &&
+          !searchIds.has(p) &&
+          dirs[p]?.status !== "loading",
+      );
+      if (drop.length === 0) return;
+      for (const p of drop) {
+        recent.delete(p);
+        loadIds.delete(p);
+        deferred.delete(p);
+      }
+      set((s) => {
+        const next = { ...s.dirs };
+        for (const p of drop) delete next[p];
+        return { dirs: next };
+      });
+      useSearchInfo.getState().forget(drop.filter(isSearchPath));
     },
   };
 });

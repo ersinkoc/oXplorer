@@ -34,12 +34,18 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Compiles the find pattern; returns an error message for an invalid regex. */
+/**
+ * Compiles the find pattern. For an invalid regex it returns the engine's
+ * reason (English, without the "Invalid regular expression: /…/: " prefix),
+ * which the dialog shows inside a translated sentence.
+ */
 export function findPattern(rule: Extract<RenameRule, { kind: "replace" }>): RegExp | string {
   try {
     return new RegExp(rule.regex ? rule.find : escapeRegex(rule.find), rule.caseSensitive ? "gu" : "giu");
   } catch (e) {
-    return e instanceof Error ? e.message : msg("invalid pattern");
+    const reason =
+      e instanceof Error ? e.message.replace(/^Invalid regular expression:\s*(\/.*\/\w*:\s*)?/i, "") : "";
+    return reason.trim();
   }
 }
 

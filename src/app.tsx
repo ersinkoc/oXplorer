@@ -68,12 +68,13 @@ async function loadInitialState(): Promise<void> {
   // Shells don't survive a restart; an open panel comes back with a fresh one.
   if (prefs.terminalVisible) openTerminal();
   await openPendingRequests();
-  void showWhatsNewAfterUpdate();
+  const whatsNew = showWhatsNewAfterUpdate();
   void checkForUpdatesDaily();
   void info(`bootstrap: home=${home} volumes=${volumes.length} fda=${fda} restored=${session !== undefined}`);
   if (import.meta.env.DEV) {
     selfCheckIcons();
-    void import("@/dev/self-test").then((m) => m.runSelfTest());
+    // After the version check: What's New opening mid-test would cover the window.
+    void whatsNew.then(() => import("@/dev/self-test")).then((m) => m.runSelfTest());
   }
 }
 

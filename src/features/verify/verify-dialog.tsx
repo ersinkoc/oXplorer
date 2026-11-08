@@ -6,6 +6,7 @@ import { navigateTo } from "@/commands/navigation";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
 import { formatLocale } from "@/i18n/locale";
+import { batcher } from "@/lib/batch";
 import { describeError } from "@/lib/ipc";
 import { basename, parent } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -60,19 +61,33 @@ function useVerify(path: string): Run {
   const [run, setRun] = useState<Run>({ total: 0, items: [], done: false, error: null });
   useEffect(() => {
     const id = crypto.randomUUID();
+    const events = batcher<VerifyEvent>((batch) =>
+      setRun((r) => {
+        const items: Run["items"] = [];
+        let next = r;
+        for (const ev of batch) {
+          if (ev.type === "item") items.push(ev);
+          else if (ev.type === "started") next = { ...next, total: ev.total };
+          else next = { ...next, done: true };
+        }
+        return items.length > 0 ? { ...next, items: [...next.items, ...items] } : next;
+      }),
+    );
     const channel = new Channel<VerifyEvent>();
-    channel.onmessage = (ev: VerifyEvent) =>
-      setRun((r) =>
-        ev.type === "started"
-          ? { ...r, total: ev.total }
-          : ev.type === "item"
-            ? { ...r, items: [...r.items, ev] }
-            : { ...r, done: true },
-      );
+    channel.onmessage = (ev: VerifyEvent) => {
+      events.push(ev);
+      if (ev.type !== "item") events.flush();
+    };
     void commands.verifyChecksums(id, path, channel).then((r) => {
-      if (r.status === "error") setRun((s) => ({ ...s, done: true, error: describeError(r.error) }));
+      if (r.status === "error") {
+        events.flush();
+        setRun((s) => ({ ...s, done: true, error: describeError(r.error) }));
+      }
     });
-    return () => void commands.cancelJob(id);
+    return () => {
+      events.cancel();
+      void commands.cancelJob(id);
+    };
   }, [path]);
   return run;
 }

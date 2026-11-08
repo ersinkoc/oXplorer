@@ -2,11 +2,12 @@ import { debug } from "@tauri-apps/plugin-log";
 import { useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { commands, events } from "@/bindings";
-import { isVirtualPath } from "@/lib/search-path";
+import { parent } from "@/lib/path";
+import { isSearchPath, isVirtualPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { refreshAllGit, refreshGit } from "@/stores/git-store";
-import { activeTabOf, useWorkspace } from "@/stores/workspace-store";
+import { activeTabOf, PANES, useWorkspace } from "@/stores/workspace-store";
 
 /** Mount/unmount shows up as entries appearing in /Volumes. */
 const VOLUMES_DIR = "/Volumes";
@@ -19,6 +20,17 @@ async function refreshVolumes(): Promise<void> {
   if (res.status !== "ok") return;
   useApp.getState().set({ volumes: res.data });
   void debug(`volumes: ${res.data.map((v) => v.name).join(", ")}`);
+}
+
+/** Open tabs' listings, and their folders' ancestors (the column view shows those). */
+export function keptListings(tabPaths: readonly string[]): Set<string> {
+  const keep = new Set<string>();
+  for (const path of tabPaths) {
+    keep.add(path);
+    if (isSearchPath(path)) continue;
+    for (let up = parent(path); up && !keep.has(up); up = parent(up)) keep.add(up);
+  }
+  return keep;
 }
 
 /**
@@ -54,6 +66,14 @@ export function useLiveDirs(): void {
       void unlisten.then((fn) => fn());
     };
   }, []);
+
+  // Listings that no tab shows any more are forgotten (a few recent ones stay).
+  const open = useWorkspace(
+    useShallow((s) => [...new Set(PANES.flatMap((p) => s.panes[p].tabs.map((t) => t.path)))].sort()),
+  );
+  useEffect(() => {
+    useDirCache.getState().prune(keptListings(open));
+  }, [open]);
 
   useEffect(() => {
     const next = new Set(visible);

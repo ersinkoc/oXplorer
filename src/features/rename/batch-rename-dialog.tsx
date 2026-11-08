@@ -140,7 +140,11 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
             </label>
           </div>
           {typeof regexError === "string" && (
-            <p className="col-span-2 m-0 text-[12px] text-red-500">{t(regexError)}</p>
+            <p className="col-span-2 m-0 text-[12px] text-red-500">
+              {regexError
+                ? t("Not a valid regular expression: {reason}", { reason: regexError })
+                : t("Not a valid regular expression.")}
+            </p>
           )}
         </div>
       )}

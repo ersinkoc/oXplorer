@@ -44,6 +44,9 @@ export async function runSelfTest(): Promise<void> {
   const step = (name: string, ok: boolean, detail = "") =>
     void (ok ? info(`selftest ok: ${name} ${detail}`) : logError(`selftest FAIL: ${name} ${detail}`));
   try {
+    // The first run after a version bump opens What's New; the steps need a clear window.
+    useApp.getState().set({ whatsNewOpen: false });
+    await waitFor(() => !document.querySelector("dialog[open]"), 2000);
     // Closed dialogs stay out of sight, whatever display class they're given.
     const shownClosed = Array.from(document.querySelectorAll("dialog:not([open])"))
       .filter((d) => getComputedStyle(d).display !== "none")
