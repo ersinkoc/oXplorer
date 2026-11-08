@@ -1,13 +1,13 @@
 import { getVersion } from "@tauri-apps/api/app";
-import { LazyStore } from "@tauri-apps/plugin-store";
 import { lazy, Suspense } from "react";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { useT } from "@/i18n";
+import { AppStoreFile } from "@/lib/app-store-file";
 import { useApp } from "@/stores/app-store";
 import changelog from "../../../CHANGELOG.md?raw";
 
 const MarkdownView = lazy(() => import("@/features/preview/markdown-view"));
-const store = new LazyStore("settings.json");
+const store = new AppStoreFile("settings.json");
 
 /** Help → What's New, and once automatically after an update. */
 export function WhatsNewDialog() {

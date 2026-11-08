@@ -1,5 +1,5 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
 import { create } from "zustand";
+import { AppStoreFile } from "@/lib/app-store-file";
 
 /** A folder the user opened: how often and when last (epoch ms). */
 export interface Visit {
@@ -21,7 +21,7 @@ export function frecency(v: Visit, now = Date.now()): number {
 
 export const useRecents = create<{ visits: Visit[] }>()(() => ({ visits: [] }));
 
-const store = new LazyStore("recents.json");
+const store = new AppStoreFile("recents.json");
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 export async function loadRecents(): Promise<void> {

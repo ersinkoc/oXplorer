@@ -814,8 +814,13 @@ export type UndoStep = UndoStep_Serialize | UndoStep_Deserialize;
 export type UndoStep_Deserialize = 
 /**  Move the item to the Trash (reverses a copy/creation). */
 { kind: "trash"; path: string } | 
-/**  Move an item back (reverses a move, rename, or trashing). */
+/**  Move an item back (reverses a move or trashing). */
 { kind: "move"; from: string; to: string } | 
+/**
+ *  Rename an item back within its folder. Consecutive renames run together
+ *  through temporary names, so swaps and case-only changes undo too.
+ */
+{ kind: "rename"; from: string; to: string } | 
 /**  Give an item exactly these Finder tags (reverses a tag edit). */
 { kind: "tags"; path: string; tags: FinderTag[] } | 
 /**  Give an item these dates back (reverses Change Dates). */
@@ -824,8 +829,13 @@ export type UndoStep_Deserialize =
 export type UndoStep_Serialize = 
 /**  Move the item to the Trash (reverses a copy/creation). */
 { kind: "trash"; path: string } | 
-/**  Move an item back (reverses a move, rename, or trashing). */
+/**  Move an item back (reverses a move or trashing). */
 { kind: "move"; from: string; to: string } | 
+/**
+ *  Rename an item back within its folder. Consecutive renames run together
+ *  through temporary names, so swaps and case-only changes undo too.
+ */
+{ kind: "rename"; from: string; to: string } | 
 /**  Give an item exactly these Finder tags (reverses a tag edit). */
 { kind: "tags"; path: string; tags: FinderTag[] } | 
 /**  Give an item these dates back (reverses Change Dates). */

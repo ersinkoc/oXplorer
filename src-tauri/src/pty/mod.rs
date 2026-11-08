@@ -31,7 +31,9 @@ struct Session {
     /// Label of the window the terminal is in; its shells end with it.
     window: String,
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    /// Input for the shell; a writer thread owns the pty's write side, so a
+    /// program that stops reading (a full tty buffer) can't block the caller.
+    input: std::sync::mpsc::Sender<Vec<u8>>,
     child: Box<dyn Child + Send + Sync>,
 }
 
@@ -154,11 +156,23 @@ pub fn pty_open(
     // The child holds its own copy of the slave side.
     drop(pair.slave);
     let mut reader = pair.master.try_clone_reader().map_err(pty_err)?;
-    let writer = pair.master.take_writer().map_err(pty_err)?;
+    let mut writer = pair.master.take_writer().map_err(pty_err)?;
+    let (input, inbox) = std::sync::mpsc::channel::<Vec<u8>>();
+    std::thread::Builder::new()
+        .name("pty-input".into())
+        .spawn(move || {
+            // Ends when the session (the sender) is dropped or the pty closes.
+            while let Ok(bytes) = inbox.recv() {
+                if writer.write_all(&bytes).and_then(|()| writer.flush()).is_err() {
+                    break;
+                }
+            }
+        })
+        .map_err(pty_err)?;
     let session = Arc::new(Mutex::new(Session {
         window: window.label().to_owned(),
         master: pair.master,
-        writer,
+        input,
         child,
     }));
     if let Ok(mut map) = manager.sessions.lock() {
@@ -167,7 +181,7 @@ pub fn pty_open(
 
     let manager = Arc::clone(&manager);
     std::thread::Builder::new()
-        .name(format!("pty-{id}"))
+        .name("pty-output".into())
         .spawn(move || {
             let mut buf = vec![0u8; READ_CHUNK];
             let mut pending = Vec::new();
@@ -210,8 +224,8 @@ pub fn pty_open(
 #[specta::specta]
 pub fn pty_write(manager: State<'_, Arc<PtyManager>>, id: String, data: String) -> AppResult<()> {
     let session = manager.get(&id)?;
-    let mut s = session.lock().map_err(pty_err)?;
-    s.writer.write_all(data.as_bytes()).and_then(|()| s.writer.flush()).map_err(pty_err)
+    let s = session.lock().map_err(pty_err)?;
+    s.input.send(data.into_bytes()).map_err(pty_err)
 }
 
 #[tauri::command]

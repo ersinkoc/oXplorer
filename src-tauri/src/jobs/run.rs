@@ -48,6 +48,11 @@ enum Done {
         path: PathBuf,
         before: Vec<crate::model::FinderTag>,
     },
+    /// Renamed within its folder (undone together with neighbouring renames).
+    Renamed {
+        from: PathBuf,
+        to: PathBuf,
+    },
     /// Dates were changed; these restore them.
     Dated {
         path: PathBuf,
@@ -208,6 +213,45 @@ fn err(path: &Path, e: &io::Error) -> JobFailure {
     JobFailure { path: path.to_string_lossy().into_owned(), error: AppError::from_io(e, path) }
 }
 
+fn invalid(src: &Path, dst: &Path, reason: &str) -> JobFailure {
+    JobFailure {
+        path: src.to_string_lossy().into_owned(),
+        error: AppError::InvalidPath { path: dst.to_string_lossy().into_owned(), reason: reason.into() },
+    }
+}
+
+/// Both paths name one existing item (e.g. reached through a symlinked folder).
+fn same_item(a: &Path, b: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    match (fs::symlink_metadata(a), fs::symlink_metadata(b)) {
+        (Ok(x), Ok(y)) => x.dev() == y.dev() && x.ino() == y.ino(),
+        _ => false,
+    }
+}
+
+/// `p` with symlinks in its folder resolved; the item itself is not followed.
+fn real_location(p: &Path) -> PathBuf {
+    match (p.parent(), p.file_name()) {
+        (Some(dir), Some(name)) => fs::canonicalize(dir).map_or_else(|_| p.to_path_buf(), |d| d.join(name)),
+        _ => p.to_path_buf(),
+    }
+}
+
+/// Removes the sources a move copied (children first). A folder that gained
+/// items during the copy is left in place with them, and that is an error.
+/// Already gone is fine: non-Mac volumes drop a file's `._` sidecar with it.
+fn remove_copied(copied: &[PathBuf]) -> Result<(), (PathBuf, io::Error)> {
+    for p in copied {
+        let Ok(meta) = fs::symlink_metadata(p) else { continue };
+        let r = if meta.is_dir() { fs::remove_dir(p) } else { fs::remove_file(p) };
+        match r {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => return Err((p.clone(), e)),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 /// Bytes and item count of a tree, without following symlinks.
 fn tree_size(p: &Path) -> (u64, u32) {
     let Ok(meta) = fs::symlink_metadata(p) else { return (0, 0) };
@@ -270,7 +314,8 @@ impl Runner<'_> {
     /// `Ok(false)` = skipped.
     fn transfer_one(&mut self, src: &Path, mut dst: PathBuf, mode: Mode) -> Result<bool, JobFailure> {
         let meta = fs::symlink_metadata(src).map_err(|e| err(src, &e))?;
-        if src == dst {
+        // The same item, also when one of the panes reached it through a symlink.
+        if src == dst || same_item(src, &dst) {
             if mode == Mode::Move {
                 return Ok(false);
             }
@@ -278,16 +323,11 @@ impl Runner<'_> {
             dst =
                 names::duplicate(dst.parent().unwrap_or(Path::new("/")), &file_name(src), has_extension(src));
         }
-        if meta.is_dir() && dst.starts_with(src) {
-            return Err(JobFailure {
-                path: src.to_string_lossy().into_owned(),
-                error: AppError::InvalidPath {
-                    path: dst.to_string_lossy().into_owned(),
-                    reason: "a folder can’t be copied or moved into itself".into(),
-                },
-            });
+        if meta.is_dir() && (dst.starts_with(src) || real_location(&dst).starts_with(real_location(src))) {
+            return Err(invalid(src, &dst, "a folder can’t be copied or moved into itself"));
         }
 
+        let mut replace = false;
         if let Ok(existing) = dst.symlink_metadata() {
             // Packages (.app, .pages) are replaced or kept whole, never mixed.
             let folders = meta.is_dir() && existing.is_dir() && !is_package(src) && !is_package(&dst);
@@ -309,7 +349,7 @@ impl Runner<'_> {
             match choice {
                 ConflictChoice::Merge if folders => return self.merge(src, &dst, mode),
                 // Merge only applies to folders; anything else keeps both.
-                ConflictChoice::Merge => {
+                ConflictChoice::Merge | ConflictChoice::KeepBoth => {
                     dst = names::keep_both(
                         dst.parent().unwrap_or(Path::new("/")),
                         &file_name(&dst),
@@ -321,41 +361,61 @@ impl Runner<'_> {
                     self.stopped = true;
                     return Ok(false);
                 }
-                ConflictChoice::KeepBoth => {
-                    dst = names::keep_both(
-                        dst.parent().unwrap_or(Path::new("/")),
-                        &file_name(&dst),
-                        has_extension(src),
-                    );
-                }
                 ConflictChoice::Replace => {
-                    // The replaced item goes to the Trash so undo can bring it back.
-                    let to = fsops::trash(&dst).map_err(|e| err(&dst, &e))?;
-                    self.log.push(Done::Trashed { from: dst.clone(), to });
+                    // Trashing the folder that holds the source would take the source with it.
+                    if src.starts_with(&dst) || real_location(src).starts_with(real_location(&dst)) {
+                        return Err(invalid(src, &dst, "an item can’t replace the folder it is in"));
+                    }
+                    replace = true;
                 }
             }
         }
 
-        if mode == Mode::Move && fsops::same_device(src, dst.parent().unwrap_or(Path::new("/"))) {
-            fs::rename(src, &dst).map_err(|e| err(src, &e))?;
+        let parent = dst.parent().unwrap_or(Path::new("/")).to_path_buf();
+        if mode == Mode::Move && fsops::same_device(src, &parent) {
+            if replace {
+                // The replaced item goes to the Trash so undo can bring it back.
+                let to = fsops::trash(&dst).map_err(|e| err(&dst, &e))?;
+                self.log.push(Done::Trashed { from: dst.clone(), to });
+            }
+            fsops::rename_excl(src, &dst).map_err(|e| err(src, &e))?;
             self.log.push(Done::Moved { from: src.to_path_buf(), to: dst });
             self.removed.push(src.to_path_buf());
             return Ok(true);
         }
 
-        match self.copy_tree(src, &dst) {
-            Ok(()) => {}
-            Err(e) => {
-                // Never leave a half-copied tree behind.
-                let _ = fsops::remove(&dst);
-                if self.stopped {
-                    return Ok(false);
-                }
-                return Err(e);
+        // A replacement is copied next to the old item first, which is only
+        // trashed once the copy is complete.
+        let target = if replace {
+            parent.join(format!(".oxreplace-{}-{}", std::process::id(), file_name(&dst)))
+        } else {
+            dst.clone()
+        };
+        let mut copied = Vec::new();
+        if let Err(e) = self.copy_tree(src, &target, &mut copied) {
+            // Never leave a half-copied tree behind, but an item that was
+            // already there (a race since the check above) isn't ours.
+            if !matches!(e.error, AppError::AlreadyExists { .. }) {
+                let _ = fsops::remove(&target);
+            }
+            if self.stopped {
+                return Ok(false);
+            }
+            return Err(e);
+        }
+        if replace {
+            let placed = fsops::trash(&dst).and_then(|to| {
+                self.log.push(Done::Trashed { from: dst.clone(), to });
+                fsops::rename_excl(&target, &dst)
+            });
+            if let Err(e) = placed {
+                let _ = fsops::remove(&target);
+                return Err(err(&dst, &e));
             }
         }
         if mode == Mode::Move {
-            fsops::remove(src).map_err(|e| err(src, &e))?;
+            // Only what was copied: items that appeared in the source meanwhile stay.
+            remove_copied(&copied).map_err(|(p, e)| err(&p, &e))?;
             self.log.push(Done::Moved { from: src.to_path_buf(), to: dst });
             self.removed.push(src.to_path_buf());
         } else {
@@ -392,17 +452,20 @@ impl Runner<'_> {
         Ok(any || all)
     }
 
-    fn copy_tree(&mut self, src: &Path, dst: &Path) -> Result<(), JobFailure> {
+    /// Copies `src` to `dst`, adding each copied source to `copied` (children
+    /// before their folder). An entry that can't be listed fails the copy.
+    fn copy_tree(&mut self, src: &Path, dst: &Path, copied: &mut Vec<PathBuf>) -> Result<(), JobFailure> {
         if self.should_stop() {
             return Err(err(src, &io::Error::from(io::ErrorKind::Interrupted)));
         }
         let meta = fs::symlink_metadata(src).map_err(|e| err(src, &e))?;
         if meta.is_dir() {
             fs::create_dir(dst).map_err(|e| err(dst, &e))?;
-            let children: Vec<PathBuf> =
-                fs::read_dir(src).map_err(|e| err(src, &e))?.flatten().map(|e| e.path()).collect();
+            let children: Vec<PathBuf> = fs::read_dir(src)
+                .and_then(|entries| entries.map(|e| e.map(|e| e.path())).collect())
+                .map_err(|e| err(src, &e))?;
             for child in children {
-                self.copy_tree(&child, &dst.join(child.file_name().unwrap_or_default()))?;
+                self.copy_tree(&child, &dst.join(child.file_name().unwrap_or_default()), copied)?;
             }
             fsops::copy_dir_metadata(src, dst).map_err(|e| err(dst, &e))?;
             self.tick(0, 1, src);
@@ -425,6 +488,7 @@ impl Runner<'_> {
             }
             self.tick(meta.len(), 1, src);
         }
+        copied.push(src.to_path_buf());
         Ok(())
     }
 
@@ -473,11 +537,21 @@ impl Runner<'_> {
         self.r.planned(0, u32::try_from(steps.len()).unwrap_or(u32::MAX));
         // Items a failed move-back left where they were; their folder must not go to the Trash.
         let mut stranded: Vec<PathBuf> = Vec::new();
-        for step in steps {
+        let mut steps = steps.into_iter().peekable();
+        while let Some(step) = steps.next() {
             if self.should_stop() {
                 break;
             }
             match step {
+                UndoStep::Rename { from, to } => {
+                    let mut pairs = vec![(from, to)];
+                    while let Some(UndoStep::Rename { .. }) = steps.peek() {
+                        if let Some(UndoStep::Rename { from, to }) = steps.next() {
+                            pairs.push((from, to));
+                        }
+                    }
+                    self.undo_renames(&pairs)?;
+                }
                 UndoStep::Trash { path } => {
                     let p = validate_path(&path)?;
                     if stranded.iter().any(|s| s.starts_with(&p)) {
@@ -534,8 +608,15 @@ impl Runner<'_> {
                     let result = if fsops::same_device(&from, &parent) {
                         fs::rename(&from, &to)
                     } else {
-                        let r = self.copy_tree(&from, &to).map_err(|_| io::Error::other("copy failed"));
-                        r.and_then(|()| fsops::remove(&from))
+                        let mut copied = Vec::new();
+                        match self.copy_tree(&from, &to, &mut copied) {
+                            Ok(()) => remove_copied(&copied).map_err(|(_, e)| e),
+                            Err(_) => {
+                                // `to` was checked to be free above: the partial copy is ours.
+                                let _ = fsops::remove(&to);
+                                Err(io::Error::other("copy failed"))
+                            }
+                        }
                     };
                     match result {
                         Ok(()) => {
@@ -550,6 +631,41 @@ impl Runner<'_> {
                     self.tick(0, 1, &parent);
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Renames back as one all-or-nothing batch (through temporary names).
+    fn undo_renames(&mut self, pairs: &[(String, String)]) -> Result<(), AppError> {
+        let mut items = Vec::with_capacity(pairs.len());
+        for (from, to) in pairs {
+            let (from, to) = (validate_path(from)?, validate_path(to)?);
+            if from.parent() != to.parent() {
+                return Err(AppError::InvalidPath {
+                    path: to.to_string_lossy().into_owned(),
+                    reason: "a rename stays in its folder".into(),
+                });
+            }
+            items.push(super::rename::RenameItem {
+                path: from.to_string_lossy().into_owned(),
+                new_name: file_name(&to),
+            });
+        }
+        match super::rename::batch_rename(&items) {
+            Ok(_) => {
+                for (from, to) in pairs {
+                    let (from, to) = (PathBuf::from(from), PathBuf::from(to));
+                    self.removed.push(from.clone());
+                    self.log.push(Done::Renamed { from, to });
+                }
+            }
+            Err(error) => {
+                let path = pairs.first().map(|(f, _)| f.clone()).unwrap_or_default();
+                self.failures.push(JobFailure { path, error });
+            }
+        }
+        for (from, _) in pairs {
+            self.tick(0, 1, Path::new(from));
         }
         Ok(())
     }
@@ -687,8 +803,9 @@ impl Runner<'_> {
     fn replace_with(&mut self, path: &Path, tmp: &Path) {
         let result = fsops::trash(path).and_then(|trashed| {
             self.log.push(Done::Trashed { from: path.to_path_buf(), to: trashed });
-            // A link never replaces something that took the name in the meantime.
-            fs::hard_link(tmp, path)
+            // Never replaces something that took the name in the meantime. (Not a
+            // hard link: exFAT, FAT and SMB volumes have none.)
+            fsops::rename_excl(tmp, path)
         });
         let _ = fs::remove_file(tmp);
         match result {
@@ -808,6 +925,7 @@ impl Runner<'_> {
                 Done::Moved { from, to } | Done::Trashed { from, to } => {
                     UndoStep::Move { from: s(to), to: s(from) }
                 }
+                Done::Renamed { from, to } => UndoStep::Rename { from: s(to), to: s(from) },
                 Done::Tagged { path, before } => UndoStep::Tags { path: s(path), tags: before.clone() },
                 Done::Dated { path, modified_ms, created_ms } => {
                     UndoStep::Dates { path: s(path), modified_ms: *modified_ms, created_ms: *created_ms }
@@ -820,6 +938,7 @@ impl Runner<'_> {
             .filter_map(|d| match d {
                 Done::Created(p)
                 | Done::Moved { to: p, .. }
+                | Done::Renamed { to: p, .. }
                 | Done::Tagged { path: p, .. }
                 | Done::Dated { path: p, .. } => build_entry_for(p),
                 Done::Trashed { .. } => None,
@@ -892,6 +1011,154 @@ mod tests {
         fs::write(root.join("src/sub/b.txt"), "bb").unwrap();
         std::os::unix::fs::symlink("a.txt", root.join("src/link")).unwrap();
         fs::create_dir(root.join("dest")).unwrap();
+    }
+
+    fn copy_job(sources: &[PathBuf], dest: &Path) -> JobSpec {
+        JobSpec::Copy { sources: sources.iter().map(|p| s(p)).collect(), dest_dir: s(dest) }
+    }
+
+    fn move_job(sources: &[PathBuf], dest: &Path) -> JobSpec {
+        JobSpec::Move { sources: sources.iter().map(|p| s(p)).collect(), dest_dir: s(dest) }
+    }
+
+    /// Moving `x/x` up onto `x` with Replace would trash the source with its folder.
+    #[test]
+    fn replace_refuses_the_folder_that_holds_the_source() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir(root.join("x")).unwrap();
+        fs::write(root.join("x/x"), b"keep").unwrap();
+        let out = run(move_job(&[root.join("x/x")], &root), &mut Fake::new(ConflictChoice::Replace)).unwrap();
+        assert_eq!(out.failures.len(), 1);
+        assert_eq!(fs::read(root.join("x/x")).unwrap(), b"keep");
+    }
+
+    /// One pane at `real/`, the other at `link/` (a symlink to it): the same file.
+    #[test]
+    fn the_same_item_through_a_symlink_is_never_replaced() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir(root.join("real")).unwrap();
+        fs::write(root.join("real/f.txt"), b"data").unwrap();
+        std::os::unix::fs::symlink("real", root.join("link")).unwrap();
+        let mut fake = Fake::new(ConflictChoice::Replace);
+        let out = run(copy_job(&[root.join("real/f.txt")], &root.join("link")), &mut fake).unwrap();
+        assert!(out.failures.is_empty(), "{:?}", out.failures);
+        assert_eq!(fake.conflicts, 0);
+        assert_eq!(fs::read(root.join("real/f.txt")).unwrap(), b"data");
+        assert_eq!(fs::read_dir(root.join("real")).unwrap().count(), 2, "a duplicate, like a paste in place");
+
+        let out = run(move_job(&[root.join("real/f.txt")], &root.join("link")), &mut fake).unwrap();
+        assert!(out.failures.is_empty());
+        assert_eq!(fs::read(root.join("real/f.txt")).unwrap(), b"data");
+    }
+
+    #[test]
+    fn a_folder_is_not_copied_into_itself_through_a_symlink() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir_all(root.join("A/sub")).unwrap();
+        std::os::unix::fs::symlink("A/sub", root.join("l")).unwrap();
+        let out =
+            run(copy_job(&[root.join("A")], &root.join("l")), &mut Fake::new(ConflictChoice::Skip)).unwrap();
+        assert_eq!(out.failures.len(), 1);
+        assert_eq!(fs::read_dir(root.join("A/sub")).unwrap().count(), 0);
+    }
+
+    /// The replaced file stays in place until its replacement is complete.
+    #[test]
+    fn a_cancelled_replace_keeps_the_old_item() {
+        let Some(vol) = super::super::test_volume::OtherVolume::exfat() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("f.bin");
+        fs::write(&src, vec![1u8; 4 * 1024 * 1024]).unwrap();
+        fs::write(vol.path().join("f.bin"), b"old").unwrap();
+        let mut fake = Fake::new(ConflictChoice::Replace);
+        fake.cancel_after_bytes = Some(1);
+        let out = run(copy_job(std::slice::from_ref(&src), vol.path()), &mut fake).unwrap();
+        assert!(out.cancelled || !out.failures.is_empty());
+        assert_eq!(fs::read(vol.path().join("f.bin")).unwrap(), b"old");
+        let names: Vec<_> = fs::read_dir(vol.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| !n.starts_with("._") && n != ".Trashes" && !n.starts_with(".fseventsd"))
+            .collect();
+        assert_eq!(names, vec!["f.bin"], "no temporary copy left behind");
+    }
+
+    #[test]
+    fn a_cross_volume_move_and_its_undo() {
+        let Some(vol) = super::super::test_volume::OtherVolume::exfat() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        tree(&root);
+        let mut fake = Fake::new(ConflictChoice::Skip);
+        let out = run(move_job(&[root.join("src")], vol.path()), &mut fake).unwrap();
+        assert!(out.failures.is_empty(), "{:?}", out.failures);
+        assert!(!root.join("src").exists());
+        assert_eq!(fs::read(vol.path().join("src/sub/b.txt")).unwrap(), b"bb");
+        let action = out.undo.unwrap();
+        let back = run(JobSpec::Undo { action }, &mut fake).unwrap();
+        assert!(back.failures.is_empty(), "{:?}", back.failures);
+        assert_eq!(fs::read(root.join("src/a.txt")).unwrap(), b"aaaa");
+        assert!(!vol.path().join("src").exists());
+    }
+
+    /// exFAT has no hard links; rotating used to leave the photo only in the Trash.
+    #[test]
+    fn rotates_on_a_volume_without_hard_links() {
+        let Some(vol) = super::super::test_volume::OtherVolume::exfat() else { return };
+        let img = vol.path().join("red.png");
+        let ppm = vol.path().join("red.ppm");
+        fs::write(&ppm, b"P6\n4 2\n255\n".iter().copied().chain([255u8, 0, 0].repeat(8)).collect::<Vec<_>>())
+            .unwrap();
+        let made = std::process::Command::new("/usr/bin/sips")
+            .args(["-s", "format", "png"])
+            .arg(&ppm)
+            .arg("--out")
+            .arg(&img)
+            .output()
+            .unwrap();
+        assert!(made.status.success());
+        let out = run(
+            JobSpec::Rotate { paths: vec![s(&img)], clockwise: true },
+            &mut Fake::new(ConflictChoice::Skip),
+        )
+        .unwrap();
+        assert!(out.failures.is_empty(), "{:?}", out.failures);
+        assert!(fs::metadata(&img).unwrap().len() > 0, "the rotated picture is in place");
+    }
+
+    /// Undoing renames goes through temporary names: case-only changes and swaps.
+    #[test]
+    fn undoes_case_only_renames_and_swaps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::write(root.join("a.txt"), b"A").unwrap();
+        fs::write(root.join("b.txt"), b"B").unwrap();
+        fs::write(root.join("c.txt"), b"C").unwrap();
+        let item = |from: &str, to: &str| super::super::rename::RenameItem {
+            path: s(&root.join(from)),
+            new_name: to.into(),
+        };
+        let renamed = super::super::rename::batch_rename(&[
+            item("a.txt", "b.txt"),
+            item("b.txt", "a.txt"),
+            item("c.txt", "C.txt"),
+        ])
+        .unwrap();
+        let mut fake = Fake::new(ConflictChoice::Skip);
+        let out = run(JobSpec::Undo { action: renamed.undo.unwrap() }, &mut fake).unwrap();
+        assert!(out.failures.is_empty(), "{:?}", out.failures);
+        assert_eq!(fs::read(root.join("a.txt")).unwrap(), b"A");
+        assert_eq!(fs::read(root.join("b.txt")).unwrap(), b"B");
+        let names: Vec<_> = fs::read_dir(&root).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert!(names.iter().any(|n| n == "c.txt"), "{names:?}");
+
+        // Redo is the undo of the undo.
+        let redo = run(JobSpec::Undo { action: out.undo.unwrap() }, &mut fake).unwrap();
+        assert!(redo.failures.is_empty(), "{:?}", redo.failures);
+        assert_eq!(fs::read(root.join("a.txt")).unwrap(), b"B");
     }
 
     #[test]

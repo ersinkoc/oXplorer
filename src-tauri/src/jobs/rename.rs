@@ -102,7 +102,7 @@ pub fn batch_rename(items: &[RenameItem]) -> AppResult<BatchRenameOutcome> {
     let s = |p: &Path| p.to_string_lossy().into_owned();
     let entries = plan.iter().filter_map(|(_, dst)| build_entry_for(dst)).collect();
     let steps: Vec<UndoStep> =
-        plan.iter().rev().map(|(src, dst)| UndoStep::Move { from: s(dst), to: s(src) }).collect();
+        plan.iter().rev().map(|(src, dst)| UndoStep::Rename { from: s(dst), to: s(src) }).collect();
     let undo = (!steps.is_empty()).then(|| UndoAction { label: "Rename".into(), steps });
     Ok(BatchRenameOutcome { entries, undo })
 }

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SearchMode, SearchSpec } from "@/bindings";
 import { navigateTo } from "@/commands/navigation";
 import { msg, useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { basename } from "@/lib/path";
 import { isSearchable, parseSearchPath, searchPath } from "@/lib/search-path";
 import { useApp } from "@/stores/app-store";
@@ -258,7 +259,7 @@ function Filter<T extends string | number>({
 
 function Status({ info, count, hasQuery }: { info: typeof EMPTY_SEARCH; count: number; hasQuery: boolean }) {
   const { t, tn } = useT();
-  const n = count.toLocaleString();
+  const n = count.toLocaleString(formatLocale());
   if (!hasQuery) return <span>{t("Type and press Return")}</span>;
   if (info.running)
     return (
@@ -266,7 +267,10 @@ function Status({ info, count, hasQuery }: { info: typeof EMPTY_SEARCH; count: n
         <Loader2 className="size-3 animate-spin" />
         <span>
           {info.scanned > 0
-            ? t("{found} found · {checked} checked", { found: n, checked: info.scanned.toLocaleString() })
+            ? t("{found} found · {checked} checked", {
+                found: n,
+                checked: info.scanned.toLocaleString(formatLocale()),
+              })
             : t("{found} found", { found: n })}
         </span>
       </>

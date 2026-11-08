@@ -1,11 +1,12 @@
 import prettyBytes from "pretty-bytes";
 import { msg, t } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import type { FileEntry } from "@/lib/ipc";
 
 /** Finder uses base-10 units with one decimal ("2,1 MB"). */
 export function formatSize(bytes: number): string {
   if (bytes === 0) return t("Zero bytes");
-  return prettyBytes(bytes, { locale: true, maximumFractionDigits: 1 });
+  return prettyBytes(bytes, { locale: formatLocale(), maximumFractionDigits: 1 });
 }
 
 /** `measured` is a folder's size from Calculate Folder Sizes, still counting while `done` is false. */
@@ -15,9 +16,20 @@ export function entrySizeLabel(entry: FileEntry, measured?: { bytes: number; don
   return measured.done ? formatSize(measured.bytes) : `${formatSize(measured.bytes)}…`;
 }
 
-const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
-const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
 const DAY = 86_400_000;
+let formatters: { locale: string; time: Intl.DateTimeFormat; date: Intl.DateTimeFormat } | null = null;
+
+/** Date formatters for the current UI locale (rebuilt when it changes). */
+function fmt(): { time: Intl.DateTimeFormat; date: Intl.DateTimeFormat } {
+  const locale = formatLocale();
+  if (formatters?.locale !== locale)
+    formatters = {
+      locale,
+      time: new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }),
+      date: new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric" }),
+    };
+  return formatters;
+}
 
 /** Finder-style: "Today at 10:30", "Yesterday at 09:12", "27 Oct 2026 at 10:30". */
 export function formatDate(ms: number, now: number = Date.now()): string {
@@ -26,10 +38,10 @@ export function formatDate(ms: number, now: number = Date.now()): string {
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
   const t0 = startOfToday.getTime();
-  const time = timeFmt.format(d);
+  const time = fmt().time.format(d);
   if (ms >= t0 && ms < t0 + DAY) return t("Today at {time}", { time });
   if (ms >= t0 - DAY && ms < t0) return t("Yesterday at {time}", { time });
-  return t("{date} at {time}", { date: dateFmt.format(d), time });
+  return t("{date} at {time}", { date: fmt().date.format(d), time });
 }
 
 /** Directories, and symlinks that point at directories, are navigable. */

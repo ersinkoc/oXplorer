@@ -5,6 +5,7 @@ import { commands, type HashKind, type VerifyEvent, type VerifyStatus } from "@/
 import { navigateTo } from "@/commands/navigation";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { describeError } from "@/lib/ipc";
 import { basename, parent } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -94,14 +95,16 @@ function Body({ path, onClose }: { path: string; onClose: () => void }) {
             ? run.error
             : !run.done
               ? t("Checking {done} of {total}…", {
-                  done: run.items.length.toLocaleString(),
-                  total: run.total.toLocaleString(),
+                  done: run.items.length.toLocaleString(formatLocale()),
+                  total: run.total.toLocaleString(formatLocale()),
                 })
               : bad === 0
-                ? t("All {count} files are intact.", { count: run.items.length.toLocaleString() })
+                ? t("All {count} files are intact.", {
+                    count: run.items.length.toLocaleString(formatLocale()),
+                  })
                 : t("{bad} of {count} files failed the check.", {
-                    bad: bad.toLocaleString(),
-                    count: run.items.length.toLocaleString(),
+                    bad: bad.toLocaleString(formatLocale()),
+                    count: run.items.length.toLocaleString(formatLocale()),
                   })}
         </p>
       </header>

@@ -2,6 +2,7 @@ import { Pause, Play, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cancelJob, pauseJob } from "@/commands/jobs";
 import { useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatSize } from "@/lib/format";
 import { basename } from "@/lib/path";
 import { type JobView, jobProgress, useJobs } from "@/stores/jobs-store";
@@ -18,7 +19,11 @@ export function JobsIndicator() {
   const list = Object.values(jobs);
 
   useEffect(() => {
-    if (list.length === 0) return;
+    // The popover closes with the last job, so the next job doesn't open it.
+    if (list.length === 0) {
+      setOpen(false);
+      return;
+    }
     const timer = setInterval(() => setNow(performance.now()), 200);
     return () => clearInterval(timer);
   }, [list.length]);
@@ -57,8 +62,8 @@ function JobRow({ job }: { job: JobView }) {
     job.totalBytes > 0
       ? t("{done} of {total}", { done: formatSize(job.doneBytes), total: formatSize(job.totalBytes) })
       : t("{done} of {total} items", {
-          done: job.doneItems.toLocaleString(),
-          total: job.totalItems.toLocaleString(),
+          done: job.doneItems.toLocaleString(formatLocale()),
+          total: job.totalItems.toLocaleString(formatLocale()),
         });
   return (
     <div className="flex items-start gap-2 text-[12px]">

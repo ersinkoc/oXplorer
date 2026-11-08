@@ -5,6 +5,7 @@ import { commands, type UsageEvent_Deserialize, type UsageEvent_Serialize, type 
 import { navigateTo } from "@/commands/navigation";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatSize } from "@/lib/format";
 import { describeError, toAppError } from "@/lib/ipc";
 import { basename, join } from "@/lib/path";
@@ -128,7 +129,7 @@ function Body({ root, onClose }: { root: string; onClose: () => void }) {
             <Loader2 className="size-5 animate-spin" />
             <span className="tabular-nums">
               {t("{files} files, {size}", {
-                files: scan.files.toLocaleString(),
+                files: scan.files.toLocaleString(formatLocale()),
                 size: formatSize(scan.bytes),
               })}
             </span>
@@ -265,7 +266,8 @@ function Treemap({
           <p className="m-0 text-fg-muted">
             {formatSize(hover.node.size)}
             {node.size > 0 && ` · ${((hover.node.size / node.size) * 100).toFixed(1)}%`}
-            {hover.node.isDir && ` · ${t("{files} files", { files: hover.node.files.toLocaleString() })}`}
+            {hover.node.isDir &&
+              ` · ${t("{files} files", { files: hover.node.files.toLocaleString(formatLocale()) })}`}
           </p>
         </div>
       )}

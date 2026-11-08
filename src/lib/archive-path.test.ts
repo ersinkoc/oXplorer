@@ -14,6 +14,10 @@ describe("archive paths", () => {
     expect(parseArchivePath(archivePath(zip, "docs/img"))).toEqual({ archive: zip, inner: "docs/img" });
     expect(parseArchivePath(archivePath(zip))).toEqual({ archive: zip, inner: "" });
     expect(parseArchivePath("/plain")).toBeNull();
+    expect(parseArchivePath(archivePath("/Users/me/Wow!/a.zip", "docs"))).toEqual({
+      archive: "/Users/me/Wow!/a.zip",
+      inner: "docs",
+    });
   });
 
   it("goes up inside the archive, then to its folder", () => {

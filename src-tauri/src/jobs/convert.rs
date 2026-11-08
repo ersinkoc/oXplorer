@@ -126,12 +126,12 @@ fn reserve_temp(dir: &Path, stem: &str, ext: &str) -> std::io::Result<PathBuf> {
     Err(std::io::ErrorKind::AlreadyExists.into())
 }
 
-/// Links `tmp` under the first free variant of `name`; a name taken in the
+/// Moves `tmp` to the first free variant of `name`; a name taken in the
 /// meantime is skipped, never overwritten.
 fn claim(tmp: &Path, dir: &Path, name: &str) -> Result<PathBuf, AppError> {
     for _ in 0..100 {
         let dst = names::untitled(dir, name, true);
-        match std::fs::hard_link(tmp, &dst) {
+        match super::fsops::rename_excl(tmp, &dst) {
             Ok(()) => return Ok(dst),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => return Err(AppError::from_io(&e, &dst)),

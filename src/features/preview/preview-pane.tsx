@@ -8,6 +8,7 @@ import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { toggleQuickLook } from "@/features/preview/quick-look";
 import { TextPreview } from "@/features/preview/text-preview";
 import { useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { isArchivePath } from "@/lib/archive-path";
 import {
   entrySizeLabel,
@@ -145,7 +146,14 @@ function Content({
   const [failed, setFailed] = useState(false);
 
   if (kind === "text")
-    return <TextPreview entry={entry} onBinary={() => <BigIcon entry={entry} thumbnail />} />;
+    return (
+      // Keyed by date and size: the preview follows edits to the file.
+      <TextPreview
+        key={`${entry.path}:${entry.modifiedMs}:${entry.size}`}
+        entry={entry}
+        onBinary={() => <BigIcon entry={entry} thumbnail />}
+      />
+    );
   if (media && src && !failed) {
     if (kind === "image")
       return (
@@ -223,7 +231,10 @@ function InfoCard({ entry, media = null }: { entry: FileEntry; media?: MediaInfo
     [t("Modified"), formatDate(entry.modifiedMs)],
   ];
   if (media && "width" in media)
-    rows.push([t("Dimensions"), `${media.width.toLocaleString()} × ${media.height.toLocaleString()}`]);
+    rows.push([
+      t("Dimensions"),
+      `${media.width.toLocaleString(formatLocale())} × ${media.height.toLocaleString(formatLocale())}`,
+    ]);
   if (media && "duration" in media && Number.isFinite(media.duration))
     rows.push([t("Duration"), formatDuration(media.duration)]);
   if (entry.symlink) rows.push([t("Original"), entry.symlink.target]);

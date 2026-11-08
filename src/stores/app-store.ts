@@ -1,6 +1,6 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
 import { create } from "zustand";
 import type { Connection, FullDiskAccess, StandardLocation, VolumeInfo } from "@/bindings";
+import { AppStoreFile } from "@/lib/app-store-file";
 import type { FileEntry } from "@/lib/ipc";
 
 export interface ColumnWidths {
@@ -115,7 +115,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   connections: [],
 };
 
-const store = new LazyStore("settings.json");
+const store = new AppStoreFile("settings.json");
 
 export const useApp = create<AppState>()((set) => ({
   ...DEFAULT_PREFERENCES,

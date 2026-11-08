@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/plugin-store", () => ({
-  LazyStore: class {
-    get = vi.fn();
-    set = vi.fn(async () => {});
-  },
+  getStore: async () => ({ get: vi.fn(), set: vi.fn(async () => {}) }),
 }));
 
 const { fromSession, recallScroll, rememberScroll, toSession } = await import("@/stores/session");

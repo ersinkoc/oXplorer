@@ -208,12 +208,13 @@ pub fn run() {
         .on_menu_event(|app, event| menu::forward_event(app, event.id().as_ref()))
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
-                if let Some(ptys) = window.try_state::<std::sync::Arc<pty::PtyManager>>() {
-                    ptys.close_window(window.label());
-                }
-                if let Some(watcher) = window.try_state::<dir::DirWatcher>() {
-                    watcher.release_window(window.label());
-                }
+                release_window(window.app_handle(), window.label());
+            }
+        })
+        // A reloaded page starts over: what the old page started has no listener.
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                release_window(webview.app_handle(), webview.label());
             }
         })
         .register_asynchronous_uri_scheme_protocol(uri_scheme::SCHEME, uri_scheme::handle)
@@ -227,6 +228,15 @@ pub fn run() {
             }
             if let Some(window) = app.get_webview_window("main") {
                 mac::quicklook::install(app.handle(), &window);
+            }
+            // The only stores the frontend may use: it gets them with `getStore`
+            // and has no `store:allow-load`, which would read and write any path.
+            {
+                use tauri_plugin_store::StoreExt as _;
+                // Keep in sync with `StoreFile` in src/lib/app-store-file.ts.
+                for file in ["settings.json", "session.json", "folder-views.json", "recents.json"] {
+                    app.store(file)?;
+                }
             }
             app.manage(dir::DirWatcher::new(app.handle().clone())?);
             app.manage(std::sync::Arc::new(jobs::JobManager::default()));
@@ -243,6 +253,24 @@ pub fn run() {
                 system::request_open(app, urls.iter().filter_map(|u| u.to_file_path().ok()));
             }
         });
+}
+
+/// Ends what a window's page started: shells, folder watches, searches and
+/// disk-usage scans. Channels to a page that is gone still accept messages, so
+/// that work would otherwise run on unnoticed.
+fn release_window(app: &tauri::AppHandle, label: &str) {
+    if let Some(ptys) = app.try_state::<std::sync::Arc<pty::PtyManager>>() {
+        ptys.close_window(label);
+    }
+    if let Some(watcher) = app.try_state::<dir::DirWatcher>() {
+        watcher.release_window(label);
+    }
+    if let Some(searches) = app.try_state::<std::sync::Arc<search::SearchManager>>() {
+        searches.cancel_window(label);
+    }
+    if let Some(scans) = app.try_state::<std::sync::Arc<usage::UsageScans>>() {
+        scans.cancel_window(label);
+    }
 }
 
 #[cfg(test)]

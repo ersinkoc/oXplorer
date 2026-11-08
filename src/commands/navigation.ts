@@ -3,7 +3,13 @@ import { commands } from "@/bindings";
 import { unlockArchiveOf } from "@/commands/archive-unlock";
 import { materialize } from "@/commands/locations";
 import { t } from "@/i18n";
-import { archiveParent, archivePath, isArchiveName, isArchivePath } from "@/lib/archive-path";
+import {
+  archiveParent,
+  archivePath,
+  isArchiveName,
+  isArchivePath,
+  parseArchivePath,
+} from "@/lib/archive-path";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { mirrorMove, normalizeUserInput, parent } from "@/lib/path";
@@ -110,6 +116,26 @@ export function reload(): void {
 /** The active tab's real folder (a search's scope), for actions that need one. */
 export function currentFolder(pane?: PaneId): string {
   return realFolder(getActiveTab(pane).path);
+}
+
+/**
+ * The local item a tab stands for, for commands that act on "here" when
+ * nothing is selected (Show in Finder, Copy Path, Get Info): a search's scope,
+ * an archive's own file. Null on a server, which has no local item (says so).
+ */
+export function currentItem(pane?: PaneId): string | null {
+  const { path } = getActiveTab(pane);
+  if (isRemotePath(path)) {
+    toast(t("This isn’t available for items on a server."));
+    return null;
+  }
+  return parseArchivePath(path)?.archive ?? realFolder(path);
+}
+
+/** A folder on this Mac to scan (Disk Usage, Find Duplicates); null in archives and on servers. */
+export function scannableFolder(pane?: PaneId): string | null {
+  const { path } = getActiveTab(pane);
+  return isArchivePath(path) || isRemotePath(path) ? null : realFolder(path);
 }
 
 /** New items can't be created in (or pasted into) search results. */

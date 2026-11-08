@@ -12,7 +12,7 @@ import { describeError, toAppError } from "@/lib/ipc";
 import { isSearchPath, isVirtualPath } from "@/lib/search-path";
 import { filterEntries } from "@/lib/sort";
 import { useApp } from "@/stores/app-store";
-import { useCompare } from "@/stores/compare-store";
+import { livePair, useCompare } from "@/stores/compare-store";
 import { useDirCache } from "@/stores/dir-cache-store";
 import { getActiveTab, otherPane, type PaneId, useWorkspace } from "@/stores/workspace-store";
 
@@ -186,7 +186,8 @@ export function registerTabCommands(): void {
       title: "Compare Panes",
       run: () => {
         const ws = useWorkspace.getState();
-        if (useCompare.getState().pair) return useCompare.setState({ pair: null });
+        // A second press ends a comparison; a stale pair just gets replaced.
+        if (livePair()) return useCompare.setState({ pair: null });
         if (!ws.dualPane) {
           toast(t("Open the second pane first (⌘U)."));
           return;
@@ -221,8 +222,8 @@ export function registerTabCommands(): void {
       title: "Select Differences",
       run: () => {
         const ws = useWorkspace.getState();
-        const pair = useCompare.getState().pair;
-        if (!pair || !ws.dualPane) return;
+        const pair = livePair();
+        if (!pair) return;
         const cache = useDirCache.getState().dirs;
         const { showHidden } = useApp.getState();
         const list = (p: string) => filterEntries(cache[p]?.entries ?? [], { showHidden, filter: "" });

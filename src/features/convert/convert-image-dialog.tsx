@@ -4,6 +4,7 @@ import { commands, type ImageFormat } from "@/bindings";
 import { applyFsChanges, recordUndo } from "@/commands/jobs";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { describeError, type FileEntry, toAppError, unwrap } from "@/lib/ipc";
 import { basename } from "@/lib/path";
 import { selectAll } from "@/lib/selection";
@@ -112,8 +113,8 @@ function Body({ paths, onClose }: { paths: string[]; onClose: () => void }) {
       <p className="m-0 text-[12px] text-fg-faint">
         {busy
           ? t("Converting {done} of {total}…", {
-              done: done.toLocaleString(),
-              total: paths.length.toLocaleString(),
+              done: done.toLocaleString(formatLocale()),
+              total: paths.length.toLocaleString(formatLocale()),
             })
           : t("The originals stay as they are; new files are made next to them.")}
       </p>

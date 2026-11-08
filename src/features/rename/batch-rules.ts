@@ -1,4 +1,13 @@
 import { msg } from "@/i18n";
+import { parent } from "@/lib/path";
+
+/**
+ * A name in a folder, case-insensitive like the default APFS volume. Items
+ * from several folders (search results) only clash within their own folder.
+ */
+export function siblingKey(dir: string, name: string): string {
+  return `${dir}\n${name.toLowerCase()}`;
+}
 
 /** Finder's "Rename N Items" options. */
 export type RenameRule =
@@ -66,7 +75,7 @@ function problemWith(name: string): string | null {
 /**
  * New names for `items` (in their on-screen order), with problems flagged:
  * invalid names, two items ending up with the same name in one folder, or a
- * name taken by another item in the folder (`siblings`, lower-cased).
+ * name taken by another item in the folder (`siblings`, as `siblingKey`s).
  */
 export function previewRenames(
   items: readonly { path: string; name: string; isFolder: boolean }[],
@@ -79,15 +88,18 @@ export function previewRenames(
     const next = newName(item.name, item.isFolder, rule, i, pattern);
     return { path: item.path, name: item.name, newName: next, problem: problemWith(next) };
   });
-  // Case-insensitive like the default APFS volume.
-  const renamedAway = new Set(out.filter((p) => p.newName !== p.name).map((p) => p.name.toLowerCase()));
+  const dir = (p: { path: string }) => parent(p.path) ?? "/";
+  const renamedAway = new Set(out.filter((p) => p.newName !== p.name).map((p) => siblingKey(dir(p), p.name)));
   const counts = new Map<string, number>();
-  for (const p of out) counts.set(p.newName.toLowerCase(), (counts.get(p.newName.toLowerCase()) ?? 0) + 1);
+  for (const p of out) {
+    const key = siblingKey(dir(p), p.newName);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
   for (const p of out) {
     if (p.problem || p.newName === p.name) continue;
-    const key = p.newName.toLowerCase();
+    const key = siblingKey(dir(p), p.newName);
     if ((counts.get(key) ?? 0) > 1) p.problem = msg("Same name as another item");
-    else if (siblings.has(key) && !renamedAway.has(key) && key !== p.name.toLowerCase())
+    else if (siblings.has(key) && !renamedAway.has(key) && key !== siblingKey(dir(p), p.name))
       p.problem = msg("An item with this name already exists");
   }
   return out;

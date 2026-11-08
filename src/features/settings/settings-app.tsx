@@ -1,6 +1,5 @@
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { LazyStore } from "@tauri-apps/plugin-store";
 import { Keyboard, Palette, Server, Settings2, SquareTerminal, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { events } from "@/bindings";
@@ -8,10 +7,11 @@ import { ConnectionsSection } from "@/features/settings/connections-section";
 import { ShortcutsSection } from "@/features/settings/shortcuts-section";
 import { applyLanguage, applyTheme } from "@/features/settings/use-preference-effects";
 import { msg, useT } from "@/i18n";
+import { AppStoreFile } from "@/lib/app-store-file";
 import { copyText, cutText, focusedTextField, pasteText, undoText } from "@/lib/text-edit";
 import { DEFAULT_PREFERENCES, type Preferences } from "@/stores/app-store";
 
-const store = new LazyStore("settings.json");
+const store = new AppStoreFile("settings.json");
 
 /** One preference, read from and written to the store the main window watches. */
 export function usePref<K extends keyof Preferences>(key: K): [Preferences[K], (v: Preferences[K]) => void] {
@@ -257,6 +257,14 @@ function TerminalSection() {
   const [size, setSize] = usePref("terminalFontSize");
   const [startIn, setStartIn] = usePref("terminalStartIn");
   const { t } = useT();
+  // Typed freely and clamped once done: clamping each keystroke turns "1" into 9.
+  const [draft, setDraft] = useState<string | null>(null);
+  const commitSize = () => {
+    if (draft === null) return;
+    const n = Number(draft);
+    if (draft.trim() !== "" && Number.isFinite(n)) setSize(Math.min(24, Math.max(9, Math.round(n))));
+    setDraft(null);
+  };
   return (
     <section>
       <h1 className="m-0 mb-2 text-[17px] font-semibold">{t("Terminal")}</h1>
@@ -266,8 +274,12 @@ function TerminalSection() {
           aria-label={t("Font size")}
           min={9}
           max={24}
-          value={size}
-          onChange={(e) => setSize(Math.min(24, Math.max(9, Number(e.target.value) || 12)))}
+          value={draft ?? size}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitSize}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitSize();
+          }}
           className="h-7 w-20 rounded-md border border-border bg-bg px-2"
         />
       </Row>

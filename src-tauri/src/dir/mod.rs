@@ -6,7 +6,7 @@ pub use watcher::DirWatcher;
 
 use std::fs;
 
-use tauri::State;
+use tauri::Manager as _;
 use tauri::ipc::Channel;
 
 use crate::error::{AppError, AppResult};
@@ -83,15 +83,23 @@ fn completions(paths: impl Iterator<Item = std::path::PathBuf>, prefix: &str) ->
 /// Starts (or ref-counts) live updates for `path`; changes arrive as `DirChanged` events.
 #[tauri::command]
 #[specta::specta]
-pub fn watch_dir(window: tauri::Window, watcher: State<'_, DirWatcher>, path: String) -> AppResult<()> {
-    watcher.watch(&validate_path(&path)?, window.label())
+pub async fn watch_dir(window: tauri::Window, path: String) -> AppResult<()> {
+    let p = validate_path(&path)?;
+    // Off the main thread: resolving a path on a dead network mount can hang.
+    let (app, label) = (window.app_handle().clone(), window.label().to_owned());
+    tauri::async_runtime::spawn_blocking(move || app.state::<DirWatcher>().watch(&p, &label))
+        .await
+        .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn unwatch_dir(window: tauri::Window, watcher: State<'_, DirWatcher>, path: String) -> AppResult<()> {
-    watcher.unwatch(&validate_path(&path)?, window.label());
-    Ok(())
+pub async fn unwatch_dir(window: tauri::Window, path: String) -> AppResult<()> {
+    let p = validate_path(&path)?;
+    let (app, label) = (window.app_handle().clone(), window.label().to_owned());
+    tauri::async_runtime::spawn_blocking(move || app.state::<DirWatcher>().unwatch(&p, &label))
+        .await
+        .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })
 }
 
 #[cfg(test)]

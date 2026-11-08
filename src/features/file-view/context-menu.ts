@@ -3,6 +3,7 @@ import { commands } from "@/bindings";
 import { ARCHIVE_FORMATS, isArchive, toggleTag } from "@/commands/file-commands";
 import { runCommand } from "@/commands/registry";
 import { t } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { isChecksumList } from "@/lib/checksum-list";
 import { isFolderLike } from "@/lib/format";
 import type { FileEntry } from "@/lib/ipc";
@@ -112,7 +113,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           ? [{ text: t("Compare Files"), command: "file.compareFiles" }]
           : []),
         {
-          text: one ? t("Rename") : t("Rename {count} Items…", { count: entries.length.toLocaleString() }),
+          text: one
+            ? t("Rename")
+            : t("Rename {count} Items…", { count: entries.length.toLocaleString(formatLocale()) }),
           command: "file.rename",
         },
         { text: t("Duplicate"), command: "file.duplicate" },
@@ -138,7 +141,7 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           ? [
               {
                 text: t("New Folder with Selection ({count} Items)", {
-                  count: entries.length.toLocaleString(),
+                  count: entries.length.toLocaleString(formatLocale()),
                 }),
                 command: "file.newFolderWithSelection",
               },
@@ -161,7 +164,9 @@ export async function showItemMenu(entries: readonly FileEntry[]): Promise<void>
           : []),
         "-",
         {
-          text: one ? t("Copy") : t("Copy {count} Items", { count: entries.length.toLocaleString() }),
+          text: one
+            ? t("Copy")
+            : t("Copy {count} Items", { count: entries.length.toLocaleString(formatLocale()) }),
           command: "edit.copy",
         },
         { text: t("Copy Path"), command: "file.copyPath" },

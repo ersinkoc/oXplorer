@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewRenames, splitExtension } from "@/features/rename/batch-rules";
+import { previewRenames, siblingKey, splitExtension } from "@/features/rename/batch-rules";
 
 const files = ["IMG_001.jpg", "IMG_002.jpg", "notes.txt"].map((name) => ({
   path: `/d/${name}`,
@@ -65,7 +65,7 @@ describe("batch rename rules", () => {
     const taken = previewRenames(
       files.slice(2),
       { kind: "replace", find: "notes", replace: "todo", regex: false, caseSensitive: true },
-      new Set(["todo.txt"]),
+      new Set([siblingKey("/d", "todo.txt")]),
     );
     expect(taken[0]?.problem).toBe("An item with this name already exists");
     // A name freed by another item in the same batch is fine: x1→x2 while x2→x3.
@@ -75,11 +75,21 @@ describe("batch rename rules", () => {
         { path: "/d/x2", name: "x2", isFolder: false },
       ],
       { kind: "format", base: "x", start: 2, digits: 1, where: "after" },
-      new Set(["x1", "x2"]),
+      new Set([siblingKey("/d", "x1"), siblingKey("/d", "x2")]),
     );
     expect(shift.map((p) => [p.newName, p.problem])).toEqual([
       ["x2", null],
       ["x3", null],
     ]);
+    // Search results from two folders: the same new name in each is fine.
+    const twoFolders = previewRenames(
+      [
+        { path: "/a/a.txt", name: "a.txt", isFolder: false },
+        { path: "/b/a.txt", name: "a.txt", isFolder: false },
+      ],
+      { kind: "add", text: "_old", where: "after" },
+      new Set([siblingKey("/a", "a.txt"), siblingKey("/b", "a.txt")]),
+    );
+    expect(twoFolders.map((p) => p.problem)).toEqual([null, null]);
   });
 });

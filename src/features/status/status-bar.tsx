@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { commands } from "@/bindings";
 import { useVisibleEntries } from "@/features/file-view/use-visible-entries";
 import { useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatSize, isFolderLike } from "@/lib/format";
 import { useApp } from "@/stores/app-store";
 import { useCompareMarks } from "@/stores/compare-store";
@@ -44,15 +45,15 @@ export function StatusBar({ pane }: { pane: PaneId }) {
   if (selected.length > 0) {
     parts.push(
       t("{selected} of {total} selected", {
-        selected: selected.length.toLocaleString(),
-        total: count.toLocaleString(),
+        selected: selected.length.toLocaleString(formatLocale()),
+        total: count.toLocaleString(formatLocale()),
       }),
     );
     if (selectedBytes > 0) parts.push(formatSize(selectedBytes));
   } else {
     parts.push(
       dir?.status === "loading"
-        ? t("{count} items…", { count: count.toLocaleString() })
+        ? t("{count} items…", { count: count.toLocaleString(formatLocale()) })
         : tn(count, "{count} item", "{count} items"),
     );
   }

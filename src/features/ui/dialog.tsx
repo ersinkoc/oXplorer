@@ -2,7 +2,8 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 /**
  * Minimal modal built on <dialog>: native focus trapping, Esc to close, and
- * inert background. `onClose` fires for Esc and backdrop clicks.
+ * inert background. `onClose` fires for Esc and backdrop clicks (Esc only when
+ * `dismissible` is false: a stray click must not answer a question).
  */
 export function Dialog({
   open,
@@ -10,8 +11,10 @@ export function Dialog({
   label,
   children,
   className,
+  dismissible = true,
 }: {
   open: boolean;
+  dismissible?: boolean;
   onClose: () => void;
   label: string;
   children: ReactNode;
@@ -34,7 +37,7 @@ export function Dialog({
         onClose();
       }}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
       // `not-open:hidden`: a display class (`flex`) passed in would otherwise
       // override the browser's `display: none` for a closed dialog.

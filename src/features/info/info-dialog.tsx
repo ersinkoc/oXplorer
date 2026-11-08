@@ -6,6 +6,7 @@ import { FileIcon } from "@/features/file-view/file-icon";
 import { TagDots } from "@/features/file-view/tag-dots";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatDate, formatSize, isFolderLike, kindLabel } from "@/lib/format";
 import { describeError, type FileEntry, toAppError } from "@/lib/ipc";
 import { parent, tildify } from "@/lib/path";
@@ -202,12 +203,15 @@ function InfoBody({ paths, onClose }: { paths: string[]; onClose: () => void }) 
     ? size
       ? `${tn(size.files, "{size} on disk {allocated} for {count} item", "{size} on disk {allocated} for {count} items", { size: formatSize(size.bytes), allocated: formatSize(size.allocated) })}${done ? "" : "…"}`
       : t("Calculating…")
-    : t("{size} ({bytes} bytes)", { size: formatSize(single.size), bytes: single.size.toLocaleString() });
+    : t("{size} ({bytes} bytes)", {
+        size: formatSize(single.size),
+        bytes: single.size.toLocaleString(formatLocale()),
+      });
 
   const rows: [string, React.ReactNode][] =
     entries.length > 1
       ? [
-          [t("Items"), entries.length.toLocaleString()],
+          [t("Items"), entries.length.toLocaleString(formatLocale())],
           [t("Size"), sizeLabel],
           [t("Where"), tildify(parent(single.path) ?? "/", home)],
         ]

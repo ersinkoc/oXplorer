@@ -1,4 +1,4 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { AppStoreFile } from "@/lib/app-store-file";
 import { DEFAULT_SORT, type SortConfig } from "@/lib/sort";
 import type { ViewMode } from "@/stores/workspace-store";
 
@@ -13,7 +13,7 @@ const SAVE_DELAY_MS = 1000;
 
 /** Oldest first (a Map keeps insertion order), so trimming drops the least recent. */
 const views = new Map<string, FolderView>();
-const store = new LazyStore("folder-views.json");
+const store = new AppStoreFile("folder-views.json");
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 function isRecord(v: unknown): v is Record<string, unknown> {

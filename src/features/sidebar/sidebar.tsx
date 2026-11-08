@@ -162,7 +162,7 @@ export function Sidebar() {
                 <Item
                   key={c.id}
                   icon={Server}
-                  label={c.name || c.host}
+                  label={c.name || c.host || c.bucket}
                   active={current.startsWith(path)}
                   dropDir={path}
                   onClick={() => navigateTo(path)}

@@ -5,6 +5,7 @@ import { commands, type SyncEvent, type SyncSide, type SyncStatus } from "@/bind
 import { runJob } from "@/commands/jobs";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatDate, formatSize } from "@/lib/format";
 import { basename } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -149,7 +150,7 @@ function Body({ left, right, onClose }: { left: string; right: string; onClose: 
               ? scan.items.length === 0
                 ? t("The folders are the same.")
                 : tn(scan.items.length, "1 difference", "{count} differences")
-              : t("Comparing… {count} folders", { count: scan.folders.toLocaleString() })}
+              : t("Comparing… {count} folders", { count: scan.folders.toLocaleString(formatLocale()) })}
           </p>
         </div>
         <label
@@ -228,7 +229,7 @@ function Body({ left, right, onClose }: { left: string; right: string; onClose: 
         </table>
         {plan.length > SHOWN && (
           <p className="px-3 py-2 text-[12px] text-fg-faint">
-            {t("and {count} more", { count: (plan.length - SHOWN).toLocaleString() })}
+            {t("and {count} more", { count: (plan.length - SHOWN).toLocaleString(formatLocale()) })}
           </p>
         )}
       </div>
@@ -236,8 +237,8 @@ function Body({ left, right, onClose }: { left: string; right: string; onClose: 
       <footer className="flex items-center gap-2 border-t border-border px-4 py-3">
         <span className="flex-1 text-[12px] text-fg-muted">
           {t("{right} to the right, {left} to the left. Replaced items go to the Trash.", {
-            right: toRight.length.toLocaleString(),
-            left: toLeft.length.toLocaleString(),
+            right: toRight.length.toLocaleString(formatLocale()),
+            left: toLeft.length.toLocaleString(formatLocale()),
           })}
         </span>
         <DialogButton onClick={onClose}>{t("Cancel")}</DialogButton>

@@ -2,9 +2,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import { applyFsChanges, recordUndo } from "@/commands/jobs";
-import { findPattern, previewRenames, type RenameRule } from "@/features/rename/batch-rules";
+import { findPattern, previewRenames, type RenameRule, siblingKey } from "@/features/rename/batch-rules";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { isFolderLike } from "@/lib/format";
 import { CommandError, type FileEntry, unwrap } from "@/lib/ipc";
 import { parent } from "@/lib/path";
@@ -53,7 +54,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
   const dirs = useDirCache((s) => s.dirs);
   const siblings = new Set(
     [...new Set(entries.map((e) => parent(e.path) ?? "/"))].flatMap(
-      (d) => dirs[d]?.entries.map((e) => e.name.toLowerCase()) ?? [],
+      (d) => dirs[d]?.entries.map((e) => siblingKey(d, e.name)) ?? [],
     ),
   );
   const items = entries.map((e) => ({ path: e.path, name: e.name, isFolder: isFolderLike(e) }));
@@ -90,7 +91,7 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
       }}
     >
       <h2 className="m-0 text-[14px] font-semibold">
-        {t("Rename {count} Items", { count: entries.length.toLocaleString() })}
+        {t("Rename {count} Items", { count: entries.length.toLocaleString(formatLocale()) })}
       </h2>
       <select
         aria-label={t("Rename mode")}
@@ -225,8 +226,8 @@ function Body({ entries, onClose }: { entries: FileEntry[]; onClose: () => void 
           {problems > 0
             ? tn(problems, "{count} name can’t be used", "{count} names can’t be used")
             : t("{changed} of {total} will be renamed", {
-                changed: changes.length.toLocaleString(),
-                total: entries.length.toLocaleString(),
+                changed: changes.length.toLocaleString(formatLocale()),
+                total: entries.length.toLocaleString(formatLocale()),
               })}
         </p>
         <div className="flex gap-2">

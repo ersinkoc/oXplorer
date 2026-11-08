@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/features/preview/preview-pane", () => ({ EntryPreview: () => null }));
 vi.mock("@/features/file-view/context-menu", () => ({ showItemMenu: vi.fn() }));
 vi.mock("@crabnebula/tauri-plugin-drag", () => ({ startDrag: vi.fn() }));
-vi.mock("@tauri-apps/plugin-store", () => ({ LazyStore: class {} }));
+vi.mock("@tauri-apps/plugin-store", () => ({ getStore: async () => undefined }));
 
 const { ancestorChain, columnRoot } = await import("@/features/file-view/file-columns");
 

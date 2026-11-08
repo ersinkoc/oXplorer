@@ -128,8 +128,11 @@ pub struct UndoAction {
 pub enum UndoStep {
     /// Move the item to the Trash (reverses a copy/creation).
     Trash { path: String },
-    /// Move an item back (reverses a move, rename, or trashing).
+    /// Move an item back (reverses a move or trashing).
     Move { from: String, to: String },
+    /// Rename an item back within its folder. Consecutive renames run together
+    /// through temporary names, so swaps and case-only changes undo too.
+    Rename { from: String, to: String },
     /// Give an item exactly these Finder tags (reverses a tag edit).
     Tags { path: String, tags: Vec<FinderTag> },
     /// Give an item these dates back (reverses Change Dates).

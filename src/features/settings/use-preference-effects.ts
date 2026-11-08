@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import { type Language, menuTitles, resolveLanguage, t } from "@/i18n";
+import { resolveFormatLocale, setFormatLocale } from "@/i18n/locale";
 import { MENU_LABELS } from "@/i18n/menu-labels";
 import { describeError } from "@/lib/ipc";
 import { type Preferences, type Theme, useApp } from "@/stores/app-store";
@@ -20,6 +21,9 @@ export function applyTheme(theme: Theme): void {
 export async function applyLanguage(pref: Preferences["languagePref"]): Promise<Language> {
   const system = await locale().catch(() => null);
   const lang = resolveLanguage(pref, system);
+  setFormatLocale(resolveFormatLocale(lang, system));
+  // CSS `uppercase` and hyphenation follow it ("Git" → "GİT" in Turkish).
+  document.documentElement.lang = lang;
   useApp.getState().set({ language: lang });
   return lang;
 }

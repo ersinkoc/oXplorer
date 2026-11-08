@@ -5,6 +5,7 @@ import { runJob } from "@/commands/jobs";
 import { navigateTo } from "@/commands/navigation";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatSize } from "@/lib/format";
 import { basename, parent, tildify } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -115,8 +116,8 @@ function Body({ path, onClose }: { path: string; onClose: () => void }) {
                   size: formatSize(wasted),
                 })
             : t("Looking… {scanned} files, {hashed} compared", {
-                scanned: scan.scanned.toLocaleString(),
-                hashed: scan.hashed.toLocaleString(),
+                scanned: scan.scanned.toLocaleString(formatLocale()),
+                hashed: scan.hashed.toLocaleString(formatLocale()),
               })}
         </p>
       </header>

@@ -413,37 +413,89 @@ fn zip_to_system_time(t: zip::DateTime) -> Option<SystemTime> {
     u64::try_from(secs).ok().map(|s| UNIX_EPOCH + Duration::from_secs(s))
 }
 
-fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<()> {
+/// Folder modes from a tar that still have to be applied, by name of a folder
+/// right inside the staging folder (the caller moves those out first: a
+/// read-only folder can't be moved to another parent).
+type TopModes = Vec<(std::ffi::OsString, u32)>;
+
+/// Folders are written owner-writable and get their real mode once their
+/// contents are in, so read-only folders in an archive still extract.
+fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<TopModes> {
     let mut tar = tar::Archive::new(reader);
     tar.set_preserve_permissions(true);
     tar.set_preserve_mtime(true);
     tar.set_unpack_xattrs(false);
     tar.set_overwrite(false);
+    let mut dirs: Vec<(PathBuf, u32)> = Vec::new();
     for entry in tar.entries()? {
         let mut entry = entry?;
         entry.set_mask(0o7000);
-        let Some(select) = select else {
-            if !entry.unpack_in(staging)? {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive"));
+        let is_dir = entry.header().entry_type().is_dir();
+        let mode = entry.header().mode().unwrap_or(0o755) & 0o777;
+        let out = match select {
+            None => {
+                let out = staging.join(normalize_member(&entry.path()?)?);
+                if !entry.unpack_in(staging)? {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "unsafe path in archive"));
+                }
+                out
             }
-            continue;
+            Some(select) => {
+                // Picking members: hard links would point at paths that may not be extracted.
+                if entry.header().entry_type().is_hard_link() {
+                    continue;
+                }
+                let path = entry.path()?.into_owned();
+                let Some(rel) = select(&normalize_member(&path)?) else { continue };
+                if rel.as_os_str().is_empty() {
+                    continue;
+                }
+                let out = safe_join(staging, &rel)?;
+                if let Some(parent) = out.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                entry.unpack(&out)?;
+                out
+            }
         };
-        // Picking members: hard links would point at paths that may not be extracted.
-        if entry.header().entry_type().is_hard_link() {
-            continue;
+        if is_dir && out.is_dir() {
+            fs::set_permissions(&out, fs::Permissions::from_mode(mode | 0o700))?;
+            dirs.push((out, mode));
         }
-        let path = entry.path()?.into_owned();
-        let Some(rel) = select(&normalize_member(&path)?) else { continue };
-        if rel.as_os_str().is_empty() {
-            continue;
-        }
-        let out = safe_join(staging, &rel)?;
-        if let Some(parent) = out.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        entry.unpack(&out)?;
     }
-    Ok(())
+    // Deepest first, so a parent is locked only after its children are done.
+    dirs.sort_by_key(|(p, _)| std::cmp::Reverse(p.components().count()));
+    let mut top = TopModes::new();
+    for (p, mode) in dirs {
+        match (p.parent() == Some(staging), p.file_name()) {
+            (true, Some(name)) => top.push((name.to_owned(), mode)),
+            _ => fs::set_permissions(&p, fs::Permissions::from_mode(mode))?,
+        }
+    }
+    Ok(top)
+}
+
+/// Removes a failed extraction, read-only folders included.
+fn remove_staging(staging: &Path) {
+    fn unlock(dir: &Path) {
+        let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
+        for e in fs::read_dir(dir).into_iter().flatten().flatten() {
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                unlock(&e.path());
+            }
+        }
+    }
+    unlock(staging);
+    let _ = fs::remove_dir_all(staging);
+}
+
+/// Applies the modes `untar` left for later, once each folder is at `place(name)`.
+fn apply_top_modes(top: &TopModes, place: impl Fn(&std::ffi::OsStr) -> Option<PathBuf>) {
+    for (name, mode) in top {
+        if let Some(p) = place(name) {
+            let _ = fs::set_permissions(p, fs::Permissions::from_mode(*mode));
+        }
+    }
 }
 
 /// A member path without `./`, refusing `..` and absolute paths.
@@ -491,8 +543,11 @@ pub fn extract_to(
     };
 
     let result = (|| {
-        match kind {
-            Kind::Zip => unzip(archive, &staging, password, tick, &|p| Some(p.to_path_buf()))?,
+        let top = match kind {
+            Kind::Zip => {
+                unzip(archive, &staging, password, tick, &|p| Some(p.to_path_buf()))?;
+                TopModes::new()
+            }
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
@@ -501,7 +556,7 @@ pub fn extract_to(
                     _ => untar(zstd::Decoder::new(raw)?, &staging, None)?,
                 }
             }
-        }
+        };
         let children: Vec<PathBuf> =
             fs::read_dir(&staging)?.filter_map(Result::ok).map(|e| e.path()).collect();
         if let [only] = children.as_slice() {
@@ -509,15 +564,17 @@ pub fn extract_to(
             let target = unique(dir, &only_name, "");
             fs::rename(only, &target)?;
             fs::remove_dir(&staging)?;
+            apply_top_modes(&top, |_| Some(target.clone()));
             Ok(target)
         } else {
             let target = unique(dir, stem, "");
             fs::rename(&staging, &target)?;
+            apply_top_modes(&top, |name| Some(target.join(name)));
             Ok(target)
         }
     })();
     if result.is_err() {
-        let _ = fs::remove_dir_all(&staging);
+        remove_staging(&staging);
     }
     if stopped { Err(cancelled()) } else { result }
 }
@@ -624,8 +681,11 @@ pub fn extract_members(
         go
     };
     let result = (|| {
-        match kind {
-            Kind::Zip => unzip(archive, &staging, known_password(archive).as_deref(), tick, &select)?,
+        let top = match kind {
+            Kind::Zip => {
+                unzip(archive, &staging, known_password(archive).as_deref(), tick, &select)?;
+                TopModes::new()
+            }
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
@@ -634,19 +694,20 @@ pub fn extract_members(
                     _ => untar(zstd::Decoder::new(raw)?, &staging, Some(&select))?,
                 }
             }
-        }
+        };
         let mut created = Vec::new();
         for child in fs::read_dir(&staging)?.filter_map(Result::ok) {
-            let name = child.file_name().to_string_lossy().into_owned();
-            let target = unique(dest, &name, "");
+            let name = child.file_name();
+            let target = unique(dest, &name.to_string_lossy(), "");
             fs::rename(child.path(), &target)?;
+            apply_top_modes(&top, |n| (n == name).then(|| target.clone()));
             created.push(target);
         }
         fs::remove_dir(&staging)?;
         Ok(created)
     })();
     if result.is_err() {
-        let _ = fs::remove_dir_all(&staging);
+        remove_staging(&staging);
     }
     if stopped { Err(cancelled()) } else { result }
 }
@@ -654,6 +715,47 @@ pub fn extract_members(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tar with a read-only folder (0555) that holds a file.
+    #[test]
+    fn extracts_read_only_folders_from_a_tar() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tar_path = tmp.path().join("pkg.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&tar_path).unwrap());
+            for (path, mode) in [("pkg/", 0o755), ("pkg/ro/", 0o555)] {
+                let mut h = tar::Header::new_gnu();
+                h.set_entry_type(tar::EntryType::Directory);
+                h.set_mode(mode);
+                h.set_size(0);
+                b.append_data(&mut h, path, std::io::empty()).unwrap();
+            }
+            let mut h = tar::Header::new_gnu();
+            h.set_mode(0o644);
+            h.set_size(2);
+            b.append_data(&mut h, "pkg/ro/f.txt", &b"hi"[..]).unwrap();
+            let mut h = tar::Header::new_gnu();
+            h.set_entry_type(tar::EntryType::Directory);
+            h.set_mode(0o500);
+            h.set_size(0);
+            b.append_data(&mut h, "top/", std::io::empty()).unwrap();
+            b.finish().unwrap();
+        }
+        let out = extract(&tar_path, None, &mut |_| true).unwrap();
+        let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(fs::read(out.join("pkg/ro/f.txt")).unwrap(), b"hi");
+        assert_eq!(mode(&out.join("pkg/ro")), 0o555);
+        assert_eq!(mode(&out.join("top")), 0o500, "a top-level folder gets its mode after the move");
+
+        let dest = tmp.path().join("picked");
+        fs::create_dir(&dest).unwrap();
+        let picked = extract_members(&tar_path, &["pkg".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(fs::read(picked[0].join("ro/f.txt")).unwrap(), b"hi");
+        assert_eq!(mode(&picked[0].join("ro")), 0o555);
+        for p in [out.join("pkg/ro"), out.join("top"), picked[0].join("ro")] {
+            fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
 
     fn tree(root: &Path) -> PathBuf {
         let src = root.join("project");

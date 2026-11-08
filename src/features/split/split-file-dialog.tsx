@@ -3,6 +3,7 @@ import { runJob } from "@/commands/jobs";
 import { writableFolder } from "@/commands/navigation";
 import { Dialog, DialogButton } from "@/features/ui/dialog";
 import { msg, useT } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { formatSize } from "@/lib/format";
 import { basename } from "@/lib/path";
 import { isVirtualPath } from "@/lib/search-path";
@@ -110,7 +111,7 @@ function Body({ path, size, onClose }: { path: string; size: number; onClose: ()
         {valid
           ? t(
               "Makes {count} parts named “{name}.001”, “.002”, … Select the first part and choose Combine Files to join them.",
-              { count: partCount(size, partSize).toLocaleString(), name: basename(path) },
+              { count: partCount(size, partSize).toLocaleString(formatLocale()), name: basename(path) },
             )
           : partSize >= size
             ? t("The file is smaller than one part.")

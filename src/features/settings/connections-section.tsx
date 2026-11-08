@@ -50,6 +50,7 @@ export function ConnectionsSection({ usePref }: { usePref: UsePref }) {
         <ConnectionForm
           key={editing.id}
           initial={editing}
+          saved={connections.some((x) => x.id === editing.id)}
           onSave={save}
           onCancel={() => setEditing(null)}
           onDelete={remove}
@@ -68,7 +69,7 @@ export function ConnectionsSection({ usePref }: { usePref: UsePref }) {
                 className="flex h-9 w-full items-center gap-2 border-b border-border px-3 text-left last:border-0 hover:bg-hover"
               >
                 <Server className="size-4 shrink-0 text-accent" />
-                <span className="min-w-0 flex-1 truncate">{c.name || c.host}</span>
+                <span className="min-w-0 flex-1 truncate">{c.name || c.host || c.bucket}</span>
                 <span className="text-[11px] text-fg-muted uppercase">{c.kind}</span>
               </button>
             ))}
@@ -89,11 +90,14 @@ export function ConnectionsSection({ usePref }: { usePref: UsePref }) {
 
 function ConnectionForm({
   initial,
+  saved,
   onSave,
   onCancel,
   onDelete,
 }: {
   initial: Connection;
+  /** Already in the list (so it can be removed). */
+  saved: boolean;
   onSave: (c: Connection) => void;
   onCancel: () => void;
   onDelete: (c: Connection) => void;
@@ -141,7 +145,8 @@ function ConnectionForm({
 
   const submit = async () => {
     if (secret) await commands.remoteSaveSecret(c.id, secret);
-    onSave({ ...c, name: c.name.trim() || c.host });
+    // S3 needs no host (AWS): the bucket names it then.
+    onSave({ ...c, name: c.name.trim() || c.host.trim() || c.bucket.trim() || c.kind.toUpperCase() });
   };
 
   const kinds: [RemoteKind, string][] = [
@@ -227,7 +232,7 @@ function ConnectionForm({
         </p>
       )}
       <div className="mt-2 flex items-center gap-2">
-        {initial.name && (
+        {saved && (
           <button
             type="button"
             onClick={() => onDelete(initial)}

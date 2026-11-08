@@ -4,11 +4,12 @@ import { toast } from "sonner";
 import { type ArchiveFormat, commands, type FinderTag } from "@/bindings";
 import { applyFsChanges, recordUndo, runJob } from "@/commands/jobs";
 import { transferSpec } from "@/commands/locations";
-import { currentFolder, refuseArchiveMembers, selectedEntries, writableFolder } from "@/commands/navigation";
+import { currentItem, refuseArchiveMembers, selectedEntries, writableFolder } from "@/commands/navigation";
 import { defineCommands } from "@/commands/registry";
 import { focusedTerminal, pasteInto } from "@/features/terminal/terminal-registry";
 import { askPassword } from "@/features/ui/password-prompt";
 import { msg, t, tn } from "@/i18n";
+import { formatLocale } from "@/i18n/locale";
 import { CommandError, describeError, type FileEntry, unwrap } from "@/lib/ipc";
 import { isConvertibleImage } from "@/lib/media";
 import { basename, parent } from "@/lib/path";
@@ -218,7 +219,7 @@ export async function commitRename(entry: FileEntry, newName: string): Promise<b
   try {
     const renamed = await unwrap(commands.renamePath(entry.path, name));
     applyFsChanges([renamed], [entry.path]);
-    recordUndo({ label: msg("Rename"), steps: [{ kind: "move", from: renamed.path, to: entry.path }] });
+    recordUndo({ label: msg("Rename"), steps: [{ kind: "rename", from: renamed.path, to: entry.path }] });
     const here = getActiveTab().path;
     if (isSearchPath(here) || parent(renamed.path) === here)
       useWorkspace.getState().setSelection(selectOne(renamed.path));
@@ -603,7 +604,7 @@ export function registerFileCommands(): void {
           sel.length === 1
             ? t("Are you sure you want to delete “{name}” immediately?", { name: basename(sel[0] ?? "") })
             : t("Are you sure you want to delete these {count} items immediately?", {
-                count: sel.length.toLocaleString(),
+                count: sel.length.toLocaleString(formatLocale()),
               });
         const ok = await ask(question, {
           title: t("Delete Immediately"),
@@ -632,7 +633,9 @@ export function registerFileCommands(): void {
       title: "Get Info",
       run: () => {
         const sel = paths(selectedEntries());
-        useApp.getState().set({ infoPaths: sel.length > 0 ? sel : [currentFolder()] });
+        const here = sel.length > 0 ? null : currentItem();
+        if (sel.length === 0 && !here) return;
+        useApp.getState().set({ infoPaths: here ? [here] : sel });
       },
     },
     {

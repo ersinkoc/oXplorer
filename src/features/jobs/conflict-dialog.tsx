@@ -35,6 +35,7 @@ export function ConflictDialog() {
 
   return (
     <Dialog
+      dismissible={false}
       open={!!conflict}
       onClose={() => answer("stop")}
       label={t("Item already exists")}

@@ -49,15 +49,22 @@ pub async fn preview_hex(path: String) -> AppResult<TextPreview> {
 /// Lets the webview load `path` through `asset://` (images, audio, video).
 #[tauri::command]
 #[specta::specta]
-pub fn allow_preview(app: AppHandle, path: String) -> AppResult<()> {
+pub async fn allow_preview(app: AppHandle, path: String) -> AppResult<()> {
     let p = validate_path(&path)?;
-    let meta = p.metadata().map_err(|e| AppError::from_io(&e, &p))?;
+    let path2 = path.clone();
+    tauri::async_runtime::spawn_blocking(move || allow_file(&app, &p, path2))
+        .await
+        .map_err(|e| AppError::Io { path: Some(path), message: e.to_string() })?
+}
+
+fn allow_file(app: &AppHandle, p: &Path, path: String) -> AppResult<()> {
+    let meta = p.metadata().map_err(|e| AppError::from_io(&e, p))?;
     if !meta.is_file() {
         return Err(AppError::InvalidPath { path, reason: "not a file".into() });
     }
     let scope = app.asset_protocol_scope();
     let io = |e: tauri::Error| AppError::Io { path: Some(path.clone()), message: e.to_string() };
-    scope.allow_file(&p).map_err(io)?;
+    scope.allow_file(p).map_err(io)?;
     // The protocol checks the resolved path of symlinks.
     if let Ok(real) = p.canonicalize()
         && real != p

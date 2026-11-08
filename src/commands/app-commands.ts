@@ -3,13 +3,14 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import {
-  currentFolder,
+  currentItem,
   goBack,
   goForward,
   goUp,
   navigateTo,
   openEntries,
   reload,
+  scannableFolder,
   selectedEntries,
 } from "@/commands/navigation";
 import { defineCommands, runCommand } from "@/commands/registry";
@@ -136,7 +137,8 @@ export function registerAppCommands(): void {
       id: "file.revealInFinder",
       title: "Show in Finder",
       run: async () => {
-        const target = selectedEntries()[0]?.path ?? currentFolder();
+        const target = selectedEntries()[0]?.path ?? currentItem();
+        if (!target) return;
         try {
           await unwrap(commands.revealInFinder(target));
         } catch (err) {
@@ -149,7 +151,9 @@ export function registerAppCommands(): void {
       title: "Copy Path",
       run: async () => {
         const sel = selectedEntries().map((e) => e.path);
-        const paths = sel.length > 0 ? sel : [currentFolder()];
+        const here = sel.length > 0 ? null : currentItem();
+        const paths = here ? [here] : sel;
+        if (paths.length === 0) return;
         await writeText(paths.join("\n"));
         toast.success(tn(paths.length, "Path copied", "{count} paths copied"));
       },
@@ -248,7 +252,11 @@ export function registerAppCommands(): void {
       title: "Disk Usage…",
       run: () => {
         const [first] = selectedEntries();
-        const folder = first && first.kind === "dir" ? first.path : currentFolder();
+        const folder = first && first.kind === "dir" ? first.path : scannableFolder();
+        if (!folder || isVirtualPath(folder)) {
+          toast(t("Disk Usage works in folders on this Mac."));
+          return;
+        }
         useApp.getState().set({ diskUsagePath: folder });
       },
     },
@@ -257,8 +265,8 @@ export function registerAppCommands(): void {
       title: "Find Duplicates…",
       run: () => {
         const [first] = selectedEntries();
-        const folder = first && first.kind === "dir" ? first.path : currentFolder();
-        if (isVirtualPath(folder)) {
+        const folder = first && first.kind === "dir" ? first.path : scannableFolder();
+        if (!folder || isVirtualPath(folder)) {
           toast(t("Find Duplicates works in folders on this Mac."));
           return;
         }
@@ -325,9 +333,14 @@ export function registerAppCommands(): void {
       run: () => {
         const { path } = getActiveTab();
         if (isSearchPath(path)) return runCommand("view.find");
+        const scope = scannableFolder();
+        if (!scope) {
+          toast(t("Search works in folders on this Mac."));
+          return;
+        }
         navigateTo(
           searchPath({
-            scope: path,
+            scope,
             query: "",
             mode: "name",
             caseSensitive: false,

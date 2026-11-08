@@ -1,5 +1,5 @@
 import { tinykeys } from "tinykeys";
-import { runCommand } from "@/commands/registry";
+import { dialogOpen, runCommand } from "@/commands/registry";
 
 /**
  * Shortcuts that are NOT native-menu accelerators. Menu accelerators live in
@@ -21,6 +21,7 @@ export function installGlobalKeys(): () => void {
   for (const [combo, id] of Object.entries(GLOBAL_KEYS)) {
     bindings[combo] = (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (dialogOpen()) return;
       e.preventDefault();
       runCommand(id);
     };

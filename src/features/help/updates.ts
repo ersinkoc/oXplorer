@@ -1,14 +1,14 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { LazyStore } from "@tauri-apps/plugin-store";
 import { check } from "@tauri-apps/plugin-updater";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
 import { t } from "@/i18n";
+import { AppStoreFile } from "@/lib/app-store-file";
 import { describeError } from "@/lib/ipc";
 
 const DAY_MS = 86_400_000;
-const store = new LazyStore("settings.json");
+const store = new AppStoreFile("settings.json");
 
 /**
  * Looks for a signed update on GitHub Releases. `interactive` (the menu item)

@@ -58,11 +58,20 @@ pub fn copy_file(src: &Path, dst: &Path, on_bytes: &mut dyn FnMut(u64) -> bool) 
     if state.is_null() {
         return Err(io::Error::last_os_error());
     }
-    let callback: libc::copyfile_callback_t = Some(copy_status);
-    // SAFETY: the callback and its context outlive the copyfile call, which is
-    // the only user of `state`; flags are documented copyfile(3) flags.
+    let callback: extern "C" fn(
+        c_int,
+        c_int,
+        libc::copyfile_state_t,
+        *const c_char,
+        *const c_char,
+        *mut c_void,
+    ) -> c_int = copy_status;
+    // SAFETY: STATUS_CB takes the function pointer itself (not a pointer to
+    // it; that jumped into the stack on every non-clone copy). The callback and
+    // its context outlive the copyfile call, the only user of `state`; flags are
+    // documented copyfile(3) flags.
     let rc = unsafe {
-        libc::copyfile_state_set(state, libc::COPYFILE_STATE_STATUS_CB as u32, (&raw const callback).cast());
+        libc::copyfile_state_set(state, libc::COPYFILE_STATE_STATUS_CB as u32, callback as *const c_void);
         libc::copyfile_state_set(
             state,
             libc::COPYFILE_STATE_STATUS_CTX as u32,
@@ -90,6 +99,25 @@ pub fn copy_file(src: &Path, dst: &Path, on_bytes: &mut dyn FnMut(u64) -> bool) 
         let _ = fs::remove_file(dst);
     }
     Err(err)
+}
+
+/// Renames without ever replacing an item at `to` (`AlreadyExists` instead).
+/// Volumes without atomic exclusive rename (some network shares) get a check
+/// followed by a plain rename.
+pub fn rename_excl(from: &Path, to: &Path) -> io::Result<()> {
+    let (a, b) = (c_path(from)?, c_path(to)?);
+    // SAFETY: valid C strings; RENAME_EXCL is a documented renamex_np(2) flag.
+    if unsafe { libc::renamex_np(a.as_ptr(), b.as_ptr(), libc::RENAME_EXCL) } == 0 {
+        return Ok(());
+    }
+    let err = io::Error::last_os_error();
+    if !matches!(err.raw_os_error(), Some(libc::ENOTSUP | libc::EINVAL)) {
+        return Err(err);
+    }
+    if to.symlink_metadata().is_ok() {
+        return Err(io::Error::from(io::ErrorKind::AlreadyExists));
+    }
+    fs::rename(from, to)
 }
 
 /// Copies directory metadata (mode, times, xattrs) after its children were copied.
@@ -222,6 +250,30 @@ mod tests {
         let err = copy_file(&src, &dst, &mut |_| true).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
         assert!(dst.exists(), "existing destination must survive EEXIST");
+    }
+
+    /// Another volume means a real data copy, which calls the status callback
+    /// (a wrong callback pointer crashed the app here) and can be cancelled.
+    #[test]
+    fn copies_to_another_volume_with_progress_and_cancel() {
+        let Some(vol) = super::super::test_volume::OtherVolume::exfat() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("big.bin");
+        fs::write(&src, vec![7u8; 3 * 1024 * 1024]).unwrap();
+
+        let dst = vol.path().join("big.bin");
+        let mut last = 0;
+        copy_file(&src, &dst, &mut |b| {
+            last = b;
+            true
+        })
+        .unwrap();
+        assert_eq!(fs::read(&dst).unwrap().len(), 3 * 1024 * 1024);
+        assert!(last > 0, "a data copy reports progress");
+
+        let cancelled = vol.path().join("cancelled.bin");
+        assert!(copy_file(&src, &cancelled, &mut |_| false).is_err());
+        assert!(!cancelled.exists(), "a cancelled copy leaves no partial file");
     }
 
     #[test]

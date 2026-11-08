@@ -1,4 +1,5 @@
 import { events } from "@/bindings";
+import { focusedTextField } from "@/lib/text-edit";
 
 /**
  * Single source for every user-invocable action. The native menu, keyboard
@@ -31,6 +32,38 @@ export function listCommands(): Command[] {
   return [...registry.values()];
 }
 
+/** Text editing, which goes to the focused field of a dialog. */
+const TEXT_EDITS = new Set([
+  "edit.copy",
+  "edit.cut",
+  "edit.paste",
+  "edit.undo",
+  "edit.redo",
+  "edit.selectAll",
+]);
+/** Commands that don't touch the panes and open their own windows. */
+const DIALOG_SAFE = new Set([
+  "app.settings",
+  "app.checkUpdates",
+  "help.whatsNew",
+  "help.report",
+  "help.showLog",
+]);
+
+/** A modal dialog is open; the panes behind it are inert. */
+export function dialogOpen(): boolean {
+  return document.querySelector("dialog[open]") !== null;
+}
+
+/**
+ * Whether `id` may run now. With a dialog open, ⌘⌫ or ⌘D must not act on the
+ * files selected behind it; only text editing in its fields and app windows run.
+ */
+export function allowedNow(id: string): boolean {
+  if (!dialogOpen()) return true;
+  return DIALOG_SAFE.has(id) || (TEXT_EDITS.has(id) && focusedTextField() !== null);
+}
+
 /**
  * Routes native menu clicks/accelerators into the registry. The menu bar is
  * shared by all windows, so commands only run when this window is in front
@@ -38,6 +71,6 @@ export function listCommands(): Command[] {
  */
 export function listenToMenu(): Promise<() => void> {
   return events.menuCommand.listen((e) => {
-    if (document.hasFocus()) runCommand(e.payload.id);
+    if (document.hasFocus() && allowedNow(e.payload.id)) runCommand(e.payload.id);
   });
 }

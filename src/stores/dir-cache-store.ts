@@ -71,6 +71,8 @@ const searchIds = new Map<string, string>();
 const loadIds = new Map<string, number>();
 /** Watcher deltas received while a path was still being listed. */
 const deferred = new Map<string, DirChanged[]>();
+/** Folders with a local listing in flight (a reload keeps `status` at "ready"). */
+const listing = new Set<string>();
 
 export const useDirCache = create<DirCacheState>()((set, get) => {
   /** An archive's or a server's folder: listed in one go. */
@@ -159,6 +161,7 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
       const id = (loadIds.get(path) ?? 0) + 1;
       loadIds.set(path, id);
       const current = () => loadIds.get(path) === id;
+      listing.add(path);
 
       // A reload keeps showing the old listing and swaps atomically at the end;
       // a first load streams in so large folders paint immediately.
@@ -210,6 +213,7 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
       try {
         await Promise.race([done, invoke.then(() => done)]);
         if (!current()) return;
+        listing.delete(path);
         const queued = deferred.get(path) ?? [];
         deferred.delete(path);
         const tags = pendingTags;
@@ -221,7 +225,12 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
         );
       } catch (err) {
         const error = toAppError(err);
-        if (current()) patch(path, { status: "error", error, entries: [] });
+        if (current()) {
+          listing.delete(path);
+          // Changes queued for this listing must not land on the next one.
+          deferred.delete(path);
+          patch(path, { status: "error", error, entries: [] });
+        }
         void debug(`list ${path} failed: ${error.kind}`);
       }
     },
@@ -274,10 +283,12 @@ export const useDirCache = create<DirCacheState>()((set, get) => {
       );
       if (change.rescan) {
         void get().load(change.dir);
-      } else if (dir.status === "loading") {
-        deferred.set(change.dir, [...(deferred.get(change.dir) ?? []), change]);
-      } else if (dir.status === "ready") {
-        patch(change.dir, { entries: applyDelta(dir.entries, change) });
+      } else {
+        // A listing in flight replaces the entries when it ends: keep the change
+        // for then. A reload still shows the old list, so it changes now too.
+        if (listing.has(change.dir) || dir.status === "loading")
+          deferred.set(change.dir, [...(deferred.get(change.dir) ?? []), change]);
+        if (dir.status === "ready") patch(change.dir, { entries: applyDelta(dir.entries, change) });
       }
     },
   };

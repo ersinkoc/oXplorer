@@ -26,7 +26,9 @@ export function archivePath(archive: string, inner = ""): string {
 export function parseArchivePath(path: string): { archive: string; inner: string } | null {
   if (!isArchivePath(path)) return null;
   const rest = path.slice(PREFIX.length);
-  const at = rest.indexOf(SEP);
+  // The first `!/` after an archive name: folders may end in `!` too.
+  let at = rest.indexOf(SEP);
+  while (at >= 0 && !isArchiveName(rest.slice(0, at))) at = rest.indexOf(SEP, at + 1);
   const archive = at < 0 ? rest.replace(/!$/, "") : rest.slice(0, at);
   if (!archive.startsWith("/")) return null;
   const inner = at < 0 ? "" : rest.slice(at + SEP.length).replace(/^\/+|\/+$/g, "");

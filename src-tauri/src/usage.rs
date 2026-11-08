@@ -182,12 +182,27 @@ pub fn scan(
 }
 
 #[derive(Default)]
-pub struct UsageScans(Mutex<HashMap<String, Arc<AtomicBool>>>);
+/// Cancel flag and window label of each running scan, by id.
+pub struct UsageScans(Mutex<HashMap<String, (String, Arc<AtomicBool>)>>);
+
+impl UsageScans {
+    /// Stops the scans of a window that closed or reloaded.
+    pub fn cancel_window(&self, label: &str) {
+        if let Ok(m) = self.0.lock() {
+            for (window, flag) in m.values() {
+                if window == label {
+                    flag.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+}
 
 /// Scans `path`; progress and the result (`Done`) arrive through `on_event`.
 #[tauri::command]
 #[specta::specta]
 pub async fn disk_usage(
+    window: tauri::Window,
     scans: State<'_, Arc<UsageScans>>,
     id: String,
     path: String,
@@ -195,8 +210,10 @@ pub async fn disk_usage(
 ) -> AppResult<()> {
     let root = validate_path(&path)?;
     let cancel = Arc::new(AtomicBool::new(false));
-    if let Ok(mut m) = scans.0.lock() {
-        m.insert(id.clone(), Arc::clone(&cancel));
+    if let Ok(mut m) = scans.0.lock()
+        && let Some((_, old)) = m.insert(id.clone(), (window.label().to_owned(), Arc::clone(&cancel)))
+    {
+        old.store(true, Ordering::Relaxed);
     }
     let scans = Arc::clone(&scans);
     tauri::async_runtime::spawn_blocking(move || {
@@ -205,7 +222,9 @@ pub async fn disk_usage(
                 .send(UsageEvent::Progress { bytes, files: u32::try_from(files).unwrap_or(u32::MAX) });
         };
         let result = scan(&root, Arc::clone(&cancel), &report);
-        if let Ok(mut m) = scans.0.lock() {
+        if let Ok(mut m) = scans.0.lock()
+            && m.get(&id).is_some_and(|(_, flag)| Arc::ptr_eq(flag, &cancel))
+        {
             m.remove(&id);
         }
         let root = result?;
@@ -220,7 +239,7 @@ pub async fn disk_usage(
 #[specta::specta]
 pub fn disk_usage_cancel(scans: State<'_, Arc<UsageScans>>, id: String) {
     if let Ok(m) = scans.0.lock()
-        && let Some(flag) = m.get(&id)
+        && let Some((_, flag)) = m.get(&id)
     {
         flag.store(true, Ordering::Relaxed);
     }

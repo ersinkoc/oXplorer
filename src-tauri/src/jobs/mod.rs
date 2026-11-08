@@ -10,6 +10,8 @@ mod rename;
 mod run;
 mod split;
 pub mod sync;
+#[cfg(test)]
+mod test_volume;
 mod types;
 pub mod verify;
 

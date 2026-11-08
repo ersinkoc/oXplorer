@@ -274,7 +274,19 @@ fn invalid(message: String) -> AppError {
     AppError::InvalidQuery { message }
 }
 
-/// Checks overrides: known ids, parseable accelerators, no shortcut used twice.
+/// Keys the webview binds itself (`GLOBAL_KEYS` in src/commands/keymap.ts):
+/// a menu item given one of them would run twice.
+fn reserved() -> Vec<String> {
+    let mut keys = vec!["CmdOrCtrl+Down".to_owned()];
+    for n in 1..=9 {
+        keys.push(format!("CmdOrCtrl+Alt+{n}"));
+        keys.push(format!("Ctrl+{n}"));
+    }
+    keys
+}
+
+/// Checks overrides: known ids, parseable accelerators, no shortcut used twice
+/// (or one the webview already uses).
 pub fn validate(overrides: &Overrides) -> AppResult<()> {
     let items: Vec<&Item> = MENUS.iter().flat_map(|(_, items)| items.iter()).filter(|i| i.0 != "-").collect();
     for id in overrides.keys() {
@@ -282,7 +294,11 @@ pub fn validate(overrides: &Overrides) -> AppResult<()> {
             return Err(invalid(format!("unknown menu item {id}")));
         }
     }
-    let mut seen: Vec<(muda::accelerator::Accelerator, &str)> = Vec::new();
+    let mut seen: Vec<(muda::accelerator::Accelerator, &str)> = reserved()
+        .iter()
+        .filter_map(|k| k.parse().ok())
+        .map(|a| (a, "a built-in shortcut (⌘↓, ⌥⌘1–9, ⌃1–9)"))
+        .collect();
     for (id, title, default) in items {
         let Some(text) = accelerator(id, *default, overrides) else { continue };
         let parsed: muda::accelerator::Accelerator =
@@ -370,5 +386,13 @@ mod tests {
         assert!(err.to_string().contains("Duplicate"), "{err}");
         // Freeing it first makes it available.
         assert!(validate(&o(&[("file.rename", Some("CmdOrCtrl+D")), ("file.duplicate", None)])).is_ok());
+        // Keys the webview binds itself.
+        assert_eq!(
+            reserved().iter().filter(|k| k.parse::<muda::accelerator::Accelerator>().is_ok()).count(),
+            19
+        );
+        assert!(validate(&o(&[("file.rename", Some("Cmd+Down"))])).is_err());
+        assert!(validate(&o(&[("file.rename", Some("Ctrl+3"))])).is_err());
+        assert!(validate(&o(&[("file.rename", Some("Cmd+Alt+9"))])).is_err());
     }
 }

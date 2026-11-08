@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { info, error as logError } from "@tauri-apps/plugin-log";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
@@ -119,10 +119,13 @@ export function App() {
     const uninstallKeys = installGlobalKeys();
     const uninstallQuickLook = installQuickLook();
     const unwatchPrefs = watchPreferences();
-    const unlistenSettings = listen<{ action: string }>("settings-action", ({ payload }) =>
+    // This window's own events: a global `listen` also receives what Rust or
+    // the Settings window sends to another window (`emit_to`).
+    const self = getCurrentWebviewWindow();
+    const unlistenSettings = self.listen<{ action: string }>("settings-action", ({ payload }) =>
       handleSettingsAction(payload.action),
     );
-    const unlistenOpen = events.openRequested.listen(() => {
+    const unlistenOpen = events.openRequested(self).listen(() => {
       // Requests that arrive before bootstrap finishes are picked up by it.
       if (booted) void booted.then(openPendingRequests);
     });

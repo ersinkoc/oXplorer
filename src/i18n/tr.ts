@@ -451,6 +451,8 @@ export const tr: Readonly<Record<string, string>> = {
   "Find Duplicates": "Yinelenenleri Bul",
   "Find Duplicates…": "Yinelenenleri Bul…",
   "Find Duplicates works in folders on this Mac.": "Yinelenenleri Bul bu Mac’teki klasörlerde çalışır.",
+  "Disk Usage works in folders on this Mac.": "Disk Kullanımı bu Mac’teki klasörlerde çalışır.",
+  "Search works in folders on this Mac.": "Arama bu Mac’teki klasörlerde çalışır.",
   "Duplicates in “{name}”": "“{name}” içindeki yinelenenler",
   "No duplicates found.": "Yinelenen dosya bulunamadı.",
   "{groups}, {size} could be freed": "{groups}, {size} boşaltılabilir",

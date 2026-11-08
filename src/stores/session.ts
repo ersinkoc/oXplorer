@@ -1,4 +1,4 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { AppStoreFile } from "@/lib/app-store-file";
 import { parseArchivePath } from "@/lib/archive-path";
 import { parseSearchPath } from "@/lib/search-path";
 import { EMPTY_SELECTION } from "@/lib/selection";
@@ -152,7 +152,7 @@ export function fromSession(raw: unknown, fallback: string) {
 
 // ---------------------------------------------------------------------------
 
-const store = new LazyStore("session.json");
+const store = new AppStoreFile("session.json");
 
 export async function loadSession(): Promise<unknown> {
   try {

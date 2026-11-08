@@ -9,6 +9,16 @@ import { activeTabOf, type PaneId, useWorkspace } from "@/stores/workspace-store
 /** The two folders being compared; comparing ends when either pane leaves its folder. */
 export const useCompare = create<{ pair: { left: string; right: string } | null }>()(() => ({ pair: null }));
 
+/** The pair, if the panes still show it (it goes stale when a pane moves on or the panes swap). */
+export function livePair(): { left: string; right: string } | null {
+  const { pair } = useCompare.getState();
+  const ws = useWorkspace.getState();
+  if (!pair || !ws.dualPane) return null;
+  const live =
+    pair.left === activeTabOf(ws.panes.left).path && pair.right === activeTabOf(ws.panes.right).path;
+  return live ? pair : null;
+}
+
 /** Compare marks for `pane` by item name, or null when not comparing. */
 export function useCompareMarks(pane: PaneId): ReadonlyMap<string, CompareMark> | null {
   const pair = useCompare((s) => s.pair);

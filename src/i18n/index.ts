@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { formatLocale } from "@/i18n/locale";
 import { tr } from "@/i18n/tr";
 import { useApp } from "@/stores/app-store";
 
@@ -43,7 +44,7 @@ export function tn(
   other: string,
   vars?: Record<string, string | number>,
 ): string {
-  return t(count === 1 ? one : other, { count: count.toLocaleString(), ...vars });
+  return t(count === 1 ? one : other, { count: count.toLocaleString(formatLocale()), ...vars });
 }
 
 /**
@@ -55,7 +56,7 @@ export function useT(): { t: typeof t; tn: typeof tn } {
   return useMemo(() => {
     const bound = (text: string, vars?: Record<string, string | number>) => translate(lang, text, vars);
     const boundN = (count: number, one: string, other: string, vars?: Record<string, string | number>) =>
-      bound(count === 1 ? one : other, { count: count.toLocaleString(), ...vars });
+      bound(count === 1 ? one : other, { count: count.toLocaleString(formatLocale()), ...vars });
     return { t: bound, tn: boundN };
   }, [lang]);
 }

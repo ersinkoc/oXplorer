@@ -219,7 +219,22 @@ impl Control {
 
 #[derive(Default)]
 pub struct SearchManager {
-    running: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    /// Cancel flag and window label of each running search, by id.
+    running: Mutex<HashMap<String, (String, Arc<AtomicBool>)>>,
+}
+
+impl SearchManager {
+    /// Stops the searches of a window that closed or reloaded (a channel to a
+    /// page that is gone still accepts messages, so they wouldn't notice).
+    pub fn cancel_window(&self, label: &str) {
+        if let Ok(running) = self.running.lock() {
+            for (window, flag) in running.values() {
+                if window == label {
+                    flag.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+    }
 }
 
 /// Groups hits into batches and enforces the result limit.
@@ -353,6 +368,7 @@ pub fn run(
 #[tauri::command]
 #[specta::specta]
 pub async fn search_start(
+    window: tauri::Window,
     manager: State<'_, Arc<SearchManager>>,
     id: String,
     spec: SearchSpec,
@@ -367,14 +383,19 @@ pub async fn search_start(
         return Err(AppError::InvalidQuery { message: "the search is empty".into() });
     }
     let cancel = Arc::new(AtomicBool::new(false));
-    if let Ok(mut running) = manager.running.lock() {
-        running.insert(id.clone(), Arc::clone(&cancel));
+    if let Ok(mut running) = manager.running.lock()
+        && let Some((_, old)) = running.insert(id.clone(), (window.label().to_owned(), Arc::clone(&cancel)))
+    {
+        // A search started again under the same id replaces the old one.
+        old.store(true, Ordering::Relaxed);
     }
-    let control = Arc::new(Control { cancel, scanned: AtomicU32::new(0) });
+    let control = Arc::new(Control { cancel: Arc::clone(&cancel), scanned: AtomicU32::new(0) });
     let manager = Arc::clone(&manager);
     tauri::async_runtime::spawn_blocking(move || {
         let result = run(&scope, &spec, control, &on_event);
-        if let Ok(mut running) = manager.running.lock() {
+        if let Ok(mut running) = manager.running.lock()
+            && running.get(&id).is_some_and(|(_, flag)| Arc::ptr_eq(flag, &cancel))
+        {
             running.remove(&id);
         }
         result
@@ -387,7 +408,7 @@ pub async fn search_start(
 #[specta::specta]
 pub fn search_cancel(manager: State<'_, Arc<SearchManager>>, id: String) {
     if let Ok(running) = manager.running.lock()
-        && let Some(flag) = running.get(&id)
+        && let Some((_, flag)) = running.get(&id)
     {
         flag.store(true, Ordering::Relaxed);
     }

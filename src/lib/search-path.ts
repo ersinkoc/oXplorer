@@ -80,6 +80,8 @@ export function isVirtualPath(path: string): boolean {
 export function realFolder(path: string): string {
   const search = parseSearchPath(path);
   if (search) return search.scope;
+  // A search path that doesn't parse is never a folder.
+  if (isSearchPath(path)) return useApp.getState().home;
   const archive = parseArchivePath(path);
   if (archive) return parent(archive.archive) ?? "/";
   if (isRemotePath(path)) return useApp.getState().home;

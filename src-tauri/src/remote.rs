@@ -206,19 +206,25 @@ pub fn remote_set_connections(connections: Vec<Connection>) {
 /// Stores a connection's password / secret key in the Keychain (empty removes it).
 #[tauri::command]
 #[specta::specta]
-pub fn remote_save_secret(id: String, secret: String) -> AppResult<()> {
+pub async fn remote_save_secret(id: String, secret: String) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || save_secret(&id, &secret))
+        .await
+        .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
+fn save_secret(id: &str, secret: &str) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     {
         use security_framework::passwords::{delete_generic_password, set_generic_password};
         let r = if secret.is_empty() {
-            delete_generic_password(KEYCHAIN_SERVICE, &id).or(Ok(()))
+            delete_generic_password(KEYCHAIN_SERVICE, id).or(Ok(()))
         } else {
-            set_generic_password(KEYCHAIN_SERVICE, &id, secret.as_bytes())
+            set_generic_password(KEYCHAIN_SERVICE, id, secret.as_bytes())
         };
         r.map_err(|e: security_framework::base::Error| AppError::Io { path: None, message: e.to_string() })?;
     }
     if let Ok(mut m) = OPERATORS.lock() {
-        m.remove(&id);
+        m.remove(id);
     }
     Ok(())
 }
@@ -226,15 +232,30 @@ pub fn remote_save_secret(id: String, secret: String) -> AppResult<()> {
 /// Whether a password / secret key is stored for the connection.
 #[tauri::command]
 #[specta::specta]
-pub fn remote_has_secret(id: String) -> bool {
-    secret(&id).is_some()
+pub async fn remote_has_secret(id: String) -> bool {
+    tauri::async_runtime::spawn_blocking(move || secret(&id).is_some()).await.unwrap_or(false)
 }
 
 /// Tries to list the top of a connection (with an unsaved secret, if given).
 #[tauri::command]
 #[specta::specta]
 pub async fn remote_test(connection: Connection, secret_override: Option<String>) -> AppResult<()> {
-    let s = secret_override.filter(|s| !s.is_empty()).or_else(|| secret(&connection.id));
+    // The stored secret only goes to the server it was saved for (an edited
+    // host must not receive it); otherwise the password has to be typed again.
+    let saved_for_this =
+        CONNECTIONS.lock().ok().and_then(|m| m.get(&connection.id).cloned()).is_some_and(|c| {
+            c.kind == connection.kind
+                && c.host == connection.host
+                && c.user == connection.user
+                && c.bucket == connection.bucket
+        });
+    let stored = if saved_for_this {
+        let id = connection.id.clone();
+        tauri::async_runtime::spawn_blocking(move || secret(&id)).await.ok().flatten()
+    } else {
+        None
+    };
+    let s = secret_override.filter(|s| !s.is_empty()).or(stored);
     let op = build(&connection, s.as_deref())?;
     op.list("").await.map(|_| ()).map_err(|e| remote_err(&connection.name, &e))
 }
@@ -401,18 +422,15 @@ pub async fn download<F: FnMut(u64) -> bool>(
     for source in sources {
         let (op, inner) = resolve(source)
             .map_err(|e| TransferError::Local(std::io::Error::other(e.to_string()), dest.to_path_buf()))?;
-        let name = inner.rsplit('/').next().unwrap_or("download").to_owned();
+        let name = inner.rsplit('/').next().filter(|n| !n.is_empty()).unwrap_or("download").to_owned();
         let target = unique(dest, &name);
         let dir = format!("{inner}/");
         if op.stat(&dir).await.is_ok_and(|m| m.is_dir()) {
             std::fs::create_dir_all(&target).map_err(|e| TransferError::Local(e, target.clone()))?;
             let all = op.list_with(&dir).recursive(true).await.map_err(TransferError::Remote)?;
             for e in all {
-                let Some(rel) = e.path().strip_prefix(&dir) else { continue };
-                if rel.is_empty() || rel.split('/').any(|c| c == "..") {
-                    continue;
-                }
-                let local = target.join(rel.trim_end_matches('/'));
+                let Some(rel) = e.path().strip_prefix(&dir).and_then(local_rel) else { continue };
+                let local = target.join(rel);
                 if e.metadata().is_dir() {
                     std::fs::create_dir_all(&local).map_err(|er| TransferError::Local(er, local.clone()))?;
                 } else {
@@ -511,6 +529,16 @@ pub async fn remote_size(sources: &[String]) -> u64 {
         }
     }
     total
+}
+
+/// A server-supplied key below the downloaded folder, as a relative local path made
+/// of plain names only. Keys like `a//Users/me/.zshrc` (legal on S3) would otherwise
+/// turn into an absolute path that `join` lets replace the target folder.
+fn local_rel(rel: &str) -> Option<&Path> {
+    let rel = Path::new(rel.trim_end_matches('/'));
+    let mut parts = rel.components();
+    let plain = parts.clone().all(|c| matches!(c, std::path::Component::Normal(_)));
+    (plain && parts.next().is_some()).then_some(rel)
 }
 
 fn unique(dir: &Path, name: &str) -> PathBuf {
@@ -637,6 +665,16 @@ mod tests {
             assert!(matches!(r, Err(TransferError::Cancelled)));
             assert!(!local.path().join("big.bin").exists());
         });
+    }
+
+    #[test]
+    fn server_keys_stay_inside_the_download() {
+        assert_eq!(local_rel("a/b.txt"), Some(Path::new("a/b.txt")));
+        assert_eq!(local_rel("sub/"), Some(Path::new("sub")));
+        assert_eq!(local_rel("/Users/me/.zshrc"), None);
+        assert_eq!(local_rel("a/../../x"), None);
+        assert_eq!(local_rel("./x"), None);
+        assert_eq!(local_rel(""), None);
     }
 
     #[test]

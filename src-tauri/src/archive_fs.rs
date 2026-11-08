@@ -21,7 +21,12 @@ pub fn parse(path: &str) -> AppResult<(PathBuf, String)> {
     let invalid =
         || AppError::InvalidPath { path: path.to_owned(), reason: "not an archive location".into() };
     let rest = path.strip_prefix(PREFIX).ok_or_else(invalid)?;
-    let (archive, inner) = rest.split_once(SEP).unwrap_or((rest.trim_end_matches('!'), ""));
+    // The first `!/` after an archive name: folders may end in `!` too.
+    let (archive, inner) = rest
+        .match_indices(SEP)
+        .map(|(i, _)| (&rest[..i], &rest[i + SEP.len()..]))
+        .find(|(a, _)| archive::is_archive(Path::new(a)))
+        .unwrap_or((rest.trim_end_matches('!'), ""));
     let archive = validate_path(archive)?;
     if !archive::is_archive(&archive) {
         return Err(invalid());
@@ -174,6 +179,12 @@ mod tests {
         assert_eq!(parse(&format!("{PREFIX}{}", zip.display())).unwrap().1, "");
         assert!(parse(&virtual_path(&zip, "../etc")).is_err());
         assert!(parse("archive:/tmp/not-an-archive.txt!/x").is_err());
+        // A folder whose name ends in `!`.
+        let wow = tmp.path().join("Wow!");
+        std::fs::create_dir(&wow).unwrap();
+        let inside = wow.join("a.zip");
+        std::fs::write(&inside, "").unwrap();
+        assert_eq!(parse(&virtual_path(&inside, "docs")).unwrap(), (inside, "docs".to_owned()));
         assert!(parse("/plain/path").is_err());
     }
 
