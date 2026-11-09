@@ -30,7 +30,7 @@ In Terminal (macOS 14 or later, Apple Silicon and Intel):
 curl -fsSL https://raw.githubusercontent.com/ersinkoc/oXplorer/main/install.sh | sh
 ```
 
-This installs the newest release, betas included, into `/Applications`; run it again to update. Set `OXPLORER_VERSION=0.1.0-beta.11` for a specific release, or `OXPLORER_DEST=~/Applications` to install without an administrator password. Apps downloaded with `curl` open without the "unidentified developer" prompt.
+This installs the newest release, betas included, into `/Applications`; run it again to update. Set `OXPLORER_VERSION=0.1.0-beta.12` for a specific release, or `OXPLORER_DEST=~/Applications` to install without an administrator password. Apps downloaded with `curl` open without the "unidentified developer" prompt.
 
 Or download the DMG from the [Releases page](https://github.com/ersinkoc/oXplorer/releases) and drag OXplorer to Applications. Betas aren't signed with an Apple Developer ID yet, so macOS blocks the first launch: right-click OXplorer → **Open** (or System Settings → Privacy & Security → **Open Anyway**). **Check for Updates…** tells you when a newer beta is out.
 
