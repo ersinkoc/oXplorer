@@ -98,6 +98,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             system::home_dir,
             system::launch_dir,
             system::self_test_dir,
+            system::shots_dir,
+            system::save_screenshot,
             system::standard_locations,
             system::list_volumes,
             system::eject_volume,
@@ -154,6 +156,10 @@ fn context() -> tauri::Context<tauri::Wry> {
                 w.visible = false;
                 w.focus = false;
                 w.background_throttling = Some(tauri::utils::config::BackgroundThrottlingPolicy::Disabled);
+                // README screenshots all have one size.
+                if shots() {
+                    (w.width, w.height) = (1360.0, 860.0);
+                }
             }
         }
     }
@@ -163,13 +169,22 @@ fn context() -> tauri::Context<tauri::Wry> {
 /// Remembers window sizes and places; the self-test's hidden windows stay hidden.
 fn window_state() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     use tauri_plugin_window_state::StateFlags;
-    let flags = if self_test() { StateFlags::all() - StateFlags::VISIBLE } else { StateFlags::all() };
+    let flags = match (self_test(), shots()) {
+        (_, true) => StateFlags::all() - StateFlags::VISIBLE - StateFlags::SIZE,
+        (true, false) => StateFlags::all() - StateFlags::VISIBLE,
+        _ => StateFlags::all(),
+    };
     tauri_plugin_window_state::Builder::new().with_state_flags(flags).build()
 }
 
-/// Dev build started with `OX_SELFTEST_DIR`.
+/// Dev build started with `OX_SELFTEST_DIR` (or `OX_SHOTS_DIR`, which also runs out of sight).
 fn self_test() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("OX_SELFTEST_DIR").is_some()
+    cfg!(debug_assertions) && (std::env::var_os("OX_SELFTEST_DIR").is_some() || shots())
+}
+
+/// Dev build taking the README screenshots (`scripts/screenshots.sh`).
+fn shots() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("OX_SHOTS_DIR").is_some()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

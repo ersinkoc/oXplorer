@@ -12,6 +12,7 @@ Tauri 2.12 · React 19 (React Compiler on) · TypeScript 7 · Vite 8 · Tailwind
 - Benchmark fixture: `scripts/gen-fixture.sh /tmp/ox-100k 100000`
 - Webview errors, CSP violations and listing timings are forwarded to the Rust log (stdout in dev).
 - In-app IPC self-test of file operations: `OX_SELFTEST_DIR=/empty/dir pnpm tauri dev -- -- /empty/dir` (results in the log as `selftest ok|FAIL`). It runs hidden (no window, Dock icon or focus change; the Quick Look panel step only runs when its window shows).
+- README screenshots: `scripts/screenshots.sh` (demo folders from `scripts/demo-content.sh`, scenes in `src/dev/screenshots.ts`, saved by the dev-only `save_screenshot` from the web view itself; needs Google Chrome for the window frame).
 - Dev builds use the identifier `net.oxog.oxplorer.dev` (`context()` in `lib.rs`): their settings, session, logs and single-instance lock never touch an installed OXplorer.
 - Release benchmarks (ignored tests): `bench_list` (OX_BENCH_DIR), `bench_copy` (OX_BENCH_SRC, OX_BENCH_DEST, OX_BENCH_CANCEL_AFTER).
 - Native menu owns ⌘C/⌘X/⌘V/⌘Z/⌘⌫; `src/lib/text-edit.ts` forwards them to focused text fields.

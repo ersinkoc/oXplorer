@@ -98,7 +98,7 @@ fn shell_command(cwd: &Path, integration_base: Option<&Path>) -> CommandBuilder 
     if std::env::var_os("LANG").is_none() {
         cmd.env("LANG", "en_US.UTF-8");
     }
-    for leaked in ["OX_SELFTEST_DIR", "OX_USER_ZDOTDIR"] {
+    for leaked in ["OX_SELFTEST_DIR", "OX_SHOTS_DIR", "OX_USER_ZDOTDIR"] {
         cmd.env_remove(leaked);
     }
     let is_zsh = Path::new(&cmd.get_shell()).file_name().is_some_and(|n| n == "zsh");

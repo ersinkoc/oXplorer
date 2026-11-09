@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-shots-dir"
+description = "Enables the shots_dir command without any pre-configured scope."
+commands.allow = ["shots_dir"]
+
+[[permission]]
+identifier = "deny-shots-dir"
+description = "Denies the shots_dir command without any pre-configured scope."
+commands.deny = ["shots_dir"]

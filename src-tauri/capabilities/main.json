@@ -64,6 +64,8 @@
     "allow-home-dir",
     "allow-launch-dir",
     "allow-self-test-dir",
+    "allow-shots-dir",
+    "allow-save-screenshot",
     "allow-standard-locations",
     "allow-list-volumes",
     "allow-eject-volume",

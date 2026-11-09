@@ -75,6 +75,9 @@ async function loadInitialState(): Promise<void> {
     selfCheckIcons();
     // After the version check: What's New opening mid-test would cover the window.
     void whatsNew.then(() => import("@/dev/self-test")).then((m) => m.runSelfTest());
+    // README screenshots (scripts/screenshots.sh): the launch folder holds the demo content.
+    if (launchDir)
+      void whatsNew.then(() => import("@/dev/screenshots")).then((m) => m.runScreenshots(launchDir));
   }
 }
 

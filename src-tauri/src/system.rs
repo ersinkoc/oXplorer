@@ -37,6 +37,32 @@ pub fn self_test_dir() -> Option<String> {
     if cfg!(debug_assertions) { std::env::var("OX_SELFTEST_DIR").ok() } else { None }
 }
 
+/// Dev-only: where `src/dev/screenshots.ts` saves the README screenshots
+/// (`OX_SHOTS_DIR=/tmp/x pnpm tauri dev`). Always `None` in release builds.
+#[tauri::command]
+#[specta::specta]
+pub fn shots_dir() -> Option<String> {
+    if cfg!(debug_assertions) { std::env::var("OX_SHOTS_DIR").ok() } else { None }
+}
+
+/// Dev-only: saves what the calling window shows as `<OX_SHOTS_DIR>/<name>.png`.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_screenshot(window: tauri::WebviewWindow, name: String) -> AppResult<String> {
+    let dir = shots_dir().ok_or_else(|| AppError::InvalidPath {
+        path: name.clone(),
+        reason: "only in development builds started with OX_SHOTS_DIR".into(),
+    })?;
+    crate::jobs::check_name(&name)?;
+    let out = crate::security::validate_path(&dir)?.join(format!("{name}.png"));
+    let png = tauri::async_runtime::spawn_blocking(move || crate::mac::snapshot::web_view_png(&window))
+        .await
+        .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+        .map_err(|message| AppError::Io { path: None, message })?;
+    std::fs::write(&out, png).map_err(|e| AppError::from_io(&e, &out))?;
+    Ok(out.to_string_lossy().into_owned())
+}
+
 /// Default sidebar favorites, only those that exist on this machine.
 #[tauri::command]
 #[specta::specta]

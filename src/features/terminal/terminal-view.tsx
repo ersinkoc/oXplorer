@@ -75,6 +75,8 @@ export function TerminalView({ session, active }: { session: TerminalSession; ac
     );
     term.open(el);
     try {
+      // The README screenshots (src/dev/screenshots.ts) can't capture a WebGL canvas.
+      if (document.documentElement.dataset.oxShots) throw new Error("DOM renderer");
       const gl = new WebglAddon();
       gl.onContextLoss(() => gl.dispose());
       term.loadAddon(gl);

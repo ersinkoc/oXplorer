@@ -178,6 +178,13 @@ export const commands = {
 	 *  (`OX_SELFTEST_DIR=/tmp/x pnpm tauri dev`). Always `None` in release builds.
 	 */
 	selfTestDir: () => __TAURI_INVOKE<string | null>("self_test_dir"),
+	/**
+	 *  Dev-only: where `src/dev/screenshots.ts` saves the README screenshots
+	 *  (`OX_SHOTS_DIR=/tmp/x pnpm tauri dev`). Always `None` in release builds.
+	 */
+	shotsDir: () => __TAURI_INVOKE<string | null>("shots_dir"),
+	/**  Dev-only: saves what the calling window shows as `<OX_SHOTS_DIR>/<name>.png`. */
+	saveScreenshot: (name: string) => typedError<string, AppError_Serialize>(__TAURI_INVOKE("save_screenshot", { name })),
 	/**  Default sidebar favorites, only those that exist on this machine. */
 	standardLocations: () => __TAURI_INVOKE<StandardLocation[]>("standard_locations"),
 	/**  Mounted, user-visible volumes (what Finder lists under "Locations"). */

@@ -35,6 +35,8 @@ const COMMANDS: &[&str] = &[
     "home_dir",
     "launch_dir",
     "self_test_dir",
+    "shots_dir",
+    "save_screenshot",
     "standard_locations",
     "list_volumes",
     "eject_volume",
