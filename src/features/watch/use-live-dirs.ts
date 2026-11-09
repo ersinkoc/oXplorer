@@ -15,6 +15,23 @@ const VOLUMES_DIR = "/Volumes";
 /** Paths this window currently has a watch on (Rust ref-counts per call). */
 const watched = new Set<string>();
 
+/**
+ * The last watch/unwatch call per path; the next one waits for it. Each runs on
+ * its own thread in Rust, so an unwatch sent while its watch still runs could
+ * land first and leave the folder watched for good.
+ */
+const lastCall = new Map<string, Promise<unknown>>();
+
+function inOrder<T>(path: string, call: () => Promise<T>): Promise<T> {
+  const next = (lastCall.get(path) ?? Promise.resolve()).then(call, call);
+  lastCall.set(path, next);
+  const forget = () => {
+    if (lastCall.get(path) === next) lastCall.delete(path);
+  };
+  next.then(forget, forget);
+  return next;
+}
+
 async function refreshVolumes(): Promise<void> {
   const res = await commands.listVolumes();
   if (res.status !== "ok") return;
@@ -80,13 +97,13 @@ export function useLiveDirs(): void {
     for (const path of watched) {
       if (!next.has(path)) {
         watched.delete(path);
-        void commands.unwatchDir(path);
+        void inOrder(path, () => commands.unwatchDir(path));
       }
     }
     for (const path of next) {
       if (watched.has(path)) continue;
       watched.add(path);
-      void commands.watchDir(path).then((r) => {
+      void inOrder(path, () => commands.watchDir(path)).then((r) => {
         // Unreadable folders can't be watched; the pane already shows the error.
         if (r.status === "error") watched.delete(path);
       });

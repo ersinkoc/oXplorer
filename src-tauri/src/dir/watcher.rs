@@ -22,10 +22,25 @@ const DEBOUNCE: Duration = Duration::from_millis(80);
 /// A directory being watched, keyed by its canonical path because FSEvents
 /// reports real paths (`/private/tmp/x` for `/tmp/x`).
 struct Watched {
-    /// Path as the frontend asked for it; events are reported against this.
-    requested: PathBuf,
-    /// Panes / tabs watching it, counted per window so a closed window lets go.
-    refs: HashMap<String, usize>,
+    /// Panes / tabs watching it, counted per window (so a closed window lets
+    /// go) and per spelling the frontend asked for (`/tmp/x`, `/private/tmp/x`,
+    /// `~/desktop`): events are reported against every spelling in use.
+    refs: HashMap<(String, PathBuf), usize>,
+    /// The folder was deleted: its creation is real again, not a replay.
+    gone: bool,
+}
+
+impl Watched {
+    fn new(requested: &Path, window: &str) -> Self {
+        Self { refs: HashMap::from([((window.to_owned(), requested.to_path_buf()), 1)]), gone: false }
+    }
+
+    fn spellings(&self) -> Vec<PathBuf> {
+        let mut paths: Vec<PathBuf> = self.refs.keys().map(|(_, p)| p.clone()).collect();
+        paths.sort();
+        paths.dedup();
+        paths
+    }
 }
 
 type Registry = Arc<Mutex<HashMap<PathBuf, Watched>>>;
@@ -71,33 +86,30 @@ impl DirWatcher {
         let canonical = fs::canonicalize(dir).map_err(|e| AppError::from_io(&e, dir))?;
         let mut reg = lock(&self.registry);
         if let Some(w) = reg.get_mut(&canonical) {
-            *w.refs.entry(window.to_owned()).or_default() += 1;
+            *w.refs.entry((window.to_owned(), dir.to_path_buf())).or_default() += 1;
             return Ok(());
         }
         lock(&self.debouncer).watch(&canonical, RecursiveMode::NonRecursive).map_err(|e| AppError::Io {
             path: Some(dir.to_string_lossy().into_owned()),
             message: e.to_string(),
         })?;
-        reg.insert(
-            canonical,
-            Watched { requested: dir.to_path_buf(), refs: HashMap::from([(window.to_owned(), 1)]) },
-        );
+        reg.insert(canonical, Watched::new(dir, window));
         Ok(())
     }
 
     pub fn unwatch(&self, dir: &Path, window: &str) {
         let mut reg = lock(&self.registry);
         // The directory may be gone by now; fall back to matching the requested path.
-        let key = fs::canonicalize(dir)
-            .ok()
-            .filter(|c| reg.contains_key(c))
-            .or_else(|| reg.iter().find(|(_, w)| w.requested == dir).map(|(k, _)| k.clone()));
+        let key = fs::canonicalize(dir).ok().filter(|c| reg.contains_key(c)).or_else(|| {
+            reg.iter().find(|(_, w)| w.refs.keys().any(|(_, p)| p == dir)).map(|(k, _)| k.clone())
+        });
         let Some(key) = key else { return };
         let Some(w) = reg.get_mut(&key) else { return };
-        if let Some(n) = w.refs.get_mut(window) {
+        let slot = (window.to_owned(), dir.to_path_buf());
+        if let Some(n) = w.refs.get_mut(&slot) {
             *n -= 1;
             if *n == 0 {
-                w.refs.remove(window);
+                w.refs.remove(&slot);
             }
         }
         if w.refs.is_empty() {
@@ -110,7 +122,7 @@ impl DirWatcher {
     pub fn release_window(&self, window: &str) {
         let mut reg = lock(&self.registry);
         reg.retain(|key, w| {
-            w.refs.remove(window);
+            w.refs.retain(|(w, _), _| w != window);
             if w.refs.is_empty() {
                 self.stop(key);
                 return false;
@@ -126,7 +138,7 @@ impl DirWatcher {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct Pending {
     children: HashSet<PathBuf>,
     rescan: bool,
@@ -135,7 +147,7 @@ struct Pending {
 /// Groups raw events by watched directory and re-stats each touched child, so
 /// the frontend gets ready-to-use entries instead of event kinds to interpret.
 fn collect_changes(registry: &Registry, events: &[DebouncedEvent]) -> Vec<DirChanged> {
-    let reg = lock(registry);
+    let mut reg = lock(registry);
     let mut pending: HashMap<PathBuf, Pending> = HashMap::new();
 
     for ev in events {
@@ -148,10 +160,12 @@ fn collect_changes(registry: &Registry, events: &[DebouncedEvent]) -> Vec<DirCha
                 if let Some(dir) = dir.filter(|d| reg.contains_key(*d)) {
                     pending.entry(dir.to_path_buf()).or_default().rescan = true;
                 }
-            } else if reg.contains_key(path) {
+            } else if let Some(w) = reg.get_mut(path) {
                 // The watched directory itself was renamed/removed/re-permissioned. Its
-                // own creation is just FSEvents replaying history right after `watch`.
-                if !matches!(ev.kind, EventKind::Create(_)) {
+                // own creation is FSEvents replaying history right after `watch`,
+                // unless it was deleted before: then it was made again.
+                if !matches!(ev.kind, EventKind::Create(_)) || w.gone {
+                    w.gone = fs::symlink_metadata(path).is_err();
                     pending.entry(path.clone()).or_default().rescan = true;
                 }
             } else if let Some(parent) = path.parent().filter(|p| reg.contains_key(*p)) {
@@ -160,15 +174,15 @@ fn collect_changes(registry: &Registry, events: &[DebouncedEvent]) -> Vec<DirCha
         }
     }
 
-    let requested: HashMap<PathBuf, PathBuf> =
-        pending.keys().filter_map(|k| reg.get(k).map(|w| (k.clone(), w.requested.clone()))).collect();
+    let spellings: HashMap<PathBuf, Vec<PathBuf>> =
+        pending.keys().filter_map(|k| reg.get(k).map(|w| (k.clone(), w.spellings()))).collect();
     drop(reg);
 
     pending
         .into_iter()
-        .filter_map(|(canonical, p)| {
-            let dir = requested.get(&canonical)?;
-            Some(build_change(dir, p))
+        .flat_map(|(canonical, p)| {
+            let dirs = spellings.get(&canonical).cloned().unwrap_or_default();
+            dirs.into_iter().map(move |dir| build_change(&dir, p.clone()))
         })
         .collect()
 }
@@ -276,10 +290,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = fs::canonicalize(tmp.path()).unwrap();
         let registry: Registry = Arc::default();
-        lock(&registry).insert(
-            dir.clone(),
-            Watched { requested: dir.clone(), refs: HashMap::from([("main".to_owned(), 1)]) },
-        );
+        lock(&registry).insert(dir.clone(), Watched::new(&dir, "main"));
         let renamed = |from: &str, to: &str| {
             fs::write(dir.join(from), "x").unwrap();
             fs::rename(dir.join(from), dir.join(to)).unwrap();
@@ -329,10 +340,7 @@ mod tests {
         // Pretend the user navigated via a symlinked spelling of the same directory.
         let requested = PathBuf::from("/requested/spelling");
         let registry: Registry = Arc::default();
-        lock(&registry).insert(
-            canonical.clone(),
-            Watched { requested: requested.clone(), refs: HashMap::from([("main".to_owned(), 1)]) },
-        );
+        lock(&registry).insert(canonical.clone(), Watched::new(&requested, "main"));
 
         fs::write(canonical.join("new.txt"), "x").unwrap();
         let events = vec![
@@ -357,10 +365,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = fs::canonicalize(tmp.path()).unwrap();
         let registry: Registry = Arc::default();
-        lock(&registry).insert(
-            dir.clone(),
-            Watched { requested: dir.clone(), refs: HashMap::from([("main".to_owned(), 1)]) },
-        );
+        lock(&registry).insert(dir.clone(), Watched::new(&dir, "main"));
         fs::write(dir.join("a.txt"), "abc").unwrap();
 
         let changes =
@@ -382,6 +387,65 @@ mod tests {
             collect_changes(&registry, &[event(EventKind::Create(CreateKind::File), dir.join("a.txt"))]);
         assert_eq!(changes[0].upserted.len(), 1);
         assert_eq!(changes[0].upserted[0].size, 3);
+    }
+
+    #[test]
+    fn every_spelling_in_use_gets_the_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = fs::canonicalize(tmp.path()).unwrap();
+        let link = tmp.path().join("..").join(format!("ox-link-{}", std::process::id()));
+        let _ = fs::remove_file(&link);
+        std::os::unix::fs::symlink(&dir, &link).unwrap();
+        let registry: Registry = Arc::default();
+        let mut watched = Watched::new(&dir, "main");
+        *watched.refs.entry(("window-2".to_owned(), link.clone())).or_default() += 1;
+        lock(&registry).insert(dir.clone(), watched);
+        fs::write(dir.join("a.txt"), "x").unwrap();
+        let dirs = |reg: &Registry| {
+            let mut d: Vec<String> =
+                collect_changes(reg, &[event(EventKind::Create(CreateKind::File), dir.join("a.txt"))])
+                    .into_iter()
+                    .map(|c| {
+                        assert_eq!(c.upserted.len(), 1);
+                        c.dir
+                    })
+                    .collect();
+            d.sort();
+            d
+        };
+        let mut both = vec![dir.to_string_lossy().into_owned(), link.to_string_lossy().into_owned()];
+        both.sort();
+        assert_eq!(dirs(&registry), both);
+        // The second spelling let go: only the first is reported.
+        lock(&registry).get_mut(&dir).unwrap().refs.remove(&("window-2".to_owned(), link.clone()));
+        assert_eq!(dirs(&registry), vec![dir.to_string_lossy().into_owned()]);
+        fs::remove_file(&link).unwrap();
+    }
+
+    #[test]
+    fn a_watched_folder_made_again_is_listed_again() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = fs::canonicalize(tmp.path()).unwrap().join("dist");
+        fs::create_dir(&dir).unwrap();
+        let registry: Registry = Arc::default();
+        lock(&registry).insert(dir.clone(), Watched::new(&dir, "main"));
+        let rescans = |kind| {
+            collect_changes(&registry, &[event(kind, dir.clone())]).iter().filter(|c| c.rescan).count()
+        };
+        // Control: FSEvents replaying the folder's creation right after `watch`.
+        assert_eq!(rescans(EventKind::Create(CreateKind::Folder)), 0);
+        // `rm -rf dist`: the pane re-lists and shows "can't be found".
+        fs::remove_dir(&dir).unwrap();
+        assert_eq!(rescans(EventKind::Remove(RemoveKind::Folder)), 1);
+        // `mkdir dist`: the pane must list it again.
+        fs::create_dir(&dir).unwrap();
+        assert_eq!(
+            rescans(EventKind::Create(CreateKind::Folder)),
+            1,
+            "a recreated folder stays on its error"
+        );
+        // Once listed, a later replay is ignored again.
+        assert_eq!(rescans(EventKind::Create(CreateKind::Folder)), 0);
     }
 
     #[test]

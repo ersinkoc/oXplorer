@@ -37,9 +37,7 @@ pub struct SyncSide {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum SyncEvent {
     /// Folders compared so far.
-    Progress {
-        folders: u32,
-    },
+    Progress { folders: u32 },
     Item {
         /// Path below both roots, "/"-separated.
         rel: String,
@@ -49,6 +47,8 @@ pub enum SyncEvent {
     },
     Done {
         items: u32,
+        /// Folders inside that couldn't be read on either side: not compared.
+        unreadable: u32,
     },
 }
 
@@ -67,12 +67,12 @@ pub fn compare(
     if fs::read_dir(left).is_err() || fs::read_dir(right).is_err() {
         return false;
     }
-    let mut walk = Walk { emit, stop, by_content, folders: 0, items: 0 };
+    let mut walk = Walk { emit, stop, by_content, folders: 0, items: 0, unreadable: 0 };
     if !walk.dir(left, right, "") {
         return false;
     }
-    let items = walk.items;
-    (walk.emit)(SyncEvent::Done { items })
+    let (items, unreadable) = (walk.items, walk.unreadable);
+    (walk.emit)(SyncEvent::Done { items, unreadable })
 }
 
 struct Walk<'a> {
@@ -81,6 +81,7 @@ struct Walk<'a> {
     by_content: bool,
     folders: u32,
     items: u32,
+    unreadable: u32,
 }
 
 impl Walk<'_> {
@@ -92,9 +93,17 @@ impl Walk<'_> {
         if self.folders.is_multiple_of(64) && !(self.emit)(SyncEvent::Progress { folders: self.folders }) {
             return false;
         }
+        // A side that can't be read would look empty, and everything on the other
+        // side one-sided: the folder isn't compared, and the end says so.
+        let (Ok(on_left), Ok(on_right)) = (list(left), list(right)) else {
+            self.unreadable += 1;
+            return true;
+        };
         // Matched by folded name: either side may store a name decomposed (NFD).
         let mut names: BTreeMap<String, (Option<String>, Option<String>)> = BTreeMap::new();
-        for (name, is_left) in list(left).map(|n| (n, true)).chain(list(right).map(|n| (n, false))) {
+        for (name, is_left) in
+            on_left.into_iter().map(|n| (n, true)).chain(on_right.into_iter().map(|n| (n, false)))
+        {
             let slot = names.entry(fold(&name)).or_default();
             if is_left { slot.0 = Some(name) } else { slot.1 = Some(name) }
         }
@@ -148,14 +157,13 @@ impl Walk<'_> {
     }
 }
 
-fn list(dir: &Path) -> impl Iterator<Item = String> {
-    fs::read_dir(dir)
-        .into_iter()
-        .flatten()
+fn list(dir: &Path) -> std::io::Result<Vec<String>> {
+    Ok(fs::read_dir(dir)?
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
         // Finder's folder settings aren't content.
         .filter(|n| n != ".DS_Store")
+        .collect())
 }
 
 /// How two non-folder items differ, or None when they look the same.
@@ -265,7 +273,7 @@ mod tests {
         assert!(compare(&l, &r, false, &|| false, &mut |ev| {
             match ev {
                 SyncEvent::Item { rel, status, .. } => items.push((rel, status)),
-                SyncEvent::Done { items } => done = Some(items),
+                SyncEvent::Done { items, .. } => done = Some(items),
                 SyncEvent::Progress { .. } => {}
             }
             true
@@ -389,7 +397,7 @@ mod tests {
         let finished = |l: &Path, r: &Path| {
             let mut done = None;
             compare(l, r, false, &|| false, &mut |ev| {
-                if let SyncEvent::Done { items } = ev {
+                if let SyncEvent::Done { items, .. } = ev {
                     done = Some(items);
                 }
                 true
@@ -406,6 +414,35 @@ mod tests {
         let got = finished(&l, &r);
         fs::set_permissions(&l, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(got, None, "an unreadable side finished as a comparison");
+    }
+
+    #[test]
+    fn unreadable_folders_inside_are_counted_not_compared() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let (l, r) = (tmp.path().join("l"), tmp.path().join("r"));
+        for side in [&l, &r] {
+            fs::create_dir_all(side.join("locked")).unwrap();
+            fs::create_dir_all(side.join("open")).unwrap();
+        }
+        fs::write(l.join("locked/a"), b"x").unwrap();
+        fs::write(r.join("locked/b"), b"y").unwrap();
+        fs::write(l.join("open/c"), b"z").unwrap();
+        fs::set_permissions(r.join("locked"), fs::Permissions::from_mode(0o000)).unwrap();
+        let mut events = Vec::new();
+        compare(&l, &r, false, &|| false, &mut |ev| {
+            events.push(format!("{ev:?}"));
+            true
+        });
+        fs::set_permissions(r.join("locked"), fs::Permissions::from_mode(0o755)).unwrap();
+        // Control: the readable folder's difference is there; nothing is claimed
+        // about the one that can't be read, and the end says so.
+        assert!(events.iter().any(|e| e.contains("open/c")), "{events:?}");
+        assert!(!events.iter().any(|e| e.contains("locked/a")), "{events:?}");
+        assert!(
+            events.last().is_some_and(|e| e.contains("unreadable: 1")),
+            "the end doesn't say a folder couldn't be read: {events:?}"
+        );
     }
 
     #[test]

@@ -326,7 +326,9 @@ export type DupEvent =
 /**  Files looked at so far, and files whose contents were read. */
 { type: "progress"; scanned: number; hashed: number } | 
 /**  Files with identical contents, sorted by path. */
-{ type: "group"; size: number; paths: string[] } | { type: "done"; groups: number };
+{ type: "group"; size: number; paths: string[] } | { type: "done"; groups: number; 
+/**  Folders inside that couldn't be read: their files weren't compared. */
+unreadable: number };
 
 /**  The items after an edit (tags, dates), and how to undo it. */
 export type EditOutcome = EditOutcome_Serialize | EditOutcome_Deserialize;
@@ -754,13 +756,17 @@ export type SyncEvent_Deserialize =
 /**  Folders compared so far. */
 { type: "progress"; folders: number } | { type: "item"; 
 /**  Path below both roots, "/"-separated. */
-rel: string; status: SyncStatus; left?: SyncSide | null; right?: SyncSide | null } | { type: "done"; items: number };
+rel: string; status: SyncStatus; left?: SyncSide | null; right?: SyncSide | null } | { type: "done"; items: number; 
+/**  Folders inside that couldn't be read on either side: not compared. */
+unreadable: number };
 
 export type SyncEvent_Serialize = 
 /**  Folders compared so far. */
 { type: "progress"; folders: number } | { type: "item"; 
 /**  Path below both roots, "/"-separated. */
-rel: string; status: SyncStatus; left: SyncSide | null; right: SyncSide | null } | { type: "done"; items: number };
+rel: string; status: SyncStatus; left: SyncSide | null; right: SyncSide | null } | { type: "done"; items: number; 
+/**  Folders inside that couldn't be read on either side: not compared. */
+unreadable: number };
 
 /**  One side of a difference. */
 export type SyncSide = {

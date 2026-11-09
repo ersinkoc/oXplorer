@@ -82,7 +82,8 @@ pub fn search(
             let Ok(entry) = entry else { return WalkState::Continue };
             let Some(ft) = entry.file_type() else { return WalkState::Continue };
             if ft.is_dir() {
-                return if entry.depth() > 0 && is_package_path(entry.path()) {
+                let twin = crate::system::is_firmlink_twin(root, entry.path());
+                return if entry.depth() > 0 && (twin || is_package_path(entry.path())) {
                     WalkState::Skip
                 } else {
                     WalkState::Continue

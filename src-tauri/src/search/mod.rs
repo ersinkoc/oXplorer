@@ -5,10 +5,9 @@ mod content;
 mod name;
 mod spotlight;
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -220,20 +219,14 @@ impl Control {
 #[derive(Default)]
 pub struct SearchManager {
     /// Cancel flag and window label of each running search, by id.
-    running: Mutex<HashMap<String, (String, Arc<AtomicBool>)>>,
+    running: crate::running::Running,
 }
 
 impl SearchManager {
     /// Stops the searches of a window that closed or reloaded (a channel to a
-    /// page that is gone still accepts messages, so they wouldn't notice).
+    /// gone page still accepts messages, so nothing else would stop them).
     pub fn cancel_window(&self, label: &str) {
-        if let Ok(running) = self.running.lock() {
-            for (window, flag) in running.values() {
-                if window == label {
-                    flag.store(true, Ordering::Relaxed);
-                }
-            }
-        }
+        self.running.cancel_window(label);
     }
 }
 
@@ -375,29 +368,21 @@ pub async fn search_start(
     on_event: Channel<SearchEvent>,
 ) -> AppResult<()> {
     let scope = validate_path(&spec.scope)?;
-    if !scope.is_dir() {
-        return Err(AppError::NotADirectory { path: spec.scope });
-    }
     // A name search may be only filters ("files over 1 GB").
     if spec.query.trim().is_empty() && !(spec.mode == SearchMode::Name && spec.has_filters()) {
         return Err(AppError::InvalidQuery { message: "the search is empty".into() });
     }
-    let cancel = Arc::new(AtomicBool::new(false));
-    if let Ok(mut running) = manager.running.lock()
-        && let Some((_, old)) = running.insert(id.clone(), (window.label().to_owned(), Arc::clone(&cancel)))
-    {
-        // A search started again under the same id replaces the old one.
-        old.store(true, Ordering::Relaxed);
-    }
+    // Registered first: a Stop arriving while the folder is checked still counts.
+    let cancel = manager.running.start(&id, window.label());
     let control = Arc::new(Control { cancel: Arc::clone(&cancel), scanned: AtomicU32::new(0) });
     let manager = Arc::clone(&manager);
     tauri::async_runtime::spawn_blocking(move || {
-        let result = run(&scope, &spec, control, &on_event);
-        if let Ok(mut running) = manager.running.lock()
-            && running.get(&id).is_some_and(|(_, flag)| Arc::ptr_eq(flag, &cancel))
-        {
-            running.remove(&id);
-        }
+        let result = if scope.is_dir() {
+            run(&scope, &spec, control, &on_event)
+        } else {
+            Err(AppError::NotADirectory { path: spec.scope.clone() })
+        };
+        manager.running.finish(&id, &cancel);
         result
     })
     .await
@@ -407,11 +392,7 @@ pub async fn search_start(
 #[tauri::command]
 #[specta::specta]
 pub fn search_cancel(manager: State<'_, Arc<SearchManager>>, id: String) {
-    if let Ok(running) = manager.running.lock()
-        && let Some((_, flag)) = running.get(&id)
-    {
-        flag.store(true, Ordering::Relaxed);
-    }
+    manager.running.cancel(&id);
 }
 
 /// Shortens a matched line around its start for display.

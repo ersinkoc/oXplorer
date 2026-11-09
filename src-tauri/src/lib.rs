@@ -11,6 +11,7 @@ mod preview;
 mod pty;
 mod releases;
 mod remote;
+mod running;
 mod search;
 mod security;
 mod system;

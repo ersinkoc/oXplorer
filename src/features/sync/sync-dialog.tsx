@@ -68,6 +68,8 @@ interface Scan {
   done: boolean;
   /** The comparison couldn't start (a folder that can't be read). */
   error: string | null;
+  /** Folders inside that couldn't be read, so weren't compared. */
+  unreadable: number;
 }
 
 const fresh = (key: string, run = ""): Scan => ({
@@ -77,6 +79,7 @@ const fresh = (key: string, run = ""): Scan => ({
   folders: 0,
   done: false,
   error: null,
+  unreadable: 0,
 });
 
 /** Streams the differences; a new comparison (other mode) starts from an empty list. */
@@ -100,7 +103,7 @@ function useComparison(left: string, right: string, byContent: boolean): Scan {
           if (ev.type === "item")
             items.push({ rel: ev.rel, status: ev.status, left: ev.left ?? null, right: ev.right ?? null });
           else if (ev.type === "progress") next = { ...next, folders: ev.folders };
-          else next = { ...next, done: true };
+          else next = { ...next, done: true, unreadable: ev.unreadable };
         }
         return items.length > 0 ? { ...next, items: [...next.items, ...items] } : next;
       }),
@@ -168,9 +171,17 @@ function Body({ left, right, onClose }: { left: string; right: string; onClose: 
             {scan.error
               ? scan.error
               : scan.done
-                ? scan.items.length === 0
-                  ? t("The folders are the same.")
-                  : tn(scan.items.length, "1 difference", "{count} differences")
+                ? [
+                    scan.items.length > 0
+                      ? tn(scan.items.length, "1 difference", "{count} differences")
+                      : scan.unreadable > 0
+                        ? t("No differences in what could be read.")
+                        : t("The folders are the same."),
+                    scan.unreadable > 0 &&
+                      tn(scan.unreadable, "1 folder couldn’t be read", "{count} folders couldn’t be read"),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
                 : t("Comparing… {count} folders", { count: scan.folders.toLocaleString(formatLocale()) })}
           </p>
         </div>

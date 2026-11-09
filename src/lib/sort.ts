@@ -32,6 +32,25 @@ const SYMBOLS = /[^\p{L}\p{N}]/gu;
 const keyCache = new WeakMap<FileEntry, string>();
 
 /**
+ * Letters without a decomposition, as the collator orders them: most count as
+ * their base letter; the dotless ı is a letter of its own right after i (the
+ * U+FFFF that follows "i" in its key sorts above every letter).
+ */
+const LETTERS: Readonly<Record<string, string>> = {
+  ı: "i\uffff",
+  ł: "l",
+  ø: "o",
+  đ: "d",
+  ð: "d",
+  ħ: "h",
+  ŀ: "l",
+  ß: "ss",
+  æ: "ae",
+  œ: "oe",
+};
+const UNDECOMPOSED = /[ıłøđðħŀßæœ]/g;
+
+/**
  * Precomputed equivalent of `compareNames` ordering: accents stripped, lowercased,
  * punctuation pushed below digits (as ICU does), digit runs zero-padded so plain
  * string comparison is numeric-aware. Sorting 100k
@@ -43,7 +62,8 @@ export function naturalKey(name: string): string {
     .replace(MARKS, "")
     .toLowerCase()
     .replace(SYMBOLS, (c) => `\u0001${c}`)
-    .replace(DIGITS, (d) => d.replace(/^0+(?=\d)/, "").padStart(20, "0"));
+    .replace(DIGITS, (d) => d.replace(/^0+(?=\d)/, "").padStart(20, "0"))
+    .replace(UNDECOMPOSED, (c) => LETTERS[c] ?? c);
 }
 
 function keyOf(e: FileEntry): string {

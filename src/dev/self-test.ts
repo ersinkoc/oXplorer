@@ -4,7 +4,9 @@ import { info, error as logError } from "@tauri-apps/plugin-log";
 import {
   commands,
   type DupEvent,
+  events,
   type MeasureEvent,
+  type SearchEvent_Deserialize,
   type SyncEvent,
   type UsageEvent_Deserialize,
   type UsageEvent_Serialize,
@@ -16,7 +18,7 @@ import { goHistory, goUp, navigateTo } from "@/commands/navigation";
 import { runCommand } from "@/commands/registry";
 import { closeTerminal, openTerminal } from "@/commands/terminal-commands";
 import { terminalById } from "@/features/terminal/terminal-registry";
-import { menuTitles } from "@/i18n";
+import { menuTitles, tn } from "@/i18n";
 import { MENU_LABELS } from "@/i18n/menu-labels";
 import { archivePath } from "@/lib/archive-path";
 import { highlight } from "@/lib/highlight";
@@ -489,6 +491,34 @@ export async function runSelfTest(): Promise<void> {
     useApp.getState().set({ diskUsagePath: null });
     step("disk usage", !!usage && usage.files > 0 && drawn, `${usage?.files} files, drawn=${drawn}`);
 
+    // Stop pressed before the search or scan got going still stops it.
+    const searchEarly = crypto.randomUUID();
+    await commands.searchCancel(searchEarly);
+    const searchStopped = await new Promise<boolean>((resolve) => {
+      const ch = new Channel<SearchEvent_Deserialize>();
+      ch.onmessage = (ev) => ev.type === "done" && resolve(ev.cancelled);
+      const spec = {
+        scope: dir,
+        query: "x",
+        mode: "name",
+        caseSensitive: false,
+        regex: false,
+        includeHidden: true,
+      } as const;
+      void commands.searchStart(searchEarly, spec, ch).then((r) => r.status === "error" && resolve(false));
+    });
+    const usageEarly = crypto.randomUUID();
+    await commands.diskUsageCancel(usageEarly);
+    const usageStopped = await new Promise<boolean>((resolve) => {
+      const ch = new Channel<UsageEvent_Deserialize>();
+      ch.onmessage = (raw) => {
+        const ev = raw as UsageEvent_Serialize;
+        if (ev.type === "done") resolve(ev.cancelled);
+      };
+      void commands.diskUsage(usageEarly, dir, ch).then((r) => r.status === "error" && resolve(false));
+    });
+    step("early stop", searchStopped && usageStopped, `search=${searchStopped} usage=${usageStopped}`);
+
     // Git: a folder outside any repository has no status (and doesn't fail).
     const git = await commands.gitStatus(dir);
     step("git status outside a repo", git.status === "ok" && git.data === null);
@@ -705,6 +735,41 @@ export async function runSelfTest(): Promise<void> {
       dupDenied && syncDenied,
       `duplicates=${dupDenied} sync=${syncDenied}`,
     );
+
+    // A folder inside that can't be read is counted, not passed over in silence.
+    const holder = await unwrap(commands.createItem(folder.path, "holder", true));
+    const inner = await unwrap(commands.createItem(holder.path, "inner", true));
+    await unwrap(commands.setPermissions(inner.path, 0o000));
+    const innerText = tn(1, "1 folder couldn’t be read", "{count} folders couldn’t be read");
+    useApp.getState().set({ duplicatesPath: holder.path });
+    const dupInner = await dialogSays(innerText);
+    useApp.getState().set({ duplicatesPath: null });
+    await waitFor(() => !document.querySelector("dialog[open]"), 2000);
+    useApp.getState().set({ syncPair: { left: holder.path, right: holder.path } });
+    const syncInner = await dialogSays(innerText);
+    useApp.getState().set({ syncPair: null });
+    await waitFor(() => !document.querySelector("dialog[open]"), 2000);
+    await unwrap(commands.setPermissions(inner.path, 0o755));
+    step(
+      "unreadable folders inside are counted",
+      dupInner && syncInner,
+      `duplicates=${dupInner} sync=${syncInner}`,
+    );
+
+    // One folder open under two spellings (another letter case, like /tmp and
+    // /private/tmp): changes reach both.
+    const spelling = await unwrap(commands.createItem(folder.path, "spelling", true));
+    const otherCase = join(folder.path, "SPELLING");
+    const live = new Set<string>();
+    const stopLive = await events.dirChanged.listen(({ payload }) => live.add(payload.dir));
+    await unwrap(commands.watchDir(spelling.path));
+    await unwrap(commands.watchDir(otherCase));
+    await unwrap(commands.createItem(spelling.path, "new.txt", false));
+    const bothLive = await waitFor(() => live.has(spelling.path) && live.has(otherCase), 3000);
+    await commands.unwatchDir(otherCase);
+    await commands.unwatchDir(spelling.path);
+    stopLive();
+    step("two spellings stay live", bothLive, [...live].join(" | "));
 
     // SHA-256 (Get Info) of an empty file.
     const sum = await commands.checksum(crypto.randomUUID(), nf1.path);

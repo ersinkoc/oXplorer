@@ -239,3 +239,22 @@ fn filters_by_kind() {
     s.query = "pack".into();
     assert_eq!(result_names(&collect(&s, control())), ["pack.zip"]);
 }
+
+/// Scope "/" (the Mac): `/private`, `/Users` … are firmlinks into
+/// `/System/Volumes/Data`, so each file there has two paths.
+/// `cargo test --lib search::tests::whole_mac_finds_each_file_once -- --ignored`
+#[test]
+#[ignore = "walks the whole disk"]
+fn whole_mac_finds_each_file_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let marker = format!("ox-firmlink-{}.marker", std::process::id());
+    fs::write(dir.path().join(&marker), "x").unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let matcher = name::NameMatcher::new(&marker, false).unwrap();
+    name::search(Path::new("/"), &matcher, true, &control(), &tx);
+    drop(tx);
+    let hits: Vec<PathBuf> = rx.iter().map(|h| h.path).collect();
+    // Control: the file is there to be found.
+    assert!(!hits.is_empty(), "the marker was not found at all");
+    assert_eq!(hits.len(), 1, "found more than once: {hits:?}");
+}

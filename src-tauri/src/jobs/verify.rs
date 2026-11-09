@@ -189,11 +189,16 @@ pub fn verify(
     if !emit(VerifyEvent::Started { total: u32::try_from(entries.len()).unwrap_or(u32::MAX) }) {
         return Ok(());
     }
+    // Names are checked as text, and the file they lead to must be inside too:
+    // a symlink in the folder could point anywhere.
+    let real_dir = fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let inside = |p: &Path| fs::canonicalize(p).is_ok_and(|real| real.starts_with(&real_dir));
     for e in entries {
         let target = resolve(dir, &e.name);
         let status = match &target {
             None => VerifyStatus::Unreadable,
             Some(p) if fs::symlink_metadata(p).is_err() => VerifyStatus::Missing,
+            Some(p) if !inside(p) => VerifyStatus::Unreadable,
             Some(_) if stop() => break,
             Some(p) => match hash(e.kind, p, &mut |_| !stop()) {
                 Ok(h) if h == e.hex => VerifyStatus::Ok,
@@ -320,6 +325,31 @@ mod tests {
         })
         .unwrap();
         assert_eq!(got, ["total 2", "\"a\\\\b.txt\" Ok", "\"two\\nlines\" Ok"]);
+    }
+
+    #[test]
+    fn a_symlink_never_leads_out_of_the_folder() {
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("hosts"), "secret").unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        std::os::unix::fs::symlink(outside.path(), d.join("etc")).unwrap();
+        fs::create_dir(d.join("sub")).unwrap();
+        fs::write(d.join("sub/in.txt"), "x").unwrap();
+        // A link that stays inside is fine.
+        std::os::unix::fs::symlink("sub", d.join("inside")).unwrap();
+        let sha = "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881";
+        fs::write(d.join("SUMS"), format!("{sha}  etc/hosts\n{sha}  ../x\n{sha}  inside/in.txt\n")).unwrap();
+        let mut got = Vec::new();
+        verify(&d.join("SUMS"), &|| false, &mut |ev| {
+            if let VerifyEvent::Item { name, status, .. } = ev {
+                got.push(format!("{name} {status:?}"));
+            }
+            true
+        })
+        .unwrap();
+        // Control: `../x` was already refused.
+        assert_eq!(got, ["etc/hosts Unreadable", "../x Unreadable", "inside/in.txt Ok"]);
     }
 
     #[test]

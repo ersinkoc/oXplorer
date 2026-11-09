@@ -208,16 +208,28 @@ pub async fn edit_tags(
     let paths = validate_all(&paths)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut entries = Vec::new();
-        let mut steps = Vec::new();
-        for p in &paths {
+        let mut done: Vec<(&PathBuf, Vec<crate::model::FinderTag>)> = Vec::new();
+        let result = paths.iter().try_for_each(|p| {
             let before = crate::mac::tags::read_tags(p);
             crate::mac::tags::edit_tags(p, &add, &remove).map_err(|e| AppError::from_io(&e, p))?;
-            steps.push(crate::jobs::UndoStep::Tags { path: p.to_string_lossy().into_owned(), tags: before });
+            done.push((p, before));
             entries.push(
                 crate::dir::build_entry_for(p)
                     .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })?,
             );
+            Ok(())
+        });
+        if let Err(e) = result {
+            // All or nothing: a half-done edit would have no undo.
+            for (p, before) in done.iter().rev() {
+                let _ = crate::mac::tags::write_tags(p, before);
+            }
+            return Err(e);
         }
+        let steps = done
+            .into_iter()
+            .map(|(p, tags)| crate::jobs::UndoStep::Tags { path: p.to_string_lossy().into_owned(), tags })
+            .collect();
         Ok(EditOutcome { entries, undo: crate::jobs::UndoAction { label: "Tags".into(), steps } })
     })
     .await
@@ -239,20 +251,32 @@ pub async fn set_dates(
     let (modified_ms, created_ms) = (ms(modified_ms), ms(created_ms));
     tauri::async_runtime::spawn_blocking(move || {
         let mut entries = Vec::new();
-        let mut steps = Vec::new();
-        for p in &paths {
+        let mut done: Vec<(&PathBuf, i64, Option<i64>)> = Vec::new();
+        let result = paths.iter().try_for_each(|p| {
             let (m, c) = crate::jobs::dates(p).map_err(|e| AppError::from_io(&e, p))?;
             crate::jobs::set_dates(p, modified_ms, created_ms).map_err(|e| AppError::from_io(&e, p))?;
-            steps.push(crate::jobs::UndoStep::Dates {
-                path: p.to_string_lossy().into_owned(),
-                modified_ms: m,
-                created_ms: c,
-            });
+            done.push((p, m, c));
             entries.push(
                 crate::dir::build_entry_for(p)
                     .ok_or_else(|| AppError::NotFound { path: p.to_string_lossy().into_owned() })?,
             );
+            Ok(())
+        });
+        if let Err(e) = result {
+            // All or nothing: a half-done edit would have no undo.
+            for (p, m, c) in done.iter().rev() {
+                let _ = crate::jobs::set_dates(p, Some(*m), *c);
+            }
+            return Err(e);
         }
+        let steps = done
+            .into_iter()
+            .map(|(p, modified_ms, created_ms)| crate::jobs::UndoStep::Dates {
+                path: p.to_string_lossy().into_owned(),
+                modified_ms,
+                created_ms,
+            })
+            .collect();
         Ok(EditOutcome { entries, undo: crate::jobs::UndoAction { label: "Change Dates".into(), steps } })
     })
     .await
@@ -262,6 +286,47 @@ pub async fn set_dates(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_edit_leaves_every_item_as_it_was() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join("a.txt");
+        fs::write(&a, "x").unwrap();
+        let before = crate::jobs::dates(&a).unwrap();
+        let tags_before = crate::mac::tags::read_tags(&a);
+        let paths =
+            vec![a.to_string_lossy().into_owned(), tmp.path().join("gone").to_string_lossy().into_owned()];
+        // Control: the one existing item alone changes.
+        let one = vec![paths[0].clone()];
+        tauri::async_runtime::block_on(set_dates(one, Some(946_684_800_000.0), None)).unwrap();
+        assert_eq!(crate::jobs::dates(&a).unwrap().0, 946_684_800_000);
+        crate::jobs::set_dates(&a, Some(before.0), before.1).unwrap();
+        assert_eq!(crate::jobs::dates(&a).unwrap(), before);
+
+        let dated = tauri::async_runtime::block_on(set_dates(paths.clone(), Some(946_684_800_000.0), None));
+        let tag = crate::model::FinderTag { name: "Red".into(), color: 6 };
+        let tagged = tauri::async_runtime::block_on(edit_tags(paths.clone(), vec![tag], vec![]));
+        assert!(dated.is_err() && tagged.is_err());
+        assert_eq!(
+            (crate::jobs::dates(&a).unwrap(), crate::mac::tags::read_tags(&a)),
+            (before, tags_before),
+            "the first item kept its new date or tag with nothing to undo it"
+        );
+
+        // Every item fine: all change, one undo step each.
+        let b = tmp.path().join("b.txt");
+        fs::write(&b, "y").unwrap();
+        let both = vec![paths[0].clone(), b.to_string_lossy().into_owned()];
+        let out =
+            tauri::async_runtime::block_on(set_dates(both.clone(), None, Some(915_148_800_000.0))).unwrap();
+        assert_eq!(out.undo.steps.len(), 2);
+        assert_eq!(crate::jobs::dates(&b).unwrap().1, Some(915_148_800_000));
+        // The first item failing: nothing changes.
+        let first_gone = vec![tmp.path().join("gone").to_string_lossy().into_owned(), both[1].clone()];
+        let tag = crate::model::FinderTag { name: "Blue".into(), color: 4 };
+        assert!(tauri::async_runtime::block_on(edit_tags(first_gone, vec![tag], vec![])).is_err());
+        assert!(crate::mac::tags::read_tags(&b).is_empty());
+    }
 
     #[test]
     fn pasted_content_gets_a_free_name() {

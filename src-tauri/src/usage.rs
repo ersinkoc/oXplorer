@@ -1,7 +1,7 @@
 //! Disk usage of a folder tree for the treemap: allocated bytes per folder,
 //! scanned in parallel, staying on one volume and counting hard links once.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
@@ -54,6 +54,7 @@ pub enum UsageEvent {
 }
 
 struct Scan {
+    root: PathBuf,
     device: u64,
     cancel: Arc<AtomicBool>,
     bytes: AtomicU64,
@@ -110,6 +111,7 @@ impl Scan {
             .unwrap_or_default();
         let children: Vec<UsageNode> = entries
             .into_par_iter()
+            .filter(|(p, _)| !crate::system::is_firmlink_twin(&self.root, p))
             .filter_map(|(p, n)| fs::symlink_metadata(&p).ok().map(|m| self.node(&p, n, &m)))
             .collect();
         let size = own + children.iter().map(|c| c.size).sum::<u64>();
@@ -155,6 +157,7 @@ pub fn scan(
         return Err(AppError::NotADirectory { path: root.to_string_lossy().into_owned() });
     }
     let state = Arc::new(Scan {
+        root: root.to_path_buf(),
         device: meta.dev(),
         cancel: Arc::clone(&cancel),
         bytes: AtomicU64::new(0),
@@ -183,18 +186,12 @@ pub fn scan(
 
 #[derive(Default)]
 /// Cancel flag and window label of each running scan, by id.
-pub struct UsageScans(Mutex<HashMap<String, (String, Arc<AtomicBool>)>>);
+pub struct UsageScans(crate::running::Running);
 
 impl UsageScans {
     /// Stops the scans of a window that closed or reloaded.
     pub fn cancel_window(&self, label: &str) {
-        if let Ok(m) = self.0.lock() {
-            for (window, flag) in m.values() {
-                if window == label {
-                    flag.store(true, Ordering::Relaxed);
-                }
-            }
-        }
+        self.0.cancel_window(label);
     }
 }
 
@@ -209,12 +206,7 @@ pub async fn disk_usage(
     on_event: Channel<UsageEvent>,
 ) -> AppResult<()> {
     let root = validate_path(&path)?;
-    let cancel = Arc::new(AtomicBool::new(false));
-    if let Ok(mut m) = scans.0.lock()
-        && let Some((_, old)) = m.insert(id.clone(), (window.label().to_owned(), Arc::clone(&cancel)))
-    {
-        old.store(true, Ordering::Relaxed);
-    }
+    let cancel = scans.0.start(&id, window.label());
     let scans = Arc::clone(&scans);
     tauri::async_runtime::spawn_blocking(move || {
         let report = |bytes: u64, files: u64| {
@@ -222,11 +214,7 @@ pub async fn disk_usage(
                 .send(UsageEvent::Progress { bytes, files: u32::try_from(files).unwrap_or(u32::MAX) });
         };
         let result = scan(&root, Arc::clone(&cancel), &report);
-        if let Ok(mut m) = scans.0.lock()
-            && m.get(&id).is_some_and(|(_, flag)| Arc::ptr_eq(flag, &cancel))
-        {
-            m.remove(&id);
-        }
+        scans.0.finish(&id, &cancel);
         let root = result?;
         let _ = on_event.send(UsageEvent::Done { cancelled: root.is_none(), root });
         Ok(())
@@ -238,11 +226,7 @@ pub async fn disk_usage(
 #[tauri::command]
 #[specta::specta]
 pub fn disk_usage_cancel(scans: State<'_, Arc<UsageScans>>, id: String) {
-    if let Ok(m) = scans.0.lock()
-        && let Some((_, flag)) = m.get(&id)
-    {
-        flag.store(true, Ordering::Relaxed);
-    }
+    scans.0.cancel(&id);
 }
 
 #[cfg(test)]

@@ -176,6 +176,8 @@ describe("naturalKey", () => {
   it("orders like the collator", async () => {
     const { compareNames, naturalKey } = await import("@/lib/sort");
     const names = ["file10", "File2", "résumé", "Resume", "Çay", "cay2", "a_b", "a0b", "z", "007", "7", "ab"];
+    // Letters that don't decompose: ı (a letter after i), ł, ø, đ, ß, æ, œ.
+    names.push("ılık", "ilik", "jam", "Łódź", "Lima", "Øresund", "Oslo", "Đakovo", "Straße", "Æble", "Œuvre");
     const byKey = names.toSorted((a, b) =>
       naturalKey(a) < naturalKey(b) ? -1 : naturalKey(a) > naturalKey(b) ? 1 : 0,
     );

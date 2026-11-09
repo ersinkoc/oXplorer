@@ -181,7 +181,7 @@ pub fn status_of(dir: &Path) -> AppResult<Option<GitStatus>> {
     if rel.components().next().is_some_and(|c| c.as_os_str() == ".git") {
         return Ok(None);
     }
-    let prefix = rel.to_string_lossy().replace('\\', "/");
+    let prefix = rel.to_string_lossy().into_owned();
 
     let interrupt = Arc::new(AtomicBool::new(false));
     let timer = {
@@ -294,6 +294,36 @@ mod tests {
 
         let outside = tempfile::tempdir().unwrap();
         assert!(status_of(outside.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn folders_with_backslashes_in_their_names_show_their_state() {
+        if Command::new("git").arg("--version").output().is_err() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let r = tmp.path();
+        git(r, &["init", "-q", "-b", "main"]);
+        for dir in ["a\\b", "x[1]", "s*", "a\\b/c"] {
+            std::fs::create_dir(r.join(dir)).unwrap();
+            std::fs::write(r.join(dir).join("g.txt"), "1").unwrap();
+        }
+        git(r, &["add", "."]);
+        git(r, &["commit", "-q", "-m", "init"]);
+        for dir in ["a\\b", "x[1]", "s*", "a\\b/c"] {
+            std::fs::write(r.join(dir).join("g.txt"), "2").unwrap();
+        }
+        for dir in ["s*", "a\\b/c"] {
+            let s = status_of(&r.join(dir)).unwrap().unwrap();
+            assert_eq!(state(&s, "g.txt"), Some(GitState::Modified), "{dir}");
+        }
+        // The repository's top: the folder shows as changed.
+        assert_eq!(state(&status_of(r).unwrap().unwrap(), "a\\b"), Some(GitState::Modified));
+        // Control: other characters that mean something to git patterns.
+        let s = status_of(&r.join("x[1]")).unwrap().unwrap();
+        assert_eq!(state(&s, "g.txt"), Some(GitState::Modified));
+        let s = status_of(&r.join("a\\b")).unwrap().unwrap();
+        assert_eq!(state(&s, "g.txt"), Some(GitState::Modified), "a\\b shows no state");
     }
 
     #[test]

@@ -62,7 +62,14 @@ export async function pasteFiles(forceMove: boolean): Promise<void> {
   const wasCut = !!clipboard?.cut && sameSet(clipboard.paths, sources);
   if (isRemotePath(destDir)) {
     const spec = transferSpec(sources, destDir, "copy");
-    if (spec) await runJob(spec);
+    const out = spec ? await runJob(spec) : null;
+    // A cut moves: once every item is on the server, the originals go to the
+    // Trash (undoable there). After a partial upload nothing is removed.
+    const complete = out && !out.cancelled && out.failures.length === 0 && out.skipped === 0;
+    if ((forceMove || wasCut) && complete && spec?.kind === "upload") {
+      await runJob({ kind: "trash", paths: sources }, { select: false });
+      if (wasCut) useApp.getState().set({ clipboard: null });
+    }
     return;
   }
   if (forceMove || wasCut) {

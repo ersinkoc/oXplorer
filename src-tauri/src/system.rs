@@ -233,9 +233,50 @@ fn statfs(path: &Path) -> io::Result<FsStat> {
     })
 }
 
+/// macOS shows parts of the Data volume twice: `/Users` is a firmlink to
+/// `/System/Volumes/Data/Users` (listed in /usr/share/firmlinks). A walk from
+/// `root` that also covers the short spelling skips the long one at `path`, or
+/// every file there would be found and counted twice.
+pub fn is_firmlink_twin(root: &Path, path: &Path) -> bool {
+    static TWINS: std::sync::OnceLock<Vec<(PathBuf, PathBuf)>> = std::sync::OnceLock::new();
+    let twins = TWINS.get_or_init(|| {
+        fs::read_to_string("/usr/share/firmlinks")
+            .map(|text| {
+                text.lines()
+                    .filter_map(|line| {
+                        let (source, target) = line.split_once('\t')?;
+                        let twin = Path::new("/System/Volumes/Data").join(target.trim());
+                        Some((twin, PathBuf::from(source.trim())))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    });
+    twins.iter().any(|(twin, source)| twin == path && source.starts_with(root))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn firmlinked_folders_are_walked_once() {
+        if !Path::new("/usr/share/firmlinks").exists() {
+            return;
+        }
+        let twin = |root: &str, path: &str| is_firmlink_twin(Path::new(root), Path::new(path));
+        assert!(twin("/", "/System/Volumes/Data/Users"));
+        assert!(twin("/", "/System/Volumes/Data/private"));
+        assert!(twin("/System", "/System/Volumes/Data/System/Library/Speech"));
+        // Not covered by the walk under the short name: counted once, here.
+        assert!(!twin("/System", "/System/Volumes/Data/Users"));
+        assert!(!twin("/System/Volumes/Data", "/System/Volumes/Data/Users"));
+        assert!(!twin("/System/Volumes", "/System/Volumes/Data/Users"));
+        // Not firmlinked, or the short spelling itself.
+        assert!(!twin("/", "/System/Volumes/Data/home"));
+        assert!(!twin("/", "/Users"));
+        assert!(!twin("/", "/System/Volumes/Data/Users/me"));
+    }
 
     #[test]
     fn statfs_root() {

@@ -18,10 +18,7 @@ const HEAD: u64 = 64 * 1024;
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum DupEvent {
     /// Files looked at so far, and files whose contents were read.
-    Progress {
-        scanned: u32,
-        hashed: u32,
-    },
+    Progress { scanned: u32, hashed: u32 },
     /// Files with identical contents, sorted by path.
     Group {
         #[specta(type = u32)]
@@ -30,6 +27,8 @@ pub enum DupEvent {
     },
     Done {
         groups: u32,
+        /// Folders inside that couldn't be read: their files weren't compared.
+        unreadable: u32,
     },
 }
 
@@ -44,8 +43,12 @@ pub fn find(root: &Path, stop: &dyn Fn() -> bool, emit: &mut dyn FnMut(DupEvent)
     let mut seen = HashSet::new();
     let mut stack = vec![root.to_path_buf()];
     let mut scanned = 0u32;
+    let mut unreadable = 0u32;
     while let Some(dir) = stack.pop() {
-        let Ok(read) = fs::read_dir(&dir) else { continue };
+        let Ok(read) = fs::read_dir(&dir) else {
+            unreadable += 1;
+            continue;
+        };
         for item in read.flatten() {
             let path = item.path();
             let Ok(meta) = fs::symlink_metadata(&path) else { continue };
@@ -92,7 +95,7 @@ pub fn find(root: &Path, stop: &dyn Fn() -> bool, emit: &mut dyn FnMut(DupEvent)
             }
         }
     }
-    emit(DupEvent::Done { groups })
+    emit(DupEvent::Done { groups, unreadable })
 }
 
 /// Splits `paths` by `key`, keeping only groups of two or more (unreadable files drop out).
@@ -133,6 +136,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn unreadable_folders_inside_are_counted() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir(root.join("locked")).unwrap();
+        fs::write(root.join("locked/a"), b"same").unwrap();
+        fs::write(root.join("b"), b"same").unwrap();
+        fs::write(root.join("c"), b"same").unwrap();
+        fs::set_permissions(root.join("locked"), fs::Permissions::from_mode(0o000)).unwrap();
+        let mut last = String::new();
+        find(&root, &|| false, &mut |ev| {
+            last = format!("{ev:?}");
+            true
+        });
+        fs::set_permissions(root.join("locked"), fs::Permissions::from_mode(0o755)).unwrap();
+        // Control: the readable pair is found.
+        assert!(last.contains("groups: 1"), "{last}");
+        assert!(last.contains("unreadable: 1"), "the end doesn't say a folder couldn't be read: {last}");
+    }
+
+    #[test]
     fn an_unreadable_folder_is_never_reported_as_clean() {
         use std::os::unix::fs::PermissionsExt as _;
         let tmp = tempfile::tempdir().unwrap();
@@ -143,7 +167,7 @@ mod tests {
         let finished = |root: &Path| {
             let mut done = None;
             find(root, &|| false, &mut |ev| {
-                if let DupEvent::Done { groups } = ev {
+                if let DupEvent::Done { groups, .. } = ev {
                     done = Some(groups);
                 }
                 true
@@ -180,7 +204,7 @@ mod tests {
         assert!(find(&root, &|| false, &mut |ev| {
             match ev {
                 DupEvent::Group { size, paths } => groups.push((size, paths)),
-                DupEvent::Done { groups } => done = Some(groups),
+                DupEvent::Done { groups, .. } => done = Some(groups),
                 DupEvent::Progress { .. } => {}
             }
             true

@@ -41,11 +41,20 @@ interface Scan {
   done: boolean;
   /** The search couldn't start (a folder that can't be read). */
   error: string | null;
+  /** Folders inside that couldn't be read, so weren't searched. */
+  unreadable: number;
 }
 
 /** Runs the search for `path`; it's cancelled when the window closes. */
 function useDuplicates(path: string): [Scan, (update: (groups: Group[]) => Group[]) => void] {
-  const [scan, setScan] = useState<Scan>({ groups: [], scanned: 0, hashed: 0, done: false, error: null });
+  const [scan, setScan] = useState<Scan>({
+    groups: [],
+    scanned: 0,
+    hashed: 0,
+    done: false,
+    error: null,
+    unreadable: 0,
+  });
   useEffect(() => {
     const id = crypto.randomUUID();
     const events = batcher<DupEvent>((batch) =>
@@ -55,7 +64,7 @@ function useDuplicates(path: string): [Scan, (update: (groups: Group[]) => Group
         for (const ev of batch) {
           if (ev.type === "group") groups.push({ size: ev.size, paths: ev.paths });
           else if (ev.type === "progress") next = { ...next, scanned: ev.scanned, hashed: ev.hashed };
-          else next = { ...next, done: true };
+          else next = { ...next, done: true, unreadable: ev.unreadable };
         }
         return groups.length > 0 ? { ...next, groups: [...next.groups, ...groups] } : next;
       }),
@@ -129,12 +138,22 @@ function Body({ path, onClose }: { path: string; onClose: () => void }) {
           {scan.error
             ? scan.error
             : scan.done
-              ? groups.length === 0
-                ? t("No duplicates found.")
-                : t("{groups}, {size} could be freed", {
-                    groups: tn(groups.length, "1 set of identical files", "{count} sets of identical files"),
-                    size: formatSize(wasted),
-                  })
+              ? [
+                  groups.length === 0
+                    ? t("No duplicates found.")
+                    : t("{groups}, {size} could be freed", {
+                        groups: tn(
+                          groups.length,
+                          "1 set of identical files",
+                          "{count} sets of identical files",
+                        ),
+                        size: formatSize(wasted),
+                      }),
+                  scan.unreadable > 0 &&
+                    tn(scan.unreadable, "1 folder couldn’t be read", "{count} folders couldn’t be read"),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               : t("Looking… {scanned} files, {hashed} compared", {
                   scanned: scan.scanned.toLocaleString(formatLocale()),
                   hashed: scan.hashed.toLocaleString(formatLocale()),

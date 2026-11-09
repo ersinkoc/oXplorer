@@ -70,8 +70,11 @@ pub fn search(root: &Path, matcher: &NameMatcher, include_hidden: bool, control:
             if entry.depth() == 0 {
                 return WalkState::Continue;
             }
-            control.scanned.fetch_add(1, Ordering::Relaxed);
             let path = entry.path();
+            if entry.file_type().is_some_and(|t| t.is_dir()) && crate::system::is_firmlink_twin(root, path) {
+                return WalkState::Skip;
+            }
+            control.scanned.fetch_add(1, Ordering::Relaxed);
             let name = entry.file_name().to_string_lossy();
             if matcher.is_match(&name) && tx.send(Hit { path: path.to_path_buf(), matched: None }).is_err() {
                 return WalkState::Quit;
