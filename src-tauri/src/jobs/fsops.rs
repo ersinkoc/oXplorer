@@ -139,22 +139,46 @@ pub fn dates(path: &Path) -> io::Result<(i64, Option<i64>)> {
     Ok((meta.modified().map(ms)?, meta.created().ok().map(ms)))
 }
 
-/// Sets the modified and/or created time (epoch ms) of a file or folder.
+/// Sets the modified and/or created time (epoch ms) of a file or folder. Done
+/// by path: opening the item would need read access (its owner may set dates
+/// without it) and would block on a FIFO.
 pub fn set_dates(path: &Path, modified_ms: Option<i64>, created_ms: Option<i64>) -> io::Result<()> {
-    use std::os::darwin::fs::FileTimesExt as _;
+    use std::os::unix::ffi::OsStrExt as _;
     let at = |ms: i64| {
-        let ms = u64::try_from(ms)
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "dates before 1970"))?;
-        Ok::<_, io::Error>(std::time::UNIX_EPOCH + std::time::Duration::from_millis(ms))
+        if ms < 0 {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "dates before 1970"));
+        }
+        Ok(libc::timespec { tv_sec: ms / 1000, tv_nsec: (ms % 1000) * 1_000_000 })
     };
-    let mut times = fs::FileTimes::new();
-    if let Some(ms) = modified_ms {
-        times = times.set_modified(at(ms)?);
-    }
+    // SAFETY: attrlist is plain data; all-zero is a valid empty request.
+    let mut list: libc::attrlist = unsafe { std::mem::zeroed() };
+    list.bitmapcount = libc::ATTR_BIT_MAP_COUNT;
+    // The buffer holds the attributes in bit order: creation before modification.
+    let mut times = Vec::with_capacity(2);
     if let Some(ms) = created_ms {
-        times = times.set_created(at(ms)?);
+        list.commonattr |= libc::ATTR_CMN_CRTIME;
+        times.push(at(ms)?);
     }
-    fs::File::open(path)?.set_times(times)
+    if let Some(ms) = modified_ms {
+        list.commonattr |= libc::ATTR_CMN_MODTIME;
+        times.push(at(ms)?);
+    }
+    if times.is_empty() {
+        return Ok(());
+    }
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    // SAFETY: `c` is NUL-terminated; `list` and `times` outlive the call and the
+    // size passed is exactly the timespecs the list asks for.
+    let rc = unsafe {
+        libc::setattrlist(
+            c.as_ptr(),
+            (&raw mut list).cast(),
+            times.as_mut_ptr().cast(),
+            times.len() * std::mem::size_of::<libc::timespec>(),
+            0,
+        )
+    };
+    if rc == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
 }
 
 pub fn same_device(a: &Path, b: &Path) -> bool {
@@ -226,6 +250,55 @@ pub fn measure(paths: &[PathBuf], tick: &mut dyn FnMut(&SizeInfo) -> bool) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sets_dates_without_reading_the_item() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let (plain, locked, fifo) =
+            (tmp.path().join("plain"), tmp.path().join("locked"), tmp.path().join("fifo"));
+        fs::write(&plain, "x").unwrap();
+        fs::write(&locked, "x").unwrap();
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+        let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        // SAFETY: a NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o644) }, 0);
+        let (modified, created) = (946_684_800_000_i64, 915_148_800_000_i64);
+        let run = |p: PathBuf| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(set_dates(&p, Some(modified), Some(created)).map(|()| dates(&p).unwrap()));
+            });
+            rx.recv_timeout(std::time::Duration::from_secs(2)).map_err(|_| "hung".to_owned())
+        };
+        // Control: an ordinary file.
+        assert_eq!(run(plain).unwrap().unwrap(), (modified, Some(created)));
+        // The owner may set the dates of a file it can't read, and of a FIFO.
+        let got_locked = run(locked.clone()).map(|r| r.map_err(|e| e.kind()));
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o644)).unwrap();
+        let got_fifo = run(fifo).map(|r| r.map_err(|e| e.kind()));
+        assert_eq!(
+            (got_locked, got_fifo),
+            (Ok(Ok((modified, Some(created)))), Ok(Ok((modified, Some(created)))))
+        );
+
+        // One date at a time, folders, milliseconds, symlinks (their target), and refusals.
+        let dir = tmp.path().join("dir");
+        fs::create_dir(&dir).unwrap();
+        set_dates(&dir, Some(modified + 1234), None).unwrap();
+        assert_eq!(dates(&dir).unwrap().0, modified + 1234);
+        set_dates(&dir, None, Some(created)).unwrap();
+        assert_eq!(dates(&dir).unwrap(), (modified + 1234, Some(created)));
+        std::os::unix::fs::symlink(&dir, tmp.path().join("link")).unwrap();
+        set_dates(&tmp.path().join("link"), Some(modified), None).unwrap();
+        assert_eq!(dates(&dir).unwrap().0, modified);
+        assert_eq!(set_dates(&dir, Some(-1), None).unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(
+            set_dates(&tmp.path().join("none"), Some(0), None).unwrap_err().kind(),
+            io::ErrorKind::NotFound
+        );
+        set_dates(&dir, None, None).unwrap();
+    }
 
     #[test]
     fn copies_data_and_tags_and_reports_progress() {

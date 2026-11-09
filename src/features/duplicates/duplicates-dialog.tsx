@@ -8,6 +8,7 @@ import { useT } from "@/i18n";
 import { formatLocale } from "@/i18n/locale";
 import { batcher } from "@/lib/batch";
 import { formatSize } from "@/lib/format";
+import { describeError } from "@/lib/ipc";
 import { basename, parent, tildify } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
 
@@ -38,11 +39,13 @@ interface Scan {
   scanned: number;
   hashed: number;
   done: boolean;
+  /** The search couldn't start (a folder that can't be read). */
+  error: string | null;
 }
 
 /** Runs the search for `path`; it's cancelled when the window closes. */
 function useDuplicates(path: string): [Scan, (update: (groups: Group[]) => Group[]) => void] {
-  const [scan, setScan] = useState<Scan>({ groups: [], scanned: 0, hashed: 0, done: false });
+  const [scan, setScan] = useState<Scan>({ groups: [], scanned: 0, hashed: 0, done: false, error: null });
   useEffect(() => {
     const id = crypto.randomUUID();
     const events = batcher<DupEvent>((batch) =>
@@ -65,7 +68,7 @@ function useDuplicates(path: string): [Scan, (update: (groups: Group[]) => Group
     void commands.findDuplicates(id, path, channel).then((r) => {
       if (r.status === "error") {
         events.flush();
-        setScan((s) => ({ ...s, done: true }));
+        setScan((s) => ({ ...s, done: true, error: describeError(r.error) }));
       }
     });
     return () => {
@@ -123,17 +126,19 @@ function Body({ path, onClose }: { path: string; onClose: () => void }) {
       <header className="border-b border-border px-4 py-3">
         <p className="m-0 font-semibold">{t("Duplicates in “{name}”", { name: basename(path) || path })}</p>
         <p className="m-0 text-[12px] text-fg-muted">
-          {scan.done
-            ? groups.length === 0
-              ? t("No duplicates found.")
-              : t("{groups}, {size} could be freed", {
-                  groups: tn(groups.length, "1 set of identical files", "{count} sets of identical files"),
-                  size: formatSize(wasted),
-                })
-            : t("Looking… {scanned} files, {hashed} compared", {
-                scanned: scan.scanned.toLocaleString(formatLocale()),
-                hashed: scan.hashed.toLocaleString(formatLocale()),
-              })}
+          {scan.error
+            ? scan.error
+            : scan.done
+              ? groups.length === 0
+                ? t("No duplicates found.")
+                : t("{groups}, {size} could be freed", {
+                    groups: tn(groups.length, "1 set of identical files", "{count} sets of identical files"),
+                    size: formatSize(wasted),
+                  })
+              : t("Looking… {scanned} files, {hashed} compared", {
+                  scanned: scan.scanned.toLocaleString(formatLocale()),
+                  hashed: scan.hashed.toLocaleString(formatLocale()),
+                })}
         </p>
       </header>
 

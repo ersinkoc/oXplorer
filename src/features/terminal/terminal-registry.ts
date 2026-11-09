@@ -21,8 +21,13 @@ export function focusedTerminal(): { id: string; term: Terminal } | null {
   return id && term ? { id, term } : null;
 }
 
-/** Types text into a session as if pasted (bracketed paste when the app asked for it). */
-export function pasteInto(id: string, text: string): void {
+/**
+ * Types text into a session as if pasted (bracketed paste when the app asked for it).
+ * ESC is dropped: pasted text containing ESC[201~ would end the paste early and
+ * the rest would run as typed keys.
+ */
+export function pasteInto(id: string, raw: string): void {
+  const text = raw.split("\x1b").join("");
   const term = terminals.get(id);
   if (term) term.paste(text);
   else void commands.ptyWrite(id, text);

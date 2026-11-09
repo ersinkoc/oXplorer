@@ -78,8 +78,10 @@ pub fn split(
     }
     let count = part_count(meta.len(), part_size)?;
     let name = file_name(src);
+    // Every number, not just the ones needed: Combine would join on a leftover
+    // next part, or refuse a set with a leftover beyond a gap.
     if let Some(taken) =
-        (1..=count).map(|n| part_path(dest_dir, &name, n)).find(|p| p.symlink_metadata().is_ok())
+        (1..=MAX_PARTS).map(|n| part_path(dest_dir, &name, n)).find(|p| p.symlink_metadata().is_ok())
     {
         // Reported against the source, so say which part is in the way.
         return Err(io::Error::other(format!("“{}” already exists there", file_name(&taken))));
@@ -124,6 +126,12 @@ pub fn parts(first: &Path) -> io::Result<Vec<PathBuf>> {
         .collect();
     if found.is_empty() {
         return Err(io::ErrorKind::NotFound.into());
+    }
+    // A later part past a gap means one is missing: joining would cut the file short.
+    let next = found.len() as u64 + 1;
+    if (next + 1..=MAX_PARTS).any(|n| part_path(dir, &stem, n).symlink_metadata().is_ok()) {
+        let missing = file_name(&part_path(dir, &stem, next));
+        return Err(io::Error::new(io::ErrorKind::NotFound, format!("“{missing}” is missing")));
     }
     Ok(found)
 }
@@ -228,6 +236,44 @@ mod tests {
         .unwrap_err();
         assert_eq!(e.kind(), io::ErrorKind::Interrupted);
         assert!(!dir.join("a 2.bin").exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn parts_never_combine_into_a_different_file() {
+        let dir = temp("gaps");
+        let data: Vec<u8> = (0..2_500_000u32).map(|i| (i % 251) as u8).collect();
+        let src = dir.join("x.bin");
+        fs::write(&src, &data).unwrap();
+        let out = dir.join("out");
+        fs::create_dir(&out).unwrap();
+
+        // A part left over from an earlier, longer split would be joined on.
+        fs::write(out.join("x.bin.004"), b"old").unwrap();
+        let e = split(&src, &out, 1_000_000, &mut |_| true).unwrap_err();
+        assert!(e.to_string().contains("x.bin.004"), "{e}");
+        assert!(!out.join("x.bin.001").exists());
+        fs::remove_file(out.join("x.bin.004")).unwrap();
+        fs::write(out.join("x.bin.009"), b"old").unwrap();
+        let e = split(&src, &out, 1_000_000, &mut |_| true).unwrap_err();
+        assert!(e.to_string().contains("x.bin.009"), "{e}");
+        fs::remove_file(out.join("x.bin.009")).unwrap();
+
+        // Control: a complete set joins back byte for byte.
+        let made = split(&src, &out, 1_000_000, &mut |_| true).unwrap();
+        let whole = join(&made[0], &dir, &mut |_| true).unwrap();
+        assert_eq!(fs::read(&whole).unwrap(), data);
+        fs::remove_file(&whole).unwrap();
+
+        // A missing middle part: refused, nothing written.
+        fs::remove_file(&made[1]).unwrap();
+        let e = join(&made[0], &dir, &mut |_| true).unwrap_err();
+        assert!(e.to_string().contains("x.bin.002"), "{e}");
+        assert!(!dir.join("x 2.bin").exists());
+        // Only the last part missing can't be told from a shorter set: joined as is.
+        fs::write(&made[1], &data[1_000_000..2_000_000]).unwrap();
+        fs::remove_file(&made[2]).unwrap();
+        assert_eq!(parts(&made[0]).unwrap().len(), 2);
         fs::remove_dir_all(&dir).unwrap();
     }
 

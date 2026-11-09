@@ -1,6 +1,26 @@
-/** Quotes a path for POSIX shells: 'it'\''s here'. */
+const isControl = (c: string) => {
+  const code = c.charCodeAt(0);
+  return code < 0x20 || code === 0x7f;
+};
+
+/**
+ * Quotes a path for POSIX shells: 'it'\''s here'. Names with control characters
+ * use $'…' with \xHH escapes: typed raw, an ESC could end a bracketed paste and
+ * a newline would run what follows.
+ */
 export function shellQuote(path: string): string {
-  return /^[\w@%+=:,./-]+$/.test(path) ? path : `'${path.replace(/'/g, `'\\''`)}'`;
+  if (/^[\w@%+=:,./-]+$/.test(path)) return path;
+  if (![...path].some(isControl)) return `'${path.replace(/'/g, `'\\''`)}'`;
+  const escaped = [...path]
+    .map((c) =>
+      c === "\\" || c === "'"
+        ? `\\${c}`
+        : isControl(c)
+          ? `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`
+          : c,
+    )
+    .join("");
+  return `$'${escaped}'`;
 }
 
 /** Paths as typed after a drop into the terminal: quoted, space-separated, trailing space. */

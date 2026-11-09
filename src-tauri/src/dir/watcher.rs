@@ -183,27 +183,81 @@ fn build_change(dir: &Path, pending: Pending) -> DirChanged {
         };
     }
     // Report children under the path the frontend uses, not the canonical one.
-    let results: Vec<Result<FileEntry, String>> = pending
+    // Each child gives an entry to show and/or a path to drop.
+    let results: Vec<(Option<FileEntry>, Option<String>)> = pending
         .children
         .par_iter()
         .filter_map(|child| {
             let name = child.file_name()?;
             let path = dir.join(name);
             Some(match fs::symlink_metadata(&path) {
-                Ok(meta) => Ok(build_entry(name.to_string_lossy().into_owned(), &path, &meta, true)),
-                Err(e) if e.kind() == io::ErrorKind::NotFound => Err(path.to_string_lossy().into_owned()),
+                Ok(meta) => match stored_name(&path) {
+                    // APFS finds a name in any case or Unicode form, so the old
+                    // spelling of a case-only rename still stats: show the item
+                    // under the name it has now and drop the old spelling.
+                    Ok(stored) if stored != name => {
+                        let now = dir.join(&stored);
+                        let entry = build_entry(stored.to_string_lossy().into_owned(), &now, &meta, true);
+                        (Some(entry), Some(path.to_string_lossy().into_owned()))
+                    }
+                    _ => (Some(build_entry(name.to_string_lossy().into_owned(), &path, &meta, true)), None),
+                },
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                    (None, Some(path.to_string_lossy().into_owned()))
+                }
                 // Unreadable but present: keep whatever the frontend already shows.
                 Err(_) => return None,
             })
         })
         .collect();
-    let (upserted, removed): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
-    DirChanged {
-        dir: dir.to_string_lossy().into_owned(),
-        upserted: upserted.into_iter().filter_map(Result::ok).collect(),
-        removed: removed.into_iter().filter_map(Result::err).collect(),
-        rescan: false,
+    let mut upserted: Vec<FileEntry> = Vec::new();
+    let mut removed: Vec<String> = Vec::new();
+    for (entry, gone) in results {
+        if let Some(e) = entry.filter(|e| !upserted.iter().any(|u| u.path == e.path)) {
+            upserted.push(e);
+        }
+        removed.extend(gone);
     }
+    removed.retain(|p| !upserted.iter().any(|u| &u.path == p));
+    DirChanged { dir: dir.to_string_lossy().into_owned(), upserted, removed, rescan: false }
+}
+
+/// The name the file system stores for `path`'s last component (symlinks not followed).
+fn stored_name(path: &Path) -> io::Result<std::ffi::OsString> {
+    use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+    // The u32 length, an attrreference_t, then the name (up to 255 UTF-16
+    // units of NFD text, at most 3 bytes each) and its NUL.
+    #[repr(C, align(4))]
+    struct Buf([u8; 4 + 8 + 1024]);
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    // SAFETY: attrlist is plain data; all-zero is a valid empty request.
+    let mut list: libc::attrlist = unsafe { std::mem::zeroed() };
+    list.bitmapcount = libc::ATTR_BIT_MAP_COUNT;
+    list.commonattr = libc::ATTR_CMN_NAME;
+    let mut buf = Buf([0; 4 + 8 + 1024]);
+    // SAFETY: `c` is NUL-terminated, `list` and `buf` outlive the call, and the
+    // size passed is the buffer's own.
+    let rc = unsafe {
+        libc::getattrlist(
+            c.as_ptr(),
+            (&raw mut list).cast(),
+            buf.0.as_mut_ptr().cast(),
+            buf.0.len(),
+            libc::FSOPT_NOFOLLOW,
+        )
+    };
+    if rc != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let word = |at: usize| buf.0.get(at..at + 4).and_then(|b| b.try_into().ok()).map(u32::from_ne_bytes);
+    let bad = || io::Error::from(io::ErrorKind::InvalidData);
+    // attr_dataoffset is relative to the attrreference_t itself (at byte 4).
+    let offset = usize::try_from(word(4).ok_or_else(bad)?).map_err(|_| bad())?;
+    let length = usize::try_from(word(8).ok_or_else(bad)?).map_err(|_| bad())?;
+    let start = 4 + offset;
+    let bytes = buf.0.get(start..start + length).ok_or_else(bad)?;
+    let name = bytes.split(|b| *b == 0).next().unwrap_or_default();
+    Ok(std::ffi::OsString::from_vec(name.to_vec()))
 }
 
 #[cfg(test)]
@@ -214,6 +268,58 @@ mod tests {
 
     fn event(kind: EventKind, path: PathBuf) -> DebouncedEvent {
         DebouncedEvent::new(notify::Event::new(kind).add_path(path), Instant::now())
+    }
+
+    #[test]
+    fn a_case_only_rename_leaves_one_entry() {
+        use notify::event::{ModifyKind, RenameMode};
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = fs::canonicalize(tmp.path()).unwrap();
+        let registry: Registry = Arc::default();
+        lock(&registry).insert(
+            dir.clone(),
+            Watched { requested: dir.clone(), refs: HashMap::from([("main".to_owned(), 1)]) },
+        );
+        let renamed = |from: &str, to: &str| {
+            fs::write(dir.join(from), "x").unwrap();
+            fs::rename(dir.join(from), dir.join(to)).unwrap();
+            let kind = EventKind::Modify(ModifyKind::Name(RenameMode::Any));
+            let c = collect_changes(&registry, &[event(kind, dir.join(from)), event(kind, dir.join(to))]);
+            fs::remove_file(dir.join(to)).unwrap();
+            let names: Vec<String> = c[0].upserted.iter().map(|e| e.name.clone()).collect();
+            let removed: Vec<String> =
+                c[0].removed.iter().map(|p| p.rsplit('/').next().unwrap().to_owned()).collect();
+            (names, removed)
+        };
+        // Control: a rename to another name.
+        assert_eq!(renamed("a.txt", "b.txt"), (vec!["b.txt".to_owned()], vec!["a.txt".to_owned()]));
+        // Only the case, or only the Unicode form, changes: the old spelling still stats.
+        assert_eq!(renamed("c.txt", "C.txt"), (vec!["C.txt".to_owned()], vec!["c.txt".to_owned()]));
+        assert_eq!(
+            renamed("caf\u{e9}.txt", "cafe\u{301}.txt"),
+            (vec!["cafe\u{301}.txt".to_owned()], vec!["caf\u{e9}.txt".to_owned()])
+        );
+
+        let kind = EventKind::Modify(ModifyKind::Any);
+        let one = |name: &str| {
+            let c = collect_changes(&registry, &[event(kind, dir.join(name))]);
+            let names: Vec<String> = c[0].upserted.iter().map(|e| e.name.clone()).collect();
+            let removed: Vec<String> =
+                c[0].removed.iter().map(|p| p.rsplit('/').next().unwrap().to_owned()).collect();
+            (names, removed)
+        };
+        // The old spelling alone, in a later batch.
+        fs::write(dir.join("D.txt"), "x").unwrap();
+        assert_eq!(one("d.txt"), (vec!["D.txt".to_owned()], vec!["d.txt".to_owned()]));
+        // A file changed in place, and one deleted.
+        assert_eq!(one("D.txt"), (vec!["D.txt".to_owned()], vec![]));
+        fs::remove_file(dir.join("D.txt")).unwrap();
+        assert_eq!(one("D.txt"), (vec![], vec!["D.txt".to_owned()]));
+        // A symlink keeps its own name, not its target's.
+        fs::write(dir.join("Target"), "x").unwrap();
+        std::os::unix::fs::symlink("Target", dir.join("Link")).unwrap();
+        assert_eq!(one("Link"), (vec!["Link".to_owned()], vec![]));
+        assert_eq!(one("link"), (vec!["Link".to_owned()], vec!["link".to_owned()]));
     }
 
     #[test]

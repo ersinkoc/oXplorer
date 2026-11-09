@@ -8,6 +8,7 @@ import { msg, useT } from "@/i18n";
 import { formatLocale } from "@/i18n/locale";
 import { batcher } from "@/lib/batch";
 import { formatDate, formatSize } from "@/lib/format";
+import { describeError } from "@/lib/ipc";
 import { basename } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
 
@@ -65,9 +66,18 @@ interface Scan {
   items: SyncItem[];
   folders: number;
   done: boolean;
+  /** The comparison couldn't start (a folder that can't be read). */
+  error: string | null;
 }
 
-const fresh = (key: string, run = ""): Scan => ({ key, run, items: [], folders: 0, done: false });
+const fresh = (key: string, run = ""): Scan => ({
+  key,
+  run,
+  items: [],
+  folders: 0,
+  done: false,
+  error: null,
+});
 
 /** Streams the differences; a new comparison (other mode) starts from an empty list. */
 function useComparison(left: string, right: string, byContent: boolean): Scan {
@@ -103,7 +113,7 @@ function useComparison(left: string, right: string, byContent: boolean): Scan {
     void commands.compareFolders(id, left, right, byContent, channel).then((r) => {
       if (r.status === "error" && latest.current === id) {
         events.flush();
-        setScan((s) => ({ ...current(s), done: true }));
+        setScan((s) => ({ ...current(s), done: true, error: describeError(r.error) }));
       }
     });
     return () => {
@@ -155,11 +165,13 @@ function Body({ left, right, onClose }: { left: string; right: string; onClose: 
             {t("“{left}” and “{right}”", { left: basename(left), right: basename(right) })}
           </p>
           <p className="m-0 text-[12px] text-fg-muted">
-            {scan.done
-              ? scan.items.length === 0
-                ? t("The folders are the same.")
-                : tn(scan.items.length, "1 difference", "{count} differences")
-              : t("Comparing… {count} folders", { count: scan.folders.toLocaleString(formatLocale()) })}
+            {scan.error
+              ? scan.error
+              : scan.done
+                ? scan.items.length === 0
+                  ? t("The folders are the same.")
+                  : tn(scan.items.length, "1 difference", "{count} differences")
+                : t("Comparing… {count} folders", { count: scan.folders.toLocaleString(formatLocale()) })}
           </p>
         </div>
         <label

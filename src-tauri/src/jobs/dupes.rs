@@ -36,6 +36,10 @@ pub enum DupEvent {
 /// Walks `root` and reports groups through `emit`; stops (returning false) once
 /// `emit` does or `stop` says so (checked while big files are read, too).
 pub fn find(root: &Path, stop: &dyn Fn() -> bool, emit: &mut dyn FnMut(DupEvent) -> bool) -> bool {
+    // An unreadable folder would look free of duplicates; the caller reports the error.
+    if fs::read_dir(root).is_err() {
+        return false;
+    }
     let mut by_size: HashMap<u64, Vec<PathBuf>> = HashMap::new();
     let mut seen = HashSet::new();
     let mut stack = vec![root.to_path_buf()];
@@ -127,6 +131,32 @@ fn hash(path: &Path, limit: Option<u64>, stop: &dyn Fn() -> bool) -> io::Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unreadable_folder_is_never_reported_as_clean() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(tmp.path()).unwrap().join("locked");
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("a.txt"), b"same").unwrap();
+        fs::write(root.join("b.txt"), b"same").unwrap();
+        let finished = |root: &Path| {
+            let mut done = None;
+            find(root, &|| false, &mut |ev| {
+                if let DupEvent::Done { groups } = ev {
+                    done = Some(groups);
+                }
+                true
+            });
+            done
+        };
+        // Control: readable, one group.
+        assert_eq!(finished(&root), Some(1));
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o000)).unwrap();
+        let got = finished(&root);
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(got, None, "an unreadable folder finished as having no duplicates");
+    }
 
     #[test]
     fn groups_identical_files_only() {

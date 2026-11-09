@@ -681,6 +681,31 @@ export async function runSelfTest(): Promise<void> {
     await waitFor(() => dupDone !== null, 5000);
     step("find duplicates", dupDone === 0, `groups=${dupDone}`);
 
+    // A folder that can't be read is an error, not "no duplicates" or "the same".
+    const noRead = await unwrap(commands.createItem(folder.path, "locked", true));
+    await unwrap(commands.setPermissions(noRead.path, 0o000));
+    const deniedText = describeError({
+      kind: "permissionDenied",
+      path: noRead.path,
+      needsFullDiskAccess: false,
+    });
+    const dialogSays = (text: string) =>
+      waitFor(() => !!document.querySelector("dialog[open]")?.textContent?.includes(text), 3000);
+    useApp.getState().set({ duplicatesPath: noRead.path });
+    const dupDenied = await dialogSays(deniedText);
+    useApp.getState().set({ duplicatesPath: null });
+    await waitFor(() => !document.querySelector("dialog[open]"), 2000);
+    useApp.getState().set({ syncPair: { left: nfDir.path, right: noRead.path } });
+    const syncDenied = await dialogSays(deniedText);
+    useApp.getState().set({ syncPair: null });
+    await waitFor(() => !document.querySelector("dialog[open]"), 2000);
+    await unwrap(commands.setPermissions(noRead.path, 0o755));
+    step(
+      "unreadable folders are errors",
+      dupDenied && syncDenied,
+      `duplicates=${dupDenied} sync=${syncDenied}`,
+    );
+
     // SHA-256 (Get Info) of an empty file.
     const sum = await commands.checksum(crypto.randomUUID(), nf1.path);
     step(

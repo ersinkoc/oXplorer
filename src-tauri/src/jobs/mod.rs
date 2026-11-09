@@ -226,6 +226,7 @@ pub async fn find_duplicates(
     on_event: Channel<dupes::DupEvent>,
 ) -> AppResult<()> {
     let root = validate_path(&path)?;
+    readable_dirs(vec![root.clone()]).await?;
     let (cancel, _, _) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     tauri::async_runtime::spawn_blocking(move || {
@@ -234,6 +235,16 @@ pub async fn find_duplicates(
         manager.unregister(&id);
     });
     Ok(())
+}
+
+/// Folders a scan starts from must be readable: one that isn't (permissions,
+/// macOS privacy protection) would otherwise look empty.
+async fn readable_dirs(dirs: Vec<std::path::PathBuf>) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        dirs.iter().try_for_each(|d| fs::read_dir(d).map(drop).map_err(|e| AppError::from_io(&e, d)))
+    })
+    .await
+    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
 }
 
 /// How many items are in the Trash (Empty Trash asks before erasing them).
@@ -285,6 +296,7 @@ pub async fn compare_folders(
 ) -> AppResult<()> {
     let left = validate_path(&left)?;
     let right = validate_path(&right)?;
+    readable_dirs(vec![left.clone(), right.clone()]).await?;
     let (cancel, _, _) = jobs.register(&id)?;
     let manager = Arc::clone(&jobs);
     tauri::async_runtime::spawn_blocking(move || {

@@ -25,6 +25,7 @@
     "drag:default",
     "notification:default",
     "opener:allow-open-url",
+    "opener:allow-default-urls",
     "core:menu:default",
     "core:webview:allow-internal-toggle-devtools",
     "allow-open-dir",

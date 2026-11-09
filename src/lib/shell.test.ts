@@ -9,6 +9,11 @@ describe("shell helpers", () => {
     expect(shellArgs(["/a", "/b c"])).toBe("/a '/b c' ");
   });
 
+  it("never types control characters (an ESC[201~ in a name would end a bracketed paste)", () => {
+    expect(shellQuote("/t/a\x1b[201~\x15rm x\n")).toBe("$'/t/a\\x1b[201~\\x15rm x\\x0a'");
+    expect(shellQuote("/t/it's\\\x01a")).toBe("$'/t/it\\'s\\\\\\x01a'");
+  });
+
   it("parses local OSC 7 reports", () => {
     expect(parseOsc7("file://Mac.local/Users/me/dir%20x", ["Mac.local"])).toBe("/Users/me/dir x");
     expect(parseOsc7("file:///tmp")).toBe("/tmp");

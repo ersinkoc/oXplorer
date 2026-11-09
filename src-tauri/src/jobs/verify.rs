@@ -91,13 +91,16 @@ fn parse_line(line: &str) -> Option<Entry> {
     if line.trim().is_empty() || line.starts_with('#') {
         return None;
     }
-    // BSD: `SHA256 (name) = hex`
+    // GNU coreutils starts a line with `\` when the name is escaped (`\\`, `\n`, `\r`).
+    let (escaped, line) = line.strip_prefix('\\').map_or((false, line), |rest| (true, rest));
+    let name_of = |name: &str| if escaped { unescape(name) } else { Some(name.to_owned()) };
+    // BSD: `SHA256 (name) = hex`; a GNU name can look like it, so only with a real hash.
     if let Some((left, hex)) = line.rsplit_once(") = ")
         && let Some((_, name)) = left.split_once(" (")
         && is_hex(hex.trim())
+        && let Some(kind) = HashKind::from_hex_len(hex.trim().len())
     {
-        let hex = hex.trim().to_ascii_lowercase();
-        return Some(Entry { name: name.to_owned(), kind: HashKind::from_hex_len(hex.len())?, hex });
+        return Some(Entry { name: name_of(name)?, kind, hex: hex.trim().to_ascii_lowercase() });
     }
     // GNU: `hex  name` (text) or `hex *name` (binary)
     let (hex, rest) = line.split_once(' ')?;
@@ -106,13 +109,33 @@ fn parse_line(line: &str) -> Option<Entry> {
         return None;
     }
     Some(Entry {
-        name: name.to_owned(),
+        name: name_of(name)?,
         kind: HashKind::from_hex_len(hex.len())?,
         hex: hex.to_ascii_lowercase(),
     })
 }
 
+/// Undoes coreutils' name escaping; None for an escape it doesn't write.
+fn unescape(name: &str) -> Option<String> {
+    let mut out = String::with_capacity(name.len());
+    let mut chars = name.chars();
+    while let Some(c) = chars.next() {
+        out.push(match c {
+            '\\' => match chars.next()? {
+                '\\' => '\\',
+                'n' => '\n',
+                'r' => '\r',
+                _ => return None,
+            },
+            c => c,
+        });
+    }
+    Some(out)
+}
+
 pub fn parse(text: &str) -> Vec<Entry> {
+    // Windows tools often start the file with a byte-order mark.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     text.lines().filter_map(parse_line).collect()
 }
 
@@ -253,6 +276,50 @@ mod tests {
         assert_eq!(got[1].name, "bin/x y.iso");
         assert_eq!(got[1].hex, sha);
         assert_eq!(got[2], Entry { name: "a (1).txt".into(), hex: md5.into(), kind: HashKind::Md5 });
+    }
+
+    #[test]
+    fn reads_every_line_other_tools_write() {
+        let sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let names = |text: &str| parse(text).into_iter().map(|e| e.name).collect::<Vec<_>>();
+        // A byte-order mark (Windows tools) before the first line.
+        assert_eq!(
+            names(&format!("\u{feff}{sha}  first.txt\r\n{sha}  second.txt\r\n")),
+            ["first.txt", "second.txt"]
+        );
+        // GNU coreutils escapes names with a backslash or newline and marks the line with `\`.
+        assert_eq!(
+            names(&format!("\\{sha}  a\\\\b.txt\n\\{sha}  two\\nlines\n")),
+            ["a\\b.txt", "two\nlines"]
+        );
+        // A GNU name that happens to look like the BSD form.
+        assert_eq!(names(&format!("{sha}  score (final) = 10\n")), ["score (final) = 10"]);
+        // Control: the plain forms.
+        assert_eq!(names(&format!("{sha}  plain.txt\nSHA256 (b.txt) = {sha}\n")), ["plain.txt", "b.txt"]);
+    }
+
+    #[test]
+    fn verifies_escaped_names_as_shasum_writes_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        fs::write(d.join("a\\b.txt"), "x").unwrap();
+        fs::write(d.join("two\nlines"), "y").unwrap();
+        // `shasum -a 256 *` and `shasum -a 256 --tag *`, as macOS writes them.
+        let x = "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881";
+        let y = "a1fce4363854ff888cff4b8e7875d600c2682390412a8cf79b37d0b11148b0fa";
+        let list = format!("\u{feff}\\{x}  a\\\\b.txt\n\\SHA256 (two\\nlines) = {y}\n\\{x}  bad\\qescape\n");
+        fs::write(d.join("SUMS"), list).unwrap();
+        let mut got = Vec::new();
+        verify(&d.join("SUMS"), &|| false, &mut |ev| {
+            match ev {
+                VerifyEvent::Started { total } => got.push(format!("total {total}")),
+                VerifyEvent::Item { name, status, .. } => got.push(format!("{name:?} {status:?}")),
+                VerifyEvent::Done { .. } => {}
+            }
+            true
+        })
+        .unwrap();
+        assert_eq!(got, ["total 2", "\"a\\\\b.txt\" Ok", "\"two\\nlines\" Ok"]);
     }
 
     #[test]

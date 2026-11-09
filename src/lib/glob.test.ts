@@ -79,3 +79,20 @@ describe("mirrorMove", () => {
     expect(mirrorMove("/a", "/c/d", "/b")).toBeNull();
   });
 });
+
+describe("case folding", () => {
+  it("matches I and i in a Turkish system language too", () => {
+    const original = String.prototype.toLocaleLowerCase;
+    // WebKit's toLocaleLowerCase() follows the system language: "I" → "ı" in Turkish.
+    String.prototype.toLocaleLowerCase = function (this: string, l?: string | string[]) {
+      return original.call(this, l ?? "tr");
+    };
+    try {
+      expect(globMatcher("img*")?.("IMG_0001.JPG")).toBe(true);
+      expect(globMatcher("izmir")?.("İzmir.txt")).toBe(true);
+      expect(globMatcher("ılık")?.("ILIK.md")).toBe(true);
+    } finally {
+      String.prototype.toLocaleLowerCase = original;
+    }
+  });
+});

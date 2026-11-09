@@ -1,3 +1,4 @@
+import { foldCase } from "@/lib/glob";
 import { compareNames } from "@/lib/sort";
 
 /** Selection is keyed by path; `order` is the currently visible order of paths. */
@@ -106,8 +107,8 @@ export function typeAheadMatch(
   names: readonly { name: string; path: string }[],
   prefix: string,
 ): string | null {
-  const p = prefix.toLocaleLowerCase();
-  const starts = names.find((n) => n.name.toLocaleLowerCase().startsWith(p));
+  const p = foldCase(prefix);
+  const starts = names.find((n) => foldCase(n.name).startsWith(p));
   if (starts) return starts.path;
   const after = names
     .filter((n) => compareNames(n.name, prefix) > 0)

@@ -150,10 +150,31 @@ fn reduce(prefix: &str, changes: &[(String, GitState)]) -> (Option<GitState>, Ve
     (folder, children)
 }
 
+/// Filter commands named by the repository's own config (`.git/config`, its
+/// includes, `config.worktree`) run when status compares contents, so a
+/// downloaded repository could run code just by being looked at. They're
+/// dropped; the user's own drivers (global or system config, e.g. git-lfs) stay.
+fn drop_repository_filters(repo: &mut gix::Repository) -> AppResult<()> {
+    use gix::config::Source;
+    let mut config = repo.config_snapshot_mut();
+    let ids: Vec<_> = config
+        .sections_and_ids_by_name("filter")
+        .into_iter()
+        .flatten()
+        .filter(|(section, _)| matches!(section.meta().source, Source::Local | Source::Worktree))
+        .map(|(_, id)| id)
+        .collect();
+    for id in ids {
+        config.remove_section_by_id(id);
+    }
+    config.commit().map(|_| ()).map_err(|e| AppError::Io { path: None, message: format!("git status: {e}") })
+}
+
 pub fn status_of(dir: &Path) -> AppResult<Option<GitStatus>> {
     // gix reports the working tree resolved (/private/var/…), so compare like with like.
     let dir = &dir.canonicalize().map_err(|e| AppError::from_io(&e, dir))?;
-    let Ok(repo) = gix::discover(dir) else { return Ok(None) };
+    let Ok(mut repo) = gix::discover(dir) else { return Ok(None) };
+    drop_repository_filters(&mut repo)?;
     let Some(workdir) = repo.workdir().map(Path::to_path_buf) else { return Ok(None) };
     // Inside `.git` itself there's nothing to show.
     let Ok(rel) = dir.strip_prefix(&workdir) else { return Ok(None) };
@@ -196,6 +217,7 @@ pub async fn git_status(path: String) -> AppResult<Option<GitStatus>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
@@ -272,6 +294,69 @@ mod tests {
 
         let outside = tempfile::tempdir().unwrap();
         assert!(status_of(outside.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn browsing_never_runs_the_repositorys_filter_commands() {
+        if Command::new("git").arg("--version").output().is_err() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let r = tmp.path();
+        git(r, &["init", "-q", "-b", "main"]);
+        let attributes = "*.txt filter=evil\n*.log filter=inc\n*.dat filter=proc\n";
+        std::fs::write(r.join(".gitattributes"), attributes).unwrap();
+        for name in ["a.txt", "c.log", "d.dat"] {
+            std::fs::write(r.join(name), "same").unwrap();
+        }
+        std::fs::write(r.join("b.md"), "one").unwrap();
+        git(r, &["add", "."]);
+        git(r, &["commit", "-q", "-m", "init"]);
+        // A downloaded repository's own config names commands to run: directly,
+        // through an included file, and as a long-running process filter.
+        let marker = r.join("RAN");
+        let command = format!("touch '{}'; cat", marker.display());
+        git(r, &["config", "filter.evil.clean", &command]);
+        std::fs::write(r.join(".git/extra"), format!("[filter \"inc\"]\n\tclean = {command}\n")).unwrap();
+        git(r, &["config", "include.path", "extra"]);
+        git(r, &["config", "filter.proc.process", &format!("touch '{}'", marker.display())]);
+        // Same bytes, other date: status has to look at the contents.
+        let old = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(946_684_800);
+        for name in ["a.txt", "b.md", "c.log", "d.dat"] {
+            std::fs::File::options().write(true).open(r.join(name)).unwrap().set_modified(old).unwrap();
+        }
+        std::fs::write(r.join("b.md"), "two").unwrap();
+
+        let s = status_of(r).unwrap().unwrap();
+        assert!(!marker.exists(), "the repository's filter.evil.clean ran");
+        // Control: the change next to it is still seen.
+        assert_eq!(state(&s, "b.md"), Some(GitState::Modified));
+        assert_eq!(state(&s, "a.txt"), None);
+    }
+
+    /// The user's own filter drivers (git-lfs lives in ~/.gitconfig) still apply.
+    /// Changes HOME, so it runs alone: `OX_TEST_HOME=$(mktemp -d) HOME=$OX_TEST_HOME
+    /// cargo test --lib git::tests::user_filters_still_apply -- --ignored`
+    #[test]
+    #[ignore = "needs a scratch HOME"]
+    fn user_filters_still_apply() {
+        let home = PathBuf::from(std::env::var("OX_TEST_HOME").unwrap());
+        assert_eq!(std::env::var_os("HOME").map(PathBuf::from), Some(home.clone()));
+        let marker = home.join("USER_FILTER_RAN");
+        let config = format!("[filter \"mine\"]\n\tclean = touch '{}'; cat\n", marker.display());
+        std::fs::write(home.join(".gitconfig"), config).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let r = tmp.path();
+        git(r, &["init", "-q", "-b", "main"]);
+        std::fs::write(r.join(".gitattributes"), "*.txt filter=mine\n").unwrap();
+        std::fs::write(r.join("a.txt"), "same").unwrap();
+        git(r, &["add", "."]);
+        git(r, &["commit", "-q", "-m", "init"]);
+        let _ = std::fs::remove_file(&marker);
+        let old = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(946_684_800);
+        std::fs::File::options().write(true).open(r.join("a.txt")).unwrap().set_modified(old).unwrap();
+        status_of(r).unwrap().unwrap();
+        assert!(marker.exists(), "the user's own filter.mine.clean was dropped");
     }
 
     /// `OX_BENCH_DIR=/repo/sub cargo test --release --lib bench_git -- --ignored --nocapture`

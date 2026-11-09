@@ -63,6 +63,10 @@ pub fn compare(
     stop: &dyn Fn() -> bool,
     emit: &mut dyn FnMut(SyncEvent) -> bool,
 ) -> bool {
+    // An unreadable side would look empty; the caller reports the error instead.
+    if fs::read_dir(left).is_err() || fs::read_dir(right).is_err() {
+        return false;
+    }
     let mut walk = Walk { emit, stop, by_content, folders: 0, items: 0 };
     if !walk.dir(left, right, "") {
         return false;
@@ -104,21 +108,29 @@ impl Walk<'_> {
                     let (Some(l), Some(r)) = (&l, &r) else { continue };
                     self.dir(&left.join(l), &right.join(r), &child)
                 }
-                (Some(lm), Some(rm)) => match status(&lm, &rm) {
-                    Some(_)
-                        if self.by_content
-                            && lm.is_file()
-                            && rm.is_file()
-                            && lm.len() == rm.len()
-                            && let (Some(l), Some(r)) = (&l, &r)
-                            && same_contents(&left.join(l), &right.join(r), self.stop) =>
+                (Some(lm), Some(rm)) => {
+                    // By content, files of one size are judged by their bytes alone:
+                    // a damaged copy can keep its size and date.
+                    let found = if self.by_content
+                        && lm.is_file()
+                        && rm.is_file()
+                        && lm.len() == rm.len()
+                        && let (Some(l), Some(r)) = (&l, &r)
                     {
-                        true
+                        if same_contents(&left.join(l), &right.join(r), self.stop) {
+                            None
+                        } else {
+                            Some(status(&lm, &rm).unwrap_or(SyncStatus::Differs))
+                        }
+                    } else {
+                        status(&lm, &rm)
+                    };
+                    match found {
+                        _ if (self.stop)() => false,
+                        Some(s) => self.item(child, s, Some(&lm), Some(&rm)),
+                        None => true,
                     }
-                    _ if (self.stop)() => false,
-                    Some(s) => self.item(child, s, Some(&lm), Some(&rm)),
-                    None => true,
-                },
+                }
                 (Some(lm), None) => self.item(child, SyncStatus::LeftOnly, Some(&lm), None),
                 (None, Some(rm)) => self.item(child, SyncStatus::RightOnly, None, Some(&rm)),
                 (None, None) => true,
@@ -149,8 +161,9 @@ fn list(dir: &Path) -> impl Iterator<Item = String> {
 /// How two non-folder items differ, or None when they look the same.
 fn status(l: &Metadata, r: &Metadata) -> Option<SyncStatus> {
     let (lt, rt) = (modified_ms(l), modified_ms(r));
+    // A folder's date only says when an entry last changed: neither side is "newer".
     if l.is_dir() != r.is_dir() {
-        return Some(newer(lt, rt).unwrap_or(SyncStatus::Differs));
+        return Some(SyncStatus::Differs);
     }
     if l.len() == r.len() && (lt - rt).abs() <= TIME_SLACK_MS {
         return None;
@@ -291,6 +304,108 @@ mod tests {
         };
         assert_eq!(run(false).len(), 2);
         assert_eq!(run(true), vec![("edit.txt".to_owned(), SyncStatus::LeftNewer)]);
+    }
+
+    fn items(l: &Path, r: &Path, by_content: bool) -> Vec<(String, SyncStatus)> {
+        let mut items = Vec::new();
+        compare(l, r, by_content, &|| false, &mut |ev| {
+            if let SyncEvent::Item { rel, status, .. } = ev {
+                items.push((rel, status));
+            }
+            true
+        });
+        items
+    }
+
+    fn set_age(p: &Path, at: SystemTime) {
+        fs::File::options().write(true).open(p).unwrap().set_modified(at).unwrap();
+    }
+
+    #[test]
+    fn content_comparison_reads_files_that_look_the_same() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (l, r) = (tmp.path().join("l"), tmp.path().join("r"));
+        fs::create_dir_all(&l).unwrap();
+        fs::create_dir_all(&r).unwrap();
+        let at = SystemTime::now() - Duration::from_secs(100);
+        // Same size, same date, other bytes (a damaged copy that kept its date).
+        fs::write(l.join("a.txt"), b"good").unwrap();
+        fs::write(r.join("a.txt"), b"bad!").unwrap();
+        // Same size, dates within the 2 s slack.
+        fs::write(l.join("b.txt"), b"v1").unwrap();
+        fs::write(r.join("b.txt"), b"v2").unwrap();
+        // Control: truly identical, and two empty files.
+        fs::write(l.join("c.txt"), b"same").unwrap();
+        fs::write(r.join("c.txt"), b"same").unwrap();
+        fs::write(l.join("e.txt"), b"").unwrap();
+        fs::write(r.join("e.txt"), b"").unwrap();
+        for side in [&l, &r] {
+            set_age(&side.join("a.txt"), at);
+            set_age(&side.join("c.txt"), at);
+        }
+        set_age(&l.join("b.txt"), at);
+        set_age(&r.join("b.txt"), at + Duration::from_millis(1500));
+
+        assert_eq!(
+            items(&l, &r, true),
+            vec![("a.txt".to_owned(), SyncStatus::Differs), ("b.txt".to_owned(), SyncStatus::Differs)]
+        );
+        // Without reading, only size and date count.
+        assert_eq!(items(&l, &r, false), vec![]);
+    }
+
+    #[test]
+    fn a_file_against_a_folder_is_never_newer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (l, r) = (tmp.path().join("l"), tmp.path().join("r"));
+        fs::create_dir_all(r.join("photos")).unwrap();
+        fs::write(r.join("photos/1.jpg"), b"jpg").unwrap();
+        fs::create_dir_all(&l).unwrap();
+        fs::write(l.join("photos"), b"a file").unwrap();
+        set_age(&l.join("photos"), SystemTime::now());
+        let old = fs::File::open(r.join("photos")).unwrap();
+        old.set_modified(SystemTime::now() - Duration::from_secs(5000)).unwrap();
+        // Control: two files of other sizes still say which is newer.
+        fs::write(l.join("n.txt"), b"newer").unwrap();
+        fs::write(r.join("n.txt"), b"old").unwrap();
+        set_age(&r.join("n.txt"), SystemTime::now() - Duration::from_secs(5000));
+
+        let got = items(&l, &r, false);
+        assert_eq!(
+            got,
+            vec![("n.txt".to_owned(), SyncStatus::LeftNewer), ("photos".to_owned(), SyncStatus::Differs)]
+        );
+    }
+
+    #[test]
+    fn an_unreadable_folder_is_never_reported_as_the_same() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let tmp = tempfile::tempdir().unwrap();
+        let (l, r) = (tmp.path().join("l"), tmp.path().join("r"));
+        fs::create_dir_all(&l).unwrap();
+        fs::create_dir_all(&r).unwrap();
+        fs::write(l.join("a"), b"x").unwrap();
+        fs::write(r.join("b"), b"y").unwrap();
+        let finished = |l: &Path, r: &Path| {
+            let mut done = None;
+            compare(l, r, false, &|| false, &mut |ev| {
+                if let SyncEvent::Done { items } = ev {
+                    done = Some(items);
+                }
+                true
+            });
+            done
+        };
+        // Control: readable, two one-sided items.
+        assert_eq!(finished(&l, &r), Some(2));
+        fs::set_permissions(&r, fs::Permissions::from_mode(0o000)).unwrap();
+        let got = finished(&l, &r);
+        fs::set_permissions(&r, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(got, None, "an unreadable side finished as a comparison");
+        fs::set_permissions(&l, fs::Permissions::from_mode(0o000)).unwrap();
+        let got = finished(&l, &r);
+        fs::set_permissions(&l, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(got, None, "an unreadable side finished as a comparison");
     }
 
     #[test]
