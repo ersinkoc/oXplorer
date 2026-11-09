@@ -74,8 +74,26 @@ fn allow_file(app: &AppHandle, p: &Path, path: String) -> AppResult<()> {
     Ok(())
 }
 
+/// Opens a regular file only: opening a pipe or a serial device would wait for
+/// a writer (or carrier) forever, and could take data meant for another reader.
+fn open_file(path: &Path) -> AppResult<File> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .map_err(|e| AppError::from_io(&e, path))?;
+    if !file.metadata().is_ok_and(|m| m.is_file()) {
+        return Err(AppError::InvalidPath {
+            path: path.to_string_lossy().into_owned(),
+            reason: "not a file".into(),
+        });
+    }
+    Ok(file)
+}
+
 pub fn read_text(path: &Path) -> AppResult<TextPreview> {
-    let file = File::open(path).map_err(|e| AppError::from_io(&e, path))?;
+    let file = open_file(path)?;
     let mut buf = Vec::with_capacity(TEXT_LIMIT.min(64 * 1024));
     file.take(TEXT_LIMIT as u64 + 1).read_to_end(&mut buf).map_err(|e| AppError::from_io(&e, path))?;
     let truncated = buf.len() > TEXT_LIMIT;
@@ -84,7 +102,7 @@ pub fn read_text(path: &Path) -> AppResult<TextPreview> {
 }
 
 pub fn read_hex(path: &Path) -> AppResult<TextPreview> {
-    let file = File::open(path).map_err(|e| AppError::from_io(&e, path))?;
+    let file = open_file(path)?;
     let mut buf = Vec::with_capacity(HEX_LIMIT + 1);
     file.take(HEX_LIMIT as u64 + 1).read_to_end(&mut buf).map_err(|e| AppError::from_io(&e, path))?;
     let truncated = buf.len() > HEX_LIMIT;
@@ -188,5 +206,36 @@ mod tests {
         let p = read_text(&f).unwrap();
         assert!(!p.truncated);
         assert_eq!(p.text, "short");
+    }
+
+    #[test]
+    fn a_pipe_or_device_is_not_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Control: a file.
+        let f = tmp.path().join("f.txt");
+        std::fs::write(&f, "text").unwrap();
+        assert_eq!(read_text(&f).unwrap().text, "text");
+
+        let fifo = tmp.path().join("pipe");
+        let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o644) }, 0);
+        for read in [read_text, read_hex] {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let p = fifo.clone();
+            std::thread::spawn(move || tx.send(read(&p).is_err()).unwrap());
+            let r = rx.recv_timeout(std::time::Duration::from_secs(5));
+            if r.is_err() {
+                // Release the stuck reader before failing.
+                let _ = std::fs::OpenOptions::new().write(true).open(&fifo);
+            }
+            assert_eq!(r, Ok(true), "previewing a pipe hung or read it");
+        }
+        // A folder, and a character device, are not files either.
+        assert!(read_text(tmp.path()).is_err());
+        assert!(read_hex(Path::new("/dev/null")).is_err());
+        // An empty file is fine.
+        let empty = tmp.path().join("empty");
+        std::fs::write(&empty, "").unwrap();
+        assert_eq!(read_text(&empty).unwrap().text, "");
     }
 }

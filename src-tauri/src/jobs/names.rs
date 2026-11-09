@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 /// Splits off the extension Finder would keep at the end: files and packages
 /// only, and never a leading-dot name like `.env`.
-fn split(name: &str, has_extension: bool) -> (&str, &str) {
+pub(crate) fn split(name: &str, has_extension: bool) -> (&str, &str) {
     if !has_extension {
         return (name, "");
     }

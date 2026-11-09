@@ -322,12 +322,42 @@ pub async fn remote_rename(path: String, new_name: String) -> AppResult<String> 
     let (op, inner) = resolve(&path)?;
     let parent = inner.rsplit_once('/').map_or("", |(p, _)| p);
     let to = format!("{}{new_name}", dir_key(parent));
-    let is_dir =
-        op.stat(&inner).await.is_ok_and(|m| m.is_dir()) || op.stat(&format!("{inner}/")).await.is_ok();
-    let (from_key, to_key) =
-        if is_dir { (format!("{inner}/"), format!("{to}/")) } else { (inner.clone(), to.clone()) };
-    op.rename(&from_key, &to_key).await.map_err(|e| remote_err(&path, &e))?;
+    if to == inner {
+        return Ok(path);
+    }
+    // Never onto another item. A change of letter case only is fine unless the
+    // server tells the two names apart (both are listed).
+    let err = |e: opendal::Error| remote_err(&path, &e);
+    if taken(&op, &to).await.map_err(err)? {
+        let case_only = to.to_lowercase() == inner.to_lowercase();
+        let listed = || async {
+            let all = op.list(&dir_key(parent)).await?;
+            Ok::<_, opendal::Error>(all.iter().any(|e| e.name().trim_end_matches('/') == new_name))
+        };
+        if !case_only || listed().await.map_err(err)? {
+            return Err(AppError::AlreadyExists { path: virtual_path(id_of(&path), &to) });
+        }
+    }
+    // Folders too go without a trailing slash: OpenDAL refuses one in a rename.
+    op.rename(&inner, &to).await.map_err(err)?;
     Ok(virtual_path(id_of(&path), &to))
+}
+
+/// Whether the server has a file or folder at `key`.
+async fn taken(op: &Operator, key: &str) -> opendal::Result<bool> {
+    Ok(op.exists(key).await? || op.exists(&format!("{key}/")).await?)
+}
+
+/// `{base}{name}`, or "name 2.ext", "name 3.ext", … if the server has it (Keep Both).
+async fn free_key(op: &Operator, base: &str, name: &str, is_dir: bool) -> opendal::Result<String> {
+    let (stem, ext) = crate::jobs::names::split(name, !is_dir);
+    let mut key = format!("{base}{name}");
+    let mut n = 1;
+    while taken(op, &key).await? {
+        n += 1;
+        key = format!("{base}{stem} {n}{ext}");
+    }
+    Ok(key)
 }
 
 /// Deletes remote items permanently (servers have no Trash).
@@ -396,19 +426,26 @@ async fn download_file<F: FnMut(u64) -> bool>(
     let size = op.stat(key).await.map_err(TransferError::Remote)?.content_length();
     let reader = op.reader(key).await.map_err(TransferError::Remote)?;
     let mut file = std::fs::File::create(out).map_err(|e| TransferError::Local(e, out.to_path_buf()))?;
-    let mut offset = 0;
-    while offset < size {
-        let end = (offset + CHUNK).min(size);
-        let buf = reader.read(offset..end).await.map_err(TransferError::Remote)?;
-        file.write_all(&buf.to_vec()).map_err(|e| TransferError::Local(e, out.to_path_buf()))?;
-        offset = end;
-        if !tick(buf.len() as u64) {
-            drop(file);
-            let _ = std::fs::remove_file(out);
-            return Err(TransferError::Cancelled);
+    let copied = async {
+        let mut offset = 0;
+        while offset < size {
+            let end = (offset + CHUNK).min(size);
+            let buf = reader.read(offset..end).await.map_err(TransferError::Remote)?;
+            file.write_all(&buf.to_vec()).map_err(|e| TransferError::Local(e, out.to_path_buf()))?;
+            offset = end;
+            if !tick(buf.len() as u64) {
+                return Err(TransferError::Cancelled);
+            }
         }
+        Ok(())
     }
-    Ok(())
+    .await;
+    // Stopped or failed: no partial file under the final name.
+    if copied.is_err() {
+        drop(file);
+        let _ = std::fs::remove_file(out);
+    }
+    copied
 }
 
 /// Copies remote items (files or whole folders) into `dest`; returns the top-level
@@ -423,9 +460,15 @@ pub async fn download<F: FnMut(u64) -> bool>(
         let (op, inner) = resolve(source)
             .map_err(|e| TransferError::Local(std::io::Error::other(e.to_string()), dest.to_path_buf()))?;
         let name = inner.rsplit('/').next().filter(|n| !n.is_empty()).unwrap_or("download").to_owned();
-        let target = unique(dest, &name);
         let dir = format!("{inner}/");
-        if op.stat(&dir).await.is_ok_and(|m| m.is_dir()) {
+        let is_dir = op.stat(&dir).await.is_ok_and(|m| m.is_dir());
+        let free = dest.join(&name);
+        let target = if free.symlink_metadata().is_err() {
+            free
+        } else {
+            crate::jobs::names::keep_both(dest, &name, !is_dir)
+        };
+        if is_dir {
             std::fs::create_dir_all(&target).map_err(|e| TransferError::Local(e, target.clone()))?;
             let all = op.list_with(&dir).recursive(true).await.map_err(TransferError::Remote)?;
             for e in all {
@@ -460,34 +503,58 @@ pub async fn upload<F: FnMut(u64) -> bool>(
     let mut created = Vec::new();
     for src in sources {
         let name = src.file_name().map_or_else(|| "upload".to_owned(), |n| n.to_string_lossy().into_owned());
-        let top = format!("{base}{name}");
         let walker = walk(src).map_err(|e| TransferError::Local(e, src.clone()))?;
+        let is_dir = walker.first().is_some_and(|(_, _, d)| *d);
+        // Never over what the server has: it has no Trash to get it back from.
+        let top = free_key(&op, &base, &name, is_dir).await.map_err(TransferError::Remote)?;
         for (path, rel, is_dir) in walker {
             let key = if rel.is_empty() { top.clone() } else { format!("{top}/{rel}") };
             if is_dir {
                 op.create_dir(&format!("{key}/")).await.map_err(TransferError::Remote)?;
                 continue;
             }
-            let mut file = std::fs::File::open(&path).map_err(|e| TransferError::Local(e, path.clone()))?;
-            let mut writer = op.writer(&key).await.map_err(TransferError::Remote)?;
-            let mut buf = vec![0u8; usize::try_from(CHUNK).unwrap_or(1 << 22)];
-            loop {
-                let n = std::io::Read::read(&mut file, &mut buf)
-                    .map_err(|e| TransferError::Local(e, path.clone()))?;
-                if n == 0 {
-                    break;
-                }
-                writer.write(buf[..n].to_vec()).await.map_err(TransferError::Remote)?;
-                if !tick(n as u64) {
-                    let _ = writer.abort().await;
-                    return Err(TransferError::Cancelled);
-                }
+            let sent = send_file(&op, &path, &key, tick).await;
+            // Stopped or failed: no partial file left on the server (the name was free).
+            if sent.is_err() {
+                let _ = op.delete(&key).await;
             }
-            writer.close().await.map_err(TransferError::Remote)?;
+            sent?;
         }
         created.push(virtual_path(id_of(dest), &top));
     }
     Ok(created)
+}
+
+async fn send_file<F: FnMut(u64) -> bool>(
+    op: &Operator,
+    path: &Path,
+    key: &str,
+    tick: &mut F,
+) -> Result<(), TransferError> {
+    let local = |e| TransferError::Local(e, path.to_path_buf());
+    let mut file = std::fs::File::open(path).map_err(local)?;
+    let mut writer = op.writer(key).await.map_err(TransferError::Remote)?;
+    let mut buf = vec![0u8; usize::try_from(CHUNK).unwrap_or(1 << 22)];
+    let sent = async {
+        loop {
+            let n = std::io::Read::read(&mut file, &mut buf).map_err(local)?;
+            if n == 0 {
+                return Ok(());
+            }
+            writer.write(buf[..n].to_vec()).await.map_err(TransferError::Remote)?;
+            if !tick(n as u64) {
+                return Err(TransferError::Cancelled);
+            }
+        }
+    }
+    .await;
+    match sent {
+        Ok(()) => writer.close().await.map(|_| ()).map_err(TransferError::Remote),
+        Err(e) => {
+            let _ = writer.abort().await;
+            Err(e)
+        }
+    }
 }
 
 /// `src` and everything below it: (path, path relative to `src`, is a folder).
@@ -539,14 +606,6 @@ fn local_rel(rel: &str) -> Option<&Path> {
     let mut parts = rel.components();
     let plain = parts.clone().all(|c| matches!(c, std::path::Component::Normal(_)));
     (plain && parts.next().is_some()).then_some(rel)
-}
-
-fn unique(dir: &Path, name: &str) -> PathBuf {
-    let first = dir.join(name);
-    if first.symlink_metadata().is_err() {
-        return first;
-    }
-    (2..).map(|n| dir.join(format!("{name} {n}"))).find(|p| p.symlink_metadata().is_err()).unwrap_or(first)
 }
 
 /// Dev builds only: serves a local folder as connection `id`, so the in-app
@@ -664,6 +723,170 @@ mod tests {
             let r = download(&["remote:t2/big.bin".into()], local.path(), &mut |_| false).await;
             assert!(matches!(r, Err(TransferError::Cancelled)));
             assert!(!local.path().join("big.bin").exists());
+        });
+    }
+
+    #[test]
+    fn an_upload_never_replaces_what_the_server_has() {
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t3");
+            let s = server.path();
+            std::fs::write(s.join("keep.txt"), "server copy").unwrap();
+            std::fs::create_dir_all(s.join("docs")).unwrap();
+            std::fs::write(s.join("docs/a.txt"), "server a").unwrap();
+            let local = tempfile::tempdir().unwrap();
+            let l = local.path();
+            std::fs::write(l.join("keep.txt"), "local copy").unwrap();
+            std::fs::write(l.join("fresh.txt"), "new").unwrap();
+            std::fs::create_dir_all(l.join("docs")).unwrap();
+            std::fs::write(l.join("docs/a.txt"), "local a").unwrap();
+
+            // Control: a name the server doesn't have keeps its name.
+            let up =
+                upload(&[l.join("fresh.txt"), l.join("keep.txt"), l.join("docs")], "remote:t3/", &mut |_| {
+                    true
+                })
+                .await
+                .ok()
+                .unwrap();
+            assert_eq!(std::fs::read_to_string(s.join("fresh.txt")).unwrap(), "new");
+            assert_eq!(std::fs::read_to_string(s.join("keep.txt")).unwrap(), "server copy");
+            assert_eq!(std::fs::read_to_string(s.join("docs/a.txt")).unwrap(), "server a");
+            assert_eq!(up, ["remote:t3/fresh.txt", "remote:t3/keep 2.txt", "remote:t3/docs 2"]);
+            assert_eq!(std::fs::read_to_string(s.join("keep 2.txt")).unwrap(), "local copy");
+            assert_eq!(std::fs::read_to_string(s.join("docs 2/a.txt")).unwrap(), "local a");
+
+            // A stopped upload leaves nothing half-written behind.
+            std::fs::write(l.join("big.bin"), vec![7u8; 6 << 20]).unwrap();
+            let r = upload(&[l.join("big.bin")], "remote:t3/", &mut |_| false).await;
+            assert!(matches!(r, Err(TransferError::Cancelled)));
+            assert!(!s.join("big.bin").exists(), "a partial upload was left on the server");
+            // Stopped after the first chunk of a bigger file, inside a folder.
+            std::fs::create_dir_all(l.join("pack")).unwrap();
+            std::fs::write(l.join("pack/huge.bin"), vec![7u8; 9 << 20]).unwrap();
+            let mut calls = 0;
+            let r = upload(&[l.join("pack")], "remote:t3/", &mut |_| {
+                calls += 1;
+                calls < 2
+            })
+            .await;
+            assert!(matches!(r, Err(TransferError::Cancelled)));
+            assert!(!s.join("pack/huge.bin").exists(), "a partial upload was left on the server");
+            // The next free name, and names without an extension.
+            let up = upload(&[l.join("keep.txt")], "remote:t3/", &mut |_| true).await.ok().unwrap();
+            assert_eq!(up, ["remote:t3/keep 3.txt"]);
+            std::fs::write(s.join(".env"), "server").unwrap();
+            std::fs::write(l.join(".env"), "local").unwrap();
+            let up = upload(&[l.join(".env")], "remote:t3/", &mut |_| true).await.ok().unwrap();
+            assert_eq!(up, ["remote:t3/.env 2"]);
+            assert_eq!(std::fs::read_to_string(s.join(".env")).unwrap(), "server");
+        });
+    }
+
+    #[test]
+    fn a_rename_never_replaces_another_item() {
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t4");
+            let s = server.path();
+            std::fs::write(s.join("a.txt"), "A").unwrap();
+            std::fs::write(s.join("b.txt"), "B").unwrap();
+            let r = remote_rename("remote:t4/a.txt".into(), "b.txt".into()).await;
+            assert!(matches!(r, Err(AppError::AlreadyExists { .. })), "{r:?}");
+            assert_eq!(std::fs::read_to_string(s.join("b.txt")).unwrap(), "B");
+            assert_eq!(std::fs::read_to_string(s.join("a.txt")).unwrap(), "A");
+            // The same name changes nothing.
+            assert_eq!(
+                remote_rename("remote:t4/a.txt".into(), "a.txt".into()).await.unwrap(),
+                "remote:t4/a.txt"
+            );
+            // Control: a free name, and a change of letter case only.
+            assert_eq!(
+                remote_rename("remote:t4/a.txt".into(), "c.txt".into()).await.unwrap(),
+                "remote:t4/c.txt"
+            );
+            assert_eq!(
+                remote_rename("remote:t4/c.txt".into(), "C.txt".into()).await.unwrap(),
+                "remote:t4/C.txt"
+            );
+            let names: Vec<_> = std::fs::read_dir(s).unwrap().map(|e| e.unwrap().file_name()).collect();
+            assert!(names.contains(&"C.txt".into()), "{names:?}");
+        });
+    }
+
+    #[test]
+    fn folders_on_a_server_can_be_renamed() {
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t5");
+            let s = server.path();
+            std::fs::create_dir_all(s.join("docs")).unwrap();
+            std::fs::write(s.join("docs/x.txt"), "x").unwrap();
+            std::fs::create_dir_all(s.join("other")).unwrap();
+            let r = remote_rename("remote:t5/docs".into(), "docs2".into()).await;
+            assert_eq!(r.ok().as_deref(), Some("remote:t5/docs2"));
+            assert_eq!(std::fs::read_to_string(s.join("docs2/x.txt")).unwrap(), "x");
+            // Not onto another folder.
+            assert!(remote_rename("remote:t5/docs2".into(), "other".into()).await.is_err());
+            assert!(s.join("docs2/x.txt").exists());
+        });
+    }
+
+    #[test]
+    fn a_failed_download_leaves_no_partial_file() {
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t6");
+            let src = server.path().join("grow.bin");
+            std::fs::write(&src, vec![1u8; 9 << 20]).unwrap();
+            let local = tempfile::tempdir().unwrap();
+            // Control: an undisturbed download.
+            assert!(download(&["remote:t6/grow.bin".into()], local.path(), &mut |_| true).await.is_ok());
+            assert_eq!(std::fs::metadata(local.path().join("grow.bin")).unwrap().len(), 9 << 20);
+            std::fs::remove_file(local.path().join("grow.bin")).unwrap();
+
+            // The server file shrinks after the first chunk: the read fails.
+            let r = download(&["remote:t6/grow.bin".into()], local.path(), &mut |_| {
+                std::fs::File::options().write(true).open(&src).unwrap().set_len(10).unwrap();
+                true
+            })
+            .await;
+            assert!(r.is_err());
+            let left: Vec<_> =
+                std::fs::read_dir(local.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+            assert!(left.is_empty(), "a partial download was left: {left:?}");
+
+            // Inside a folder download: the member that failed is gone, the error reaches the caller.
+            std::fs::create_dir_all(server.path().join("set")).unwrap();
+            std::fs::write(server.path().join("set/grow.bin"), vec![1u8; 9 << 20]).unwrap();
+            let inner = server.path().join("set/grow.bin");
+            let r = download(&["remote:t6/set".into()], local.path(), &mut |_| {
+                std::fs::File::options().write(true).open(&inner).unwrap().set_len(10).unwrap();
+                true
+            })
+            .await;
+            assert!(matches!(r, Err(TransferError::Remote(_))));
+            assert!(!local.path().join("set/grow.bin").exists(), "a partial download was left");
+        });
+    }
+
+    #[test]
+    fn a_download_keeps_the_extension_when_the_name_is_taken() {
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t7");
+            std::fs::write(server.path().join("photo.jpg"), "new").unwrap();
+            std::fs::create_dir_all(server.path().join("v1.2")).unwrap();
+            let local = tempfile::tempdir().unwrap();
+            let l = local.path();
+            // Control: a free name.
+            let got = download(&["remote:t7/photo.jpg".into()], l, &mut |_| true).await.ok().unwrap();
+            assert_eq!(got, [l.join("photo.jpg")]);
+            let got = download(&["remote:t7/photo.jpg".into(), "remote:t7/v1.2".into()], l, &mut |_| true)
+                .await
+                .ok()
+                .unwrap();
+            std::fs::create_dir_all(l.join("v1.2")).unwrap();
+            assert_eq!(got[0], l.join("photo 2.jpg"));
+            assert_eq!(got[1], l.join("v1.2"));
+            let got = download(&["remote:t7/v1.2".into()], l, &mut |_| true).await.ok().unwrap();
+            assert_eq!(got, [l.join("v1.2 2")]);
         });
     }
 

@@ -90,14 +90,27 @@ fn unique(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     (2..).map(|n| dir.join(format!("{stem} {n}{ext}"))).find(free).unwrap_or(first)
 }
 
-/// Finder's naming: `name.zip` for one item, `Archive.zip` for several.
+/// Finder's naming: `name.zip` for one item, `Archive.zip` for several. A name
+/// another Compress is still writing (its temp file exists) counts as taken.
 pub fn archive_path(sources: &[PathBuf], format: ArchiveFormat) -> Option<PathBuf> {
     let dir = sources.first()?.parent()?;
     let stem = match sources {
         [one] => one.file_name()?.to_string_lossy().into_owned(),
         _ => "Archive".to_owned(),
     };
-    Some(unique(dir, &stem, format.extension()))
+    let ext = format.extension();
+    let free = |p: &PathBuf| p.symlink_metadata().is_err() && part_file(p).symlink_metadata().is_err();
+    let first = dir.join(format!("{stem}{ext}"));
+    if free(&first) {
+        return Some(first);
+    }
+    (2..).map(|n| dir.join(format!("{stem} {n}{ext}"))).find(free)
+}
+
+/// Where `compress` writes before the archive is complete.
+fn part_file(dest: &Path) -> PathBuf {
+    let name = dest.file_name().map_or_else(|| "archive".into(), |n| n.to_string_lossy().into_owned());
+    dest.with_file_name(format!(".{name}.oxpart"))
 }
 
 /// The work an extraction reports progress in: uncompressed bytes for zip
@@ -234,17 +247,16 @@ pub fn compress(
 ) -> io::Result<()> {
     let base = sources.first().and_then(|s| s.parent()).unwrap_or(Path::new("/"));
     let items = collect(sources, base)?;
-    let dir = dest.parent().unwrap_or(Path::new("/"));
-    let name = dest.file_name().map_or_else(|| "archive".into(), |n| n.to_string_lossy().into_owned());
-    let temp = dir.join(format!(".{name}.oxpart"));
+    let temp = part_file(dest);
     let mut stopped = false;
     let tick = &mut |n: u64| {
         let go = tick(n);
         stopped |= !go;
         go
     };
+    // Another job may be writing the same temp file: only its creator removes it.
+    let out = File::create_new(&temp)?;
     let result = (|| {
-        let out = File::create_new(&temp)?;
         match format {
             ArchiveFormat::Zip => write_zip(&items, out, password, tick)?,
             ArchiveFormat::TarGz => {
@@ -256,7 +268,8 @@ pub fn compress(
                 write_tar(&items, zst, tick)?.finish()?.flush()?;
             }
         }
-        fs::rename(&temp, dest)
+        // Never over an item that appeared at `dest` in the meantime.
+        super::fsops::rename_excl(&temp, dest)
     })();
     if result.is_err() {
         let _ = fs::remove_file(&temp);
@@ -283,6 +296,9 @@ fn safe_join(root: &Path, rel: &Path) -> io::Result<PathBuf> {
     }
     Ok(out)
 }
+
+/// The longest link target a member may have (macOS PATH_MAX).
+const LINK_MAX: u64 = 1024;
 
 /// Maps a member's path inside the archive to where it goes under the staging
 /// folder; `None` skips it.
@@ -322,8 +338,13 @@ fn unzip(
             fs::create_dir_all(parent)?;
         }
         if entry.is_symlink() {
+            // A link's target is a path (at most PATH_MAX bytes): never read more,
+            // a crafted entry can unpack to gigabytes.
             let mut target = String::new();
-            entry.read_to_string(&mut target)?;
+            Read::by_ref(&mut entry).take(LINK_MAX + 1).read_to_string(&mut target)?;
+            if target.len() as u64 > LINK_MAX {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "a link in the archive is too long"));
+            }
             std::os::unix::fs::symlink(target, &out)?;
             continue;
         }
@@ -418,17 +439,31 @@ fn zip_to_system_time(t: zip::DateTime) -> Option<SystemTime> {
 /// read-only folder can't be moved to another parent).
 type TopModes = Vec<(std::ffi::OsString, u32)>;
 
+/// Hard links picked without what they point at: (target member, where the
+/// link goes). A second pass over the tar writes the target's content there.
+type Links = Vec<(PathBuf, PathBuf)>;
+
+/// AppleDouble files (`._name`) that macOS tar adds for extended attributes;
+/// bsdtar folds them back into the file, other tools show them as junk.
+fn is_apple_double(path: &Path) -> bool {
+    path.file_name().is_some_and(|n| n.as_encoded_bytes().starts_with(b"._"))
+}
+
 /// Folders are written owner-writable and get their real mode once their
 /// contents are in, so read-only folders in an archive still extract.
-fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<TopModes> {
+fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<(TopModes, Links)> {
     let mut tar = tar::Archive::new(reader);
     tar.set_preserve_permissions(true);
     tar.set_preserve_mtime(true);
     tar.set_unpack_xattrs(false);
     tar.set_overwrite(false);
     let mut dirs: Vec<(PathBuf, u32)> = Vec::new();
+    let mut links = Links::new();
     for entry in tar.entries()? {
         let mut entry = entry?;
+        if is_apple_double(&entry.path()?) {
+            continue;
+        }
         entry.set_mask(0o7000);
         let is_dir = entry.header().entry_type().is_dir();
         let mode = entry.header().mode().unwrap_or(0o755) & 0o777;
@@ -441,10 +476,6 @@ fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Resu
                 out
             }
             Some(select) => {
-                // Picking members: hard links would point at paths that may not be extracted.
-                if entry.header().entry_type().is_hard_link() {
-                    continue;
-                }
                 let path = entry.path()?.into_owned();
                 let Some(rel) = select(&normalize_member(&path)?) else { continue };
                 if rel.as_os_str().is_empty() {
@@ -453,6 +484,22 @@ fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Resu
                 let out = safe_join(staging, &rel)?;
                 if let Some(parent) = out.parent() {
                     fs::create_dir_all(parent)?;
+                }
+                if entry.header().entry_type().is_hard_link() {
+                    // Picked together with its target: link to the copy made
+                    // already (targets come first in a tar); otherwise later.
+                    let Some(target) = entry.link_name()? else { continue };
+                    let target = normalize_member(&target)?;
+                    let made = select(&target)
+                        .filter(|t| !t.as_os_str().is_empty())
+                        .map(|t| safe_join(staging, &t))
+                        .transpose()?
+                        .filter(|t| t.symlink_metadata().is_ok_and(|m| m.is_file()));
+                    match made {
+                        Some(t) => fs::hard_link(t, &out)?,
+                        None => links.push((target, out)),
+                    }
+                    continue;
                 }
                 entry.unpack(&out)?;
                 out
@@ -472,7 +519,33 @@ fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Resu
             _ => fs::set_permissions(&p, fs::Permissions::from_mode(mode))?,
         }
     }
-    Ok(top)
+    Ok((top, links))
+}
+
+/// Writes the content of each hard link's target member to where the link goes.
+fn fill_links<R: Read>(reader: R, links: &Links) -> io::Result<()> {
+    let mut tar = tar::Archive::new(reader);
+    for entry in tar.entries()? {
+        let mut entry = entry?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+        let path = normalize_member(&entry.path()?)?;
+        let mut outs = links.iter().filter(|(t, _)| *t == path).map(|(_, o)| o);
+        let Some(first) = outs.next() else { continue };
+        entry.set_mask(0o7000);
+        entry.unpack(first)?;
+        for o in outs {
+            fs::hard_link(first, o)?;
+        }
+    }
+    match links.iter().find(|(_, o)| o.symlink_metadata().is_err()) {
+        Some((t, _)) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("a hard link in the archive points at a missing member: {}", t.display()),
+        )),
+        None => Ok(()),
+    }
 }
 
 /// Removes a failed extraction, read-only folders included.
@@ -551,9 +624,9 @@ pub fn extract_to(
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
-                    Kind::Tar => untar(raw, &staging, None)?,
-                    Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, None)?,
-                    _ => untar(zstd::Decoder::new(raw)?, &staging, None)?,
+                    Kind::Tar => untar(raw, &staging, None)?.0,
+                    Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, None)?.0,
+                    _ => untar(zstd::Decoder::new(raw)?, &staging, None)?.0,
                 }
             }
         };
@@ -604,6 +677,9 @@ fn tar_members<R: Read>(reader: R) -> io::Result<Vec<Member>> {
         let entry = entry?;
         let header = entry.header();
         let path = normalize_member(&entry.path()?)?;
+        if is_apple_double(&path) {
+            continue;
+        }
         let ty = header.entry_type();
         out.push(Member {
             path: path.to_string_lossy().into_owned(),
@@ -688,11 +764,20 @@ pub fn extract_members(
             }
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
-                match kind {
+                let (top, links) = match kind {
                     Kind::Tar => untar(raw, &staging, Some(&select))?,
                     Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, Some(&select))?,
                     _ => untar(zstd::Decoder::new(raw)?, &staging, Some(&select))?,
+                };
+                if !links.is_empty() {
+                    let raw = BufReader::new(File::open(archive)?);
+                    match kind {
+                        Kind::Tar => fill_links(raw, &links)?,
+                        Kind::TarGz => fill_links(flate2::read::GzDecoder::new(raw), &links)?,
+                        _ => fill_links(zstd::Decoder::new(raw)?, &links)?,
+                    }
                 }
+                top
             }
         };
         let mut created = Vec::new();
@@ -755,6 +840,242 @@ mod tests {
         for p in [out.join("pkg/ro"), out.join("top"), picked[0].join("ro")] {
             fs::set_permissions(p, fs::Permissions::from_mode(0o755)).unwrap();
         }
+    }
+
+    fn peak_rss() -> i64 {
+        // SAFETY: getrusage fills the struct it's given.
+        let mut u = unsafe { std::mem::zeroed::<libc::rusage>() };
+        unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut u) };
+        u.ru_maxrss // bytes on macOS
+    }
+
+    /// A zip whose entry `name` holds `len` deflated bytes and is marked as a symlink.
+    fn zip_with_link(path: &Path, name: &str, len: usize) {
+        let mut w = zip::ZipWriter::new(File::create(path).unwrap());
+        w.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        let chunk = vec![b'a'; 1 << 20];
+        let mut left = len;
+        while left > 0 {
+            let n = left.min(chunk.len());
+            w.write_all(&chunk[..n]).unwrap();
+            left -= n;
+        }
+        w.finish().unwrap();
+        // Central directory: made by Unix, external attributes = symlink.
+        let mut bytes = fs::read(path).unwrap();
+        let at = bytes.windows(4).position(|w| w == b"PK\x01\x02").unwrap();
+        bytes[at + 5] = 3;
+        bytes[at + 38..at + 42].copy_from_slice(&(0o120_777u32 << 16).to_le_bytes());
+        fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn a_huge_link_in_a_zip_is_refused_without_reading_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Control: an ordinary link extracts.
+        let small = tmp.path().join("small.zip");
+        zip_with_link(&small, "ok", 5);
+        let out = extract(&small, None, &mut |_| true).unwrap();
+        assert_eq!(fs::read_link(out).unwrap(), Path::new("aaaaa"));
+
+        let bomb = tmp.path().join("bomb.zip");
+        zip_with_link(&bomb, "link", 256 << 20);
+        assert!(fs::metadata(&bomb).unwrap().len() < 2 << 20);
+        let before = peak_rss();
+        let dest = tmp.path().join("picked");
+        fs::create_dir(&dest).unwrap();
+        let r = extract_members(&bomb, &["link".into()], &dest, &mut |_| true);
+        let grew = (peak_rss() - before) >> 20;
+        // Other tests share the process: a loose bound (the whole link was 256 MiB+).
+        assert!(grew < 128, "reading one link took {grew} MiB");
+        assert!(r.is_err_and(|e| e.to_string().contains("too long")));
+        assert_eq!(fs::read_dir(&dest).unwrap().count(), 0);
+
+        // Just past the limit, through a full extraction: refused, nothing left.
+        let long = tmp.path().join("long.zip");
+        zip_with_link(&long, "far", LINK_MAX as usize + 1);
+        assert!(extract(&long, None, &mut |_| true).is_err());
+        let left: Vec<_> = fs::read_dir(tmp.path()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert!(!left.iter().any(|n| n.to_string_lossy().contains("oxextract") || n == "far"), "{left:?}");
+    }
+
+    #[test]
+    fn compressing_the_same_item_twice_at_once_makes_two_archives() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tree(tmp.path());
+        let one = archive_path(std::slice::from_ref(&src), ArchiveFormat::Zip).unwrap();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+        let first = {
+            let (src, one) = (src.clone(), one.clone());
+            std::thread::spawn(move || {
+                let mut once = Some((started_tx, go_rx));
+                compress(&[src], &one, ArchiveFormat::Zip, None, &mut |_| {
+                    // Hold the first job mid-write until the second one is done.
+                    if let Some((tx, rx)) = once.take() {
+                        tx.send(()).unwrap();
+                        rx.recv().unwrap();
+                    }
+                    true
+                })
+            })
+        };
+        started_rx.recv().unwrap();
+        let two = archive_path(std::slice::from_ref(&src), ArchiveFormat::Zip).unwrap();
+        let second = compress(std::slice::from_ref(&src), &two, ArchiveFormat::Zip, None, &mut |_| true);
+        go_tx.send(()).unwrap();
+        let first = first.join().unwrap();
+        assert!(first.is_ok() && second.is_ok(), "first: {first:?}, second: {second:?}");
+        assert_ne!(one, two);
+        for z in [&one, &two] {
+            assert!(zip::ZipArchive::new(File::open(z).unwrap()).unwrap().len() > 2, "{z:?}");
+        }
+
+        // Both pick one name (before either started): the second fails, the
+        // first's temp file stays and it finishes.
+        fs::remove_file(&two).unwrap();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+        let first = {
+            let (src, two) = (src.clone(), two.clone());
+            std::thread::spawn(move || {
+                let mut once = Some((started_tx, go_rx));
+                compress(&[src], &two, ArchiveFormat::Zip, None, &mut |_| {
+                    if let Some((tx, rx)) = once.take() {
+                        tx.send(()).unwrap();
+                        rx.recv().unwrap();
+                    }
+                    true
+                })
+            })
+        };
+        started_rx.recv().unwrap();
+        let clash = compress(std::slice::from_ref(&src), &two, ArchiveFormat::Zip, None, &mut |_| false);
+        assert!(clash.is_err());
+        assert!(part_file(&two).exists(), "the running job's temp file was removed");
+        // An item made at the name meanwhile is never replaced.
+        fs::write(&two, "made meanwhile").unwrap();
+        go_tx.send(()).unwrap();
+        assert_eq!(first.join().unwrap().map_err(|e| e.kind()), Err(io::ErrorKind::AlreadyExists));
+        assert_eq!(fs::read(&two).unwrap(), b"made meanwhile");
+        assert!(!part_file(&two).exists());
+    }
+
+    /// `pkg/a` and its hard link `pkg/b`, as /usr/bin/tar writes them.
+    fn tar_with_hard_link(path: &Path) {
+        let mut b = tar::Builder::new(File::create(path).unwrap());
+        let mut h = tar::Header::new_ustar();
+        h.set_entry_type(tar::EntryType::Directory);
+        h.set_mode(0o755);
+        h.set_size(0);
+        b.append_data(&mut h, "pkg/", std::io::empty()).unwrap();
+        let mut h = tar::Header::new_ustar();
+        h.set_mode(0o644);
+        h.set_size(6);
+        b.append_data(&mut h, "pkg/a", &b"hello\n"[..]).unwrap();
+        let mut h = tar::Header::new_ustar();
+        h.set_entry_type(tar::EntryType::Link);
+        h.set_mode(0o644);
+        h.set_size(0);
+        b.append_link(&mut h, "pkg/b", "pkg/a").unwrap();
+        b.finish().unwrap();
+    }
+
+    #[test]
+    fn hard_links_in_a_tar_are_copied_out_too() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tar_path = tmp.path().join("pkg.tar");
+        tar_with_hard_link(&tar_path);
+        // Control: a full extraction has both.
+        let out = extract(&tar_path, None, &mut |_| true).unwrap();
+        assert_eq!(fs::read(out.join("b")).unwrap(), b"hello\n");
+
+        let dest = tmp.path().join("picked");
+        fs::create_dir(&dest).unwrap();
+        let got = extract_members(&tar_path, &["pkg".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(fs::read(got[0].join("a")).unwrap(), b"hello\n");
+        assert_eq!(fs::read(got[0].join("b")).map_err(|e| e.kind()), Ok(b"hello\n".to_vec()), "pkg/b");
+        // Only the link, without what it points at.
+        let got = extract_members(&tar_path, &["pkg/b".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(got, [dest.join("b")]);
+        assert_eq!(fs::read(dest.join("b")).unwrap(), b"hello\n");
+        // Picked together: one file, two names.
+        let picked = dest.join("pkg");
+        assert_eq!(
+            fs::metadata(picked.join("a")).unwrap().ino(),
+            fs::metadata(picked.join("b")).unwrap().ino()
+        );
+
+        // Compressed tars too.
+        let gz = tmp.path().join("pkg.tar.gz");
+        let mut enc = flate2::write::GzEncoder::new(File::create(&gz).unwrap(), flate2::Compression::fast());
+        io::copy(&mut File::open(&tar_path).unwrap(), &mut enc).unwrap();
+        enc.finish().unwrap();
+        let got = extract_members(&gz, &["pkg/b".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(fs::read(&got[0]).unwrap(), b"hello\n");
+
+        // A link to a member that isn't there: an error, nothing left behind.
+        let broken = tmp.path().join("broken.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&broken).unwrap());
+            let mut h = tar::Header::new_ustar();
+            h.set_entry_type(tar::EntryType::Link);
+            h.set_size(0);
+            b.append_link(&mut h, "x", "nowhere").unwrap();
+            b.finish().unwrap();
+        }
+        let empty = tmp.path().join("empty");
+        fs::create_dir(&empty).unwrap();
+        assert!(extract_members(&broken, &["x".into()], &empty, &mut |_| true).is_err());
+        assert_eq!(fs::read_dir(&empty).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn mac_tar_metadata_files_are_left_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tar_path = tmp.path().join("notes.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&tar_path).unwrap());
+            for (name, data) in [("._notes.txt", &b"\x00\x05\x16\x07meta"[..]), ("notes.txt", &b"text"[..])] {
+                let mut h = tar::Header::new_ustar();
+                h.set_mode(0o644);
+                h.set_size(data.len() as u64);
+                b.append_data(&mut h, name, data).unwrap();
+            }
+            b.finish().unwrap();
+        }
+        let names = |m: Vec<Member>| m.into_iter().map(|m| m.path).collect::<Vec<_>>();
+        assert_eq!(names(members(&tar_path).unwrap()), ["notes.txt"]);
+        // A single file lands as itself, not in a "notes" folder.
+        let out = extract(&tar_path, None, &mut |_| true).unwrap();
+        assert_eq!(out, tmp.path().join("notes.txt"));
+        assert_eq!(fs::read(&out).unwrap(), b"text");
+        assert!(!tmp.path().join("._notes.txt").exists());
+
+        // A folder with its own and its files' metadata: lands as the folder alone.
+        let pkg = tmp.path().join("pkg.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&pkg).unwrap());
+            for (name, data) in [
+                ("._pkg", &b"\x00\x05\x16\x07"[..]),
+                ("pkg/._a", &b"\x00\x05\x16\x07"[..]),
+                ("pkg/a", &b"A"[..]),
+            ] {
+                let mut h = tar::Header::new_ustar();
+                h.set_mode(0o644);
+                h.set_size(data.len() as u64);
+                b.append_data(&mut h, name, data).unwrap();
+            }
+            b.finish().unwrap();
+        }
+        let out = extract(&pkg, None, &mut |_| true).unwrap();
+        assert_eq!(out, tmp.path().join("pkg"));
+        let inside: Vec<_> = fs::read_dir(&out).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(inside, ["a"]);
+        let dest = tmp.path().join("picked");
+        fs::create_dir(&dest).unwrap();
+        extract_members(&pkg, &["pkg".into()], &dest, &mut |_| true).unwrap();
+        assert!(!dest.join("pkg/._a").exists());
     }
 
     fn tree(root: &Path) -> PathBuf {

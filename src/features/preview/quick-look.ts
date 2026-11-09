@@ -8,6 +8,8 @@ import { getActiveTab, useWorkspace } from "@/stores/workspace-store";
 let visible = false;
 /** This window opened the panel (it's shared by all windows). */
 let owner = false;
+/** Bumped by every request to show items; an older one finishing late is dropped. */
+let latest = 0;
 
 /** Selected paths of the active pane in on-screen order, and the focused one's index. */
 function currentItems(): { paths: string[]; index: number } {
@@ -23,18 +25,38 @@ export function toggleQuickLook(): void {
     void commands.quickLookClose();
     return;
   }
-  const { paths, index } = currentItems();
+  const { paths } = currentItems();
   if (paths.length === 0) return;
   owner = true;
   void (async () => {
     if (!(await unlockArchiveOf(paths))) return;
-    await commands.quickLook(await realPaths(paths), index, true);
+    const items = await currentRealItems();
+    if (items) await commands.quickLook(items.real, items.index, true);
   })();
 }
 
 /** Items inside an archive or on a server are copied to a temporary folder for Quick Look. */
 async function realPaths(paths: readonly string[]): Promise<string[]> {
   return Promise.all(paths.map((p) => materialize(p).catch(() => p)));
+}
+
+/**
+ * The selection as real files, once copied. Copies finish in any order: null
+ * when a newer request took over, and copied again when the selection moved
+ * meanwhile (so the panel never lands on an item that is no longer selected).
+ */
+async function currentRealItems(): Promise<{ real: string[]; index: number } | null> {
+  const request = ++latest;
+  for (;;) {
+    const { paths } = currentItems();
+    if (paths.length === 0) return null;
+    const real = await realPaths(paths);
+    if (request !== latest) return null;
+    const now = currentItems();
+    if (now.paths.length === paths.length && now.paths.every((p, i) => p === paths[i])) {
+      return { real, index: now.index };
+    }
+  }
 }
 
 /**
@@ -46,8 +68,7 @@ export function installQuickLook(): () => void {
     if (!visible || !owner) return;
     const pane = s.activePane;
     if (s.panes[pane] === prev.panes[pane] && pane === prev.activePane) return;
-    const { paths, index } = currentItems();
-    if (paths.length > 0) void realPaths(paths).then((real) => commands.quickLook(real, index, false));
+    void currentRealItems().then((items) => items && commands.quickLook(items.real, items.index, false));
   });
   const unlistenState = events.quickLookState.listen((e) => {
     visible = e.payload.visible;

@@ -144,7 +144,14 @@ function ConnectionForm({
   };
 
   const submit = async () => {
+    const sameServer =
+      c.kind === initial.kind &&
+      c.host === initial.host &&
+      c.user === initial.user &&
+      c.bucket === initial.bucket;
     if (secret) await commands.remoteSaveSecret(c.id, secret);
+    // A stored password only goes to the server it was typed for.
+    else if (saved && !sameServer) await commands.remoteSaveSecret(c.id, "");
     // S3 needs no host (AWS): the bucket names it then.
     onSave({ ...c, name: c.name.trim() || c.host.trim() || c.bucket.trim() || c.kind.toUpperCase() });
   };
