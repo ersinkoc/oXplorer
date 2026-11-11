@@ -871,8 +871,8 @@ impl Runner<'_> {
 
     /// Servers have no Trash, so uploads can't be undone; the pane re-lists the folder.
     fn upload(&mut self, sources: &[PathBuf], dest: &str) {
-        let sizes: Vec<(u64, u32)> = sources.iter().map(|s| tree_size(s)).collect();
-        self.r.planned(sizes.iter().map(|s| s.0).sum(), sizes.iter().map(|s| s.1).sum());
+        let (bytes, items) = crate::remote::upload_size(sources);
+        self.r.planned(bytes, items);
         let result = {
             let r = &mut *self.r;
             let mut done = 0;
@@ -1404,6 +1404,48 @@ mod tests {
         assert_eq!(out.failures.len(), 1);
         assert!(!victim.exists());
         assert!(out.undo.is_none(), "permanent delete has no undo");
+    }
+
+    #[test]
+    fn upload_progress_counts_what_links_send() {
+        use std::os::unix::fs::symlink;
+        let server = tempfile::tempdir().unwrap();
+        let op = opendal::Operator::new(opendal::services::Fs::default().root(&s(server.path()))).unwrap();
+        crate::remote::register_test_operator("run-up", op);
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("pack");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("plain.txt"), vec![1u8; 1000]).unwrap();
+        fs::write(tmp.path().join("big.bin"), vec![2u8; 5000]).unwrap();
+        symlink("../big.bin", src.join("big link.bin")).unwrap();
+
+        let mut r = Fake::new(ConflictChoice::Skip);
+        run(JobSpec::Upload { sources: vec![s(&src)], dest_dir: "remote:run-up/".into() }, &mut r).unwrap();
+        assert_eq!(fs::read(server.path().join("pack/big link.bin")).unwrap().len(), 5000);
+        println!("EXPECTED: planned 6000 bytes, done 6000 bytes");
+        println!("ACTUAL:   planned {} bytes, done {} bytes", r.planned.0, r.last.0);
+        // Control: what was sent is all there.
+        assert_eq!(r.last.0, 6000);
+        assert_eq!(r.planned.0, r.last.0, "progress ran past the planned total");
+
+        // A linked folder counts its contents; a broken link and a link back up count nothing.
+        fs::create_dir_all(tmp.path().join("far")).unwrap();
+        fs::write(tmp.path().join("far/x.bin"), vec![3u8; 700]).unwrap();
+        let tree = tmp.path().join("tree");
+        fs::create_dir_all(tree.join("sub")).unwrap();
+        fs::write(tree.join("sub/y.bin"), vec![4u8; 300]).unwrap();
+        symlink("../far", tree.join("far")).unwrap();
+        symlink("..", tree.join("sub/up")).unwrap();
+        symlink("missing", tree.join("broken")).unwrap();
+        let mut r = Fake::new(ConflictChoice::Skip);
+        run(JobSpec::Upload { sources: vec![s(&tree)], dest_dir: "remote:run-up/".into() }, &mut r).unwrap();
+        assert_eq!(r.planned, (1000, 5), "tree, sub, sub/y.bin, far, far/x.bin");
+        assert_eq!(r.last.0, 1000);
+        // Several sources add up.
+        let mut r = Fake::new(ConflictChoice::Skip);
+        let two = vec![s(&tmp.path().join("big.bin")), s(&tree.join("sub/y.bin"))];
+        run(JobSpec::Upload { sources: two, dest_dir: "remote:run-up/".into() }, &mut r).unwrap();
+        assert_eq!((r.planned.0, r.last.0), (5300, 5300));
     }
 }
 

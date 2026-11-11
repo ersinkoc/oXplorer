@@ -312,7 +312,7 @@ fn unzip(
     select: Select,
 ) -> io::Result<TopModes> {
     let mut zip = zip::ZipArchive::new(BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
-    let mut dirs: Vec<(PathBuf, u32)> = Vec::new();
+    let mut dirs: Vec<(PathBuf, DirMeta)> = Vec::new();
     for i in 0..zip.len() {
         let entry = match password {
             Some(pw) => zip.by_index_decrypt(i, pw.as_bytes()),
@@ -333,9 +333,8 @@ fn unzip(
         let out = safe_join(staging, &rel)?;
         if entry.is_dir() {
             fs::create_dir_all(&out)?;
-            if let Some(mode) = entry.unix_mode() {
-                dirs.push((out, mode & 0o777));
-            }
+            let modified = entry.last_modified().and_then(zip_to_system_time);
+            dirs.push((out, DirMeta { mode: entry.unix_mode().map(|m| m & 0o777), modified }));
             continue;
         }
         if let Some(parent) = out.parent() {
@@ -441,7 +440,31 @@ fn zip_to_system_time(t: zip::DateTime) -> Option<SystemTime> {
 /// Folder modes from a tar that still have to be applied, by name of a folder
 /// right inside the staging folder (the caller moves those out first: a
 /// read-only folder can't be moved to another parent).
-type TopModes = Vec<(std::ffi::OsString, u32)>;
+type TopModes = Vec<(std::ffi::OsString, DirMeta)>;
+
+/// Extracted folders still owner-writable, for `lock_dirs` once nothing more is
+/// written into them.
+type Dirs = Vec<(PathBuf, DirMeta)>;
+
+/// A folder's mode and date in the archive, given to it once its contents are in
+/// (writing them changes the folder's date).
+#[derive(Clone, Copy)]
+struct DirMeta {
+    mode: Option<u32>,
+    modified: Option<SystemTime>,
+}
+
+impl DirMeta {
+    fn apply(self, dir: &Path) -> io::Result<()> {
+        if let Some(t) = self.modified {
+            let _ = File::open(dir).and_then(|f| f.set_modified(t));
+        }
+        match self.mode {
+            Some(mode) => fs::set_permissions(dir, fs::Permissions::from_mode(mode)),
+            None => Ok(()),
+        }
+    }
+}
 
 /// Hard links picked without what they point at: (target member, where the
 /// link goes). A second pass over the tar writes the target's content there.
@@ -455,13 +478,13 @@ fn is_apple_double(path: &Path) -> bool {
 
 /// Folders are written owner-writable and get their real mode once their
 /// contents are in, so read-only folders in an archive still extract.
-fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<(TopModes, Links)> {
+fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Result<(Dirs, Links)> {
     let mut tar = tar::Archive::new(reader);
     tar.set_preserve_permissions(true);
     tar.set_preserve_mtime(true);
     tar.set_unpack_xattrs(false);
     tar.set_overwrite(false);
-    let mut dirs: Vec<(PathBuf, u32)> = Vec::new();
+    let mut dirs: Vec<(PathBuf, DirMeta)> = Vec::new();
     let mut links = Links::new();
     for entry in tar.entries()? {
         let mut entry = entry?;
@@ -511,22 +534,23 @@ fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Resu
         };
         if is_dir && out.is_dir() {
             fs::set_permissions(&out, fs::Permissions::from_mode(mode | 0o700))?;
-            dirs.push((out, mode));
+            let modified = entry.header().mtime().ok().map(|s| UNIX_EPOCH + Duration::from_secs(s));
+            dirs.push((out, DirMeta { mode: Some(mode), modified }));
         }
     }
-    Ok((lock_dirs(dirs, staging)?, links))
+    Ok((dirs, links))
 }
 
-/// Gives extracted folders their mode once their contents are in: deepest first,
-/// so a parent is locked only after its children are done. Folders right inside
-/// `staging` are left to the caller (TopModes).
-fn lock_dirs(mut dirs: Vec<(PathBuf, u32)>, staging: &Path) -> io::Result<TopModes> {
+/// Gives extracted folders their mode and date once their contents are in: deepest
+/// first, so a parent is locked only after its children are done. Folders right
+/// inside `staging` are left to the caller (TopModes): moving them changes their date.
+fn lock_dirs(mut dirs: Vec<(PathBuf, DirMeta)>, staging: &Path) -> io::Result<TopModes> {
     dirs.sort_by_key(|(p, _)| std::cmp::Reverse(p.components().count()));
     let mut top = TopModes::new();
-    for (p, mode) in dirs {
+    for (p, meta) in dirs {
         match (p.parent() == Some(staging), p.file_name()) {
-            (true, Some(name)) => top.push((name.to_owned(), mode)),
-            _ => fs::set_permissions(&p, fs::Permissions::from_mode(mode))?,
+            (true, Some(name)) => top.push((name.to_owned(), meta)),
+            _ => meta.apply(&p)?,
         }
     }
     Ok(top)
@@ -572,11 +596,11 @@ pub(crate) fn remove_staging(staging: &Path) {
     let _ = fs::remove_dir_all(staging);
 }
 
-/// Applies the modes `untar` left for later, once each folder is at `place(name)`.
+/// Applies the modes and dates left for later, once each folder is at `place(name)`.
 fn apply_top_modes(top: &TopModes, place: impl Fn(&std::ffi::OsStr) -> Option<PathBuf>) {
-    for (name, mode) in top {
+    for (name, meta) in top {
         if let Some(p) = place(name) {
-            let _ = fs::set_permissions(p, fs::Permissions::from_mode(*mode));
+            let _ = meta.apply(&p);
         }
     }
 }
@@ -631,9 +655,11 @@ pub fn extract_to(
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
-                    Kind::Tar => untar(raw, &staging, None)?.0,
-                    Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, None)?.0,
-                    _ => untar(zstd::Decoder::new(raw)?, &staging, None)?.0,
+                    Kind::Tar => lock_dirs(untar(raw, &staging, None)?.0, &staging)?,
+                    Kind::TarGz => {
+                        lock_dirs(untar(flate2::read::GzDecoder::new(raw), &staging, None)?.0, &staging)?
+                    }
+                    _ => lock_dirs(untar(zstd::Decoder::new(raw)?, &staging, None)?.0, &staging)?,
                 }
             }
         };
@@ -768,7 +794,7 @@ pub fn extract_members(
             Kind::Zip => unzip(archive, &staging, known_password(archive).as_deref(), tick, &select)?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
-                let (top, links) = match kind {
+                let (dirs, links) = match kind {
                     Kind::Tar => untar(raw, &staging, Some(&select))?,
                     Kind::TarGz => untar(flate2::read::GzDecoder::new(raw), &staging, Some(&select))?,
                     _ => untar(zstd::Decoder::new(raw)?, &staging, Some(&select))?,
@@ -781,7 +807,8 @@ pub fn extract_members(
                         _ => fill_links(zstd::Decoder::new(raw)?, &links)?,
                     }
                 }
-                top
+                // Only now: the links above may go into folders that are read-only.
+                lock_dirs(dirs, &staging)?
             }
         };
         let mut created = Vec::new();
@@ -1360,5 +1387,154 @@ mod tests {
         remove_staging(&staging);
         assert!(!staging.exists());
         fs::set_permissions(dest.join("ro"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn extracted_folders_keep_their_dates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let when = 1_577_934_244; // 2020-01-02 03:04:04 UTC (even: zip has 2 s steps)
+        let zip_path = tmp.path().join("dated.zip");
+        {
+            let mut w = zip::ZipWriter::new(File::create(&zip_path).unwrap());
+            let t = zip::DateTime::from_date_and_time(2020, 1, 2, 3, 4, 4).unwrap();
+            let opts = zip::write::SimpleFileOptions::default().last_modified_time(t);
+            w.add_directory("zdir/", opts).unwrap();
+            w.add_directory("zdir/inner/", opts).unwrap();
+            w.start_file("zdir/inner/f.txt", opts).unwrap();
+            w.write_all(b"f").unwrap();
+            w.finish().unwrap();
+        }
+        let tar_path = tmp.path().join("dated.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&tar_path).unwrap());
+            for path in ["tdir/", "tdir/inner/"] {
+                let mut h = tar::Header::new_gnu();
+                h.set_entry_type(tar::EntryType::Directory);
+                h.set_mode(0o755);
+                h.set_mtime(when);
+                h.set_size(0);
+                b.append_data(&mut h, path, std::io::empty()).unwrap();
+            }
+            let mut h = tar::Header::new_gnu();
+            h.set_mode(0o644);
+            h.set_mtime(when);
+            h.set_size(1);
+            b.append_data(&mut h, "tdir/inner/f.txt", &b"f"[..]).unwrap();
+            b.finish().unwrap();
+        }
+        let secs = |p: &Path| {
+            fs::metadata(p)
+                .unwrap()
+                .modified()
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        };
+        let z = extract(&zip_path, None, &mut |_| true).unwrap();
+        let t = extract(&tar_path, None, &mut |_| true).unwrap();
+        // Zip times are local time; compare with what the file inside got.
+        let zt = secs(&z.join("inner/f.txt"));
+        let got = [secs(&z), secs(&z.join("inner")), secs(&t), secs(&t.join("inner"))];
+        println!("EXPECTED: [{zt}, {zt}, {when}, {when}]");
+        println!("ACTUAL:   {got:?}");
+        // Control: files keep their dates.
+        assert_eq!(secs(&t.join("inner/f.txt")), when);
+        assert_eq!(got, [zt, zt, when, when]);
+
+        // Picked out while browsing, and a read-only folder: date and mode both kept.
+        let dest = tmp.path().join("picked");
+        fs::create_dir(&dest).unwrap();
+        extract_members(&tar_path, &["tdir/inner".into()], &dest, &mut |_| true).unwrap();
+        extract_members(&zip_path, &["zdir".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(
+            (secs(&dest.join("inner")), secs(&dest.join("zdir")), secs(&dest.join("zdir/inner"))),
+            (when, zt, zt)
+        );
+        let ro_tar = tmp.path().join("ro.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&ro_tar).unwrap());
+            let mut h = tar::Header::new_gnu();
+            h.set_entry_type(tar::EntryType::Directory);
+            h.set_mode(0o555);
+            h.set_mtime(when);
+            h.set_size(0);
+            b.append_data(&mut h, "a/locked/", std::io::empty()).unwrap();
+            let mut h = tar::Header::new_gnu();
+            h.set_mode(0o644);
+            h.set_mtime(when);
+            h.set_size(1);
+            b.append_data(&mut h, "a/locked/g.txt", &b"g"[..]).unwrap();
+            b.append_data(&mut h, "b.txt", &b"b"[..]).unwrap();
+            b.finish().unwrap();
+        }
+        // Two items at the top: they land in a folder named after the archive.
+        let out = extract(&ro_tar, None, &mut |_| true).unwrap();
+        let locked = out.join("a/locked");
+        let m = fs::metadata(&locked).unwrap().permissions().mode() & 0o777;
+        assert_eq!((secs(&locked), m), (when, 0o555));
+        fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn hard_links_into_read_only_folders_are_picked_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tar_path = tmp.path().join("pkg.tar");
+        {
+            let mut b = tar::Builder::new(File::create(&tar_path).unwrap());
+            let mut h = tar::Header::new_gnu();
+            h.set_mode(0o644);
+            h.set_size(4);
+            b.append_data(&mut h, "pkg/a.txt", &b"data"[..]).unwrap();
+            for (path, mode) in [("pkg/x/", 0o755), ("pkg/x/ro/", 0o555)] {
+                let mut h = tar::Header::new_gnu();
+                h.set_entry_type(tar::EntryType::Directory);
+                h.set_mode(mode);
+                h.set_size(0);
+                b.append_data(&mut h, path, std::io::empty()).unwrap();
+            }
+            let mut h = tar::Header::new_gnu();
+            h.set_entry_type(tar::EntryType::Link);
+            h.set_mode(0o644);
+            h.set_size(0);
+            b.append_link(&mut h, "pkg/x/ro/b.txt", "pkg/a.txt").unwrap();
+            b.finish().unwrap();
+        }
+        // Control: the whole package (the target comes out in the same pass).
+        let all = tmp.path().join("all");
+        fs::create_dir(&all).unwrap();
+        extract_members(&tar_path, &["pkg".into()], &all, &mut |_| true).unwrap();
+        assert_eq!(fs::read_to_string(all.join("pkg/x/ro/b.txt")).unwrap(), "data");
+        fs::set_permissions(all.join("pkg/x/ro"), fs::Permissions::from_mode(0o755)).unwrap();
+        // Picked without the target: the link is filled in a second pass, inside a
+        // folder that is read-only in the archive.
+        let dest = tmp.path().join("out");
+        fs::create_dir(&dest).unwrap();
+        let r = extract_members(&tar_path, &["pkg/x".into()], &dest, &mut |_| true);
+        let got =
+            r.as_ref().map(|_| fs::read_to_string(dest.join("x/ro/b.txt")).ok()).map_err(ToString::to_string);
+        println!("EXPECTED: Ok(Some(\"data\")), ro still 0o555");
+        println!("ACTUAL:   {got:?}");
+        if dest.join("x/ro").exists() {
+            let m = fs::metadata(dest.join("x/ro")).unwrap().permissions().mode() & 0o777;
+            println!("ACTUAL ro mode: {m:#o}");
+            fs::set_permissions(dest.join("x/ro"), fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert_eq!(got, Ok(Some("data".to_owned())));
+
+        // The folder is still read-only afterwards, and gzip goes the same way.
+        let gz = tmp.path().join("pkg.tar.gz");
+        {
+            let mut e =
+                flate2::write::GzEncoder::new(File::create(&gz).unwrap(), flate2::Compression::fast());
+            std::io::copy(&mut File::open(&tar_path).unwrap(), &mut e).unwrap();
+            e.finish().unwrap();
+        }
+        let dest = tmp.path().join("out gz");
+        fs::create_dir(&dest).unwrap();
+        extract_members(&gz, &["pkg/x".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(fs::read_to_string(dest.join("x/ro/b.txt")).unwrap(), "data");
+        assert_eq!(fs::metadata(dest.join("x/ro")).unwrap().permissions().mode() & 0o777, 0o555);
+        fs::set_permissions(dest.join("x/ro"), fs::Permissions::from_mode(0o755)).unwrap();
     }
 }

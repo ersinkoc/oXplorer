@@ -610,6 +610,19 @@ fn walk(src: &Path) -> std::io::Result<Vec<(PathBuf, String, bool)>> {
     Ok(out)
 }
 
+/// Bytes and items an upload sends, for the progress bar: links count as what
+/// they point at, as `walk` sends them.
+pub fn upload_size(sources: &[PathBuf]) -> (u64, u32) {
+    let mut total = (0, 0);
+    for (path, _, is_dir) in sources.iter().flat_map(|s| walk(s).unwrap_or_default()) {
+        total.1 += 1;
+        if !is_dir {
+            total.0 += std::fs::metadata(&path).map_or(0, |m| m.len());
+        }
+    }
+    total
+}
+
 /// Bytes a transfer will move, for the progress bar.
 pub async fn remote_size(sources: &[String]) -> u64 {
     let mut total = 0;
