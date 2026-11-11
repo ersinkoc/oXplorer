@@ -4,7 +4,7 @@ import { goToTypedPath, navigateTo } from "@/commands/navigation";
 import { listCommands, runCommand } from "@/commands/registry";
 import { LOCATION_NAMES } from "@/features/sidebar/sidebar";
 import { Dialog } from "@/features/ui/dialog";
-import { t, useT } from "@/i18n";
+import { msg, t, useT } from "@/i18n";
 import { fuzzyScore } from "@/lib/fuzzy";
 import { basename, tildify } from "@/lib/path";
 import { useApp } from "@/stores/app-store";
@@ -23,8 +23,14 @@ interface PaletteItem {
 const MAX_ITEMS = 50;
 /** Internal or positional commands that make no sense to pick from a list. */
 const HIDDEN_COMMANDS = /^(tab\.goto\.|palette\.)/;
+/** Menu titles that only read right under their menu (View ▸ as List). */
+const PALETTE_TITLES: Record<string, string> = {
+  "view.asList": msg("View as List"),
+  "view.asIcons": msg("View as Icons"),
+  "view.asColumns": msg("View as Columns"),
+};
 
-function allItems(): PaletteItem[] {
+export function allItems(): PaletteItem[] {
   const { home, locations, volumes } = useApp.getState();
   const items: PaletteItem[] = [];
   const seen = new Set<string>();
@@ -46,13 +52,14 @@ function allItems(): PaletteItem[] {
   for (const v of volumes) folder(v.mountPoint, "volume", v.name);
   for (const c of listCommands()) {
     if (HIDDEN_COMMANDS.test(c.id)) continue;
-    const title = t(c.title);
+    const english = PALETTE_TITLES[c.id] ?? c.title;
+    const title = t(english);
     items.push({
       key: `cmd:${c.id}`,
       kind: "command",
       title,
-      // English titles stay findable when the UI is in another language.
-      match: title === c.title ? title : `${title} ${c.title}`,
+      // English titles (and the menu's own) stay findable when the UI is in another language.
+      match: [...new Set([title, english, t(c.title), c.title])].join(" "),
       run: () => runCommand(c.id),
     });
   }

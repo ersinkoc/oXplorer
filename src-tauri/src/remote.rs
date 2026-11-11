@@ -387,13 +387,26 @@ pub async fn remote_delete(paths: Vec<String>) -> AppResult<()> {
 #[tauri::command]
 #[specta::specta]
 pub async fn remote_open_member(app: AppHandle, path: String) -> AppResult<String> {
-    let (op, inner) = resolve(&path)?;
     let base = app.path().app_cache_dir().map_err(|e| AppError::Io { path: None, message: e.to_string() })?;
+    open_member(&base, &path, &mut |_| true).await
+}
+
+async fn open_member<F: FnMut(u64) -> bool>(base: &Path, path: &str, tick: &mut F) -> AppResult<String> {
+    let (op, inner) = resolve(path)?;
     let name = inner.rsplit('/').next().unwrap_or("file").to_owned();
-    let dir = base.join("remote-open").join(id_of(&path)).join(inner.replace('/', "_"));
+    let dir = base.join("remote-open").join(id_of(path)).join(inner.replace('/', "_"));
     std::fs::create_dir_all(&dir).map_err(|e| AppError::from_io(&e, &dir))?;
     let out = dir.join(&name);
-    download_file(&op, &inner, &out, &mut |_| true).await.map_err(|e| e.into_app(&path))?;
+    // Into a name of its own, then over `out` in one step: whoever opened this
+    // file a moment ago may still be reading the copy there.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let part = dir.join(format!(".{name}.{n}.oxpart"));
+    download_file(&op, &inner, &part, tick).await.map_err(|e| e.into_app(path))?;
+    std::fs::rename(&part, &out).map_err(|e| {
+        let _ = std::fs::remove_file(&part);
+        AppError::from_io(&e, &out)
+    })?;
     Ok(out.to_string_lossy().into_owned())
 }
 
@@ -558,26 +571,42 @@ async fn send_file<F: FnMut(u64) -> bool>(
 }
 
 /// `src` and everything below it: (path, path relative to `src`, is a folder).
+/// A server can't hold links, so a link sends what it points at; a broken link
+/// inside a folder is left out, and a link to a folder it sits in isn't entered again.
 fn walk(src: &Path) -> std::io::Result<Vec<(PathBuf, String, bool)>> {
-    let mut out = Vec::new();
-    fn go(p: &Path, rel: String, out: &mut Vec<(PathBuf, String, bool)>) -> std::io::Result<()> {
-        let meta = std::fs::symlink_metadata(p)?;
-        if meta.file_type().is_symlink() {
+    use std::os::unix::fs::MetadataExt as _;
+    type Out = Vec<(PathBuf, String, bool)>;
+    fn go(p: &Path, rel: String, above: &mut Vec<(u64, u64)>, out: &mut Out) -> std::io::Result<()> {
+        let meta = match std::fs::metadata(p) {
+            Ok(m) => m,
+            Err(e) if !rel.is_empty() && std::fs::symlink_metadata(p).is_ok_and(|m| m.is_symlink()) => {
+                log::warn!("upload: left out the broken link {} ({e})", p.display());
+                return Ok(());
+            }
+            Err(e) => return Err(e),
+        };
+        if !meta.is_dir() {
+            out.push((p.to_path_buf(), rel, false));
             return Ok(());
         }
-        out.push((p.to_path_buf(), rel.clone(), meta.is_dir()));
-        if meta.is_dir() {
-            for e in std::fs::read_dir(p)?.filter_map(Result::ok) {
-                let name = e.file_name().to_string_lossy().into_owned();
-                if name == ".DS_Store" {
-                    continue;
-                }
-                go(&e.path(), if rel.is_empty() { name } else { format!("{rel}/{name}") }, out)?;
-            }
+        let id = (meta.dev(), meta.ino());
+        if above.contains(&id) {
+            return Ok(());
         }
+        out.push((p.to_path_buf(), rel.clone(), true));
+        above.push(id);
+        for e in std::fs::read_dir(p)?.filter_map(Result::ok) {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name == ".DS_Store" {
+                continue;
+            }
+            go(&e.path(), if rel.is_empty() { name } else { format!("{rel}/{name}") }, above, out)?;
+        }
+        above.pop();
         Ok(())
     }
-    go(src, String::new(), &mut out)?;
+    let mut out = Vec::new();
+    go(src, String::new(), &mut Vec::new(), &mut out)?;
     Ok(out)
 }
 
@@ -904,5 +933,117 @@ mod tests {
     fn rejects_traversal() {
         assert!(resolve("remote:x/../etc").is_err());
         assert!(resolve("/plain").is_err());
+    }
+
+    #[test]
+    fn linked_items_are_uploaded_as_what_they_point_at() {
+        use std::os::unix::fs::symlink;
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t8");
+            let s = server.path();
+            let local = tempfile::tempdir().unwrap();
+            let l = local.path();
+            std::fs::write(l.join("real.txt"), "data").unwrap();
+            std::fs::create_dir_all(l.join("pack")).unwrap();
+            std::fs::write(l.join("pack/plain.txt"), "plain").unwrap();
+            symlink("../real.txt", l.join("pack/link.txt")).unwrap();
+            symlink("real.txt", l.join("alias.txt")).unwrap();
+
+            let up = upload(&[l.join("pack"), l.join("alias.txt")], "remote:t8/", &mut |_| true)
+                .await
+                .ok()
+                .unwrap();
+            // Control: a plain file inside the folder.
+            assert_eq!(std::fs::read_to_string(s.join("pack/plain.txt")).unwrap(), "plain");
+            let got = |p: &str| std::fs::read_to_string(s.join(p)).ok();
+            println!("EXPECTED: pack/link.txt Some(\"data\"), alias.txt Some(\"data\")");
+            println!("ACTUAL:   pack/link.txt {:?}, alias.txt {:?}", got("pack/link.txt"), got("alias.txt"));
+            assert_eq!(got("pack/link.txt").as_deref(), Some("data"), "a linked file was left out");
+            assert_eq!(
+                got("alias.txt").as_deref(),
+                Some("data"),
+                "a link chosen itself was reported but not sent"
+            );
+            assert_eq!(up, ["remote:t8/pack", "remote:t8/alias.txt"]);
+
+            // A linked folder sends its contents; a link to a folder it sits in isn't
+            // entered again; a broken link inside is left out.
+            std::fs::create_dir_all(l.join("elsewhere")).unwrap();
+            std::fs::write(l.join("elsewhere/x.txt"), "x").unwrap();
+            std::fs::create_dir_all(l.join("tree/sub")).unwrap();
+            symlink("../elsewhere", l.join("tree/far")).unwrap();
+            symlink("..", l.join("tree/sub/up")).unwrap();
+            symlink("missing.txt", l.join("tree/broken.txt")).unwrap();
+            let up = upload(&[l.join("tree")], "remote:t8/", &mut |_| true).await.ok().unwrap();
+            assert_eq!(up, ["remote:t8/tree"]);
+            assert_eq!(std::fs::read_to_string(s.join("tree/far/x.txt")).unwrap(), "x");
+            assert!(s.join("tree/sub").is_dir());
+            assert!(!s.join("tree/sub/up").exists(), "a link back up was entered again");
+            assert!(!s.join("tree/broken.txt").exists());
+            // A broken link chosen itself is an error, not an empty success.
+            symlink("gone.txt", l.join("dangling.txt")).unwrap();
+            let r = upload(&[l.join("dangling.txt")], "remote:t8/", &mut |_| true).await;
+            assert!(matches!(r, Err(TransferError::Local(..))));
+            assert!(!s.join("dangling.txt").exists());
+        });
+    }
+
+    #[test]
+    fn opening_a_server_file_again_leaves_the_copy_in_use_alone() {
+        tauri::async_runtime::block_on(async {
+            let server = fake_remote("t9");
+            let size = 9 << 20;
+            std::fs::write(server.path().join("movie.bin"), vec![5u8; size]).unwrap();
+            std::fs::write(server.path().join("other.txt"), "other").unwrap();
+            let cache = tempfile::tempdir().unwrap();
+            let first = open_member(cache.path(), "remote:t9/movie.bin", &mut |_| true).await.unwrap();
+            // Control: another file opens to its own copy.
+            let other = open_member(cache.path(), "remote:t9/other.txt", &mut |_| true).await.unwrap();
+            assert_eq!(std::fs::read_to_string(other).unwrap(), "other");
+
+            // Opened again (preview pane and Quick Look at once) and stopped or failed
+            // after the first chunk: the copy the first caller got stays whole.
+            let mut during = None;
+            let again = open_member(cache.path(), "remote:t9/movie.bin", &mut |_| {
+                during.get_or_insert_with(|| std::fs::metadata(&first).map(|m| m.len()).ok());
+                false
+            })
+            .await;
+            assert!(again.is_err());
+            let after = std::fs::metadata(&first).map(|m| m.len()).ok();
+            println!("EXPECTED: during Some({size}), after Some({size})");
+            println!("ACTUAL:   during {:?}, after {after:?}", during.flatten());
+            assert_eq!(during.flatten(), Some(size as u64), "the first copy was cut short meanwhile");
+            assert_eq!(after, Some(size as u64), "the first copy was removed");
+
+            // Two opens at once: the second runs start to end while the first is
+            // after its first chunk (gated in the first one's tick). Both get the whole file.
+            let mut second = None;
+            let first_again = open_member(cache.path(), "remote:t9/movie.bin", &mut |_| {
+                if second.is_none() {
+                    second = Some(std::thread::scope(|sc| {
+                        sc.spawn(|| {
+                            tauri::async_runtime::block_on(open_member(
+                                cache.path(),
+                                "remote:t9/movie.bin",
+                                &mut |_| true,
+                            ))
+                        })
+                        .join()
+                        .unwrap()
+                    }));
+                }
+                true
+            })
+            .await
+            .unwrap();
+            let second = second.unwrap().unwrap();
+            assert_eq!(first_again, second);
+            assert_eq!(std::fs::metadata(&second).unwrap().len(), size as u64);
+            // No half-downloaded copies left next to it.
+            let dir = Path::new(&second).parent().unwrap();
+            let names: Vec<_> = std::fs::read_dir(dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+            assert_eq!(names, ["movie.bin"]);
+        });
     }
 }

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 use std::time::SystemTime;
 
 use tauri::{AppHandle, Manager as _};
@@ -142,22 +142,48 @@ pub async fn archive_list(path: String) -> AppResult<Vec<FileEntry>> {
 #[tauri::command]
 #[specta::specta]
 pub async fn archive_open_member(app: AppHandle, path: String) -> AppResult<String> {
-    let (archive, inner) = parse(&path)?;
     let base = app.path().app_cache_dir().map_err(|e| AppError::Io { path: None, message: e.to_string() })?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let dir = base.join("archive-open").join(format!("{:x}", stable_hash(&path)));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).map_err(|e| AppError::from_io(&e, &dir))?;
-        let created = archive::extract_members(&archive, &[inner], &dir, &mut |_| true)
-            .map_err(|e| AppError::from_io(&e, &archive))?;
-        created
-            .into_iter()
-            .next()
-            .map(|p| p.to_string_lossy().into_owned())
-            .ok_or(AppError::NotFound { path })
-    })
-    .await
-    .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+    tauri::async_runtime::spawn_blocking(move || open_member(&base, path, &mut |_| true))
+        .await
+        .map_err(|e| AppError::Io { path: None, message: e.to_string() })?
+}
+
+/// Modified time, size and inode.
+type Stamp = (SystemTime, u64, u64);
+
+fn stamp(meta: &std::fs::Metadata) -> Stamp {
+    use std::os::unix::fs::MetadataExt as _;
+    (meta.modified().unwrap_or(SystemTime::UNIX_EPOCH), meta.len(), meta.ino())
+}
+
+/// A copy of a member: the archive it came from, the copy and how the copy was left.
+type Opened = Arc<Mutex<Option<(Stamp, PathBuf, Stamp)>>>;
+
+/// The last copy of each member opened, by virtual path. The preview pane and
+/// Quick Look open the same member at once: the second one gets the copy the
+/// first made instead of deleting it to extract it again.
+static OPENED: LazyLock<Mutex<HashMap<String, Opened>>> = LazyLock::new(Mutex::default);
+
+fn open_member(base: &Path, path: String, tick: &mut dyn FnMut(u64) -> bool) -> AppResult<String> {
+    let (archive, inner) = parse(&path)?;
+    let slot = OPENED.lock().unwrap_or_else(PoisonError::into_inner).entry(path.clone()).or_default().clone();
+    let mut last = slot.lock().unwrap_or_else(PoisonError::into_inner);
+    let source = stamp(&std::fs::metadata(&archive).map_err(|e| AppError::from_io(&e, &archive))?);
+    // Not when the archive or the copy changed since (an app saved over the copy).
+    if let Some((from, copy, left)) = last.as_ref()
+        && *from == source
+        && copy.symlink_metadata().is_ok_and(|m| stamp(&m) == *left)
+    {
+        return Ok(copy.to_string_lossy().into_owned());
+    }
+    let dir = base.join("archive-open").join(format!("{:x}", stable_hash(&path)));
+    archive::remove_staging(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::from_io(&e, &dir))?;
+    let created = archive::extract_members(&archive, &[inner], &dir, tick)
+        .map_err(|e| AppError::from_io(&e, &archive))?;
+    let copy = created.into_iter().next().ok_or(AppError::NotFound { path })?;
+    *last = copy.symlink_metadata().ok().map(|m| (source, copy.clone(), stamp(&m)));
+    Ok(copy.to_string_lossy().into_owned())
 }
 
 fn stable_hash(s: &str) -> u64 {
@@ -209,5 +235,79 @@ mod tests {
         assert_eq!(root[0].path, virtual_path(&zip_path, "docs"));
         let deep = list(&zip_path, "docs").unwrap();
         assert_eq!(deep.iter().map(|e| e.name.as_str()).collect::<Vec<_>>(), vec!["deep"]);
+    }
+
+    fn write_zip(path: &Path, files: &[(&str, &[u8])]) {
+        use std::io::Write as _;
+        let mut w = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+        for (name, data) in files {
+            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(data).unwrap();
+        }
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn opening_a_member_again_leaves_the_copy_in_use_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("box.zip");
+        write_zip(&zip_path, &[("notes.txt", b"first"), ("other.txt", b"other")]);
+        let cache = tmp.path().join("cache");
+        let path = virtual_path(&zip_path, "notes.txt");
+        let first = open_member(&cache, path.clone(), &mut |_| true).unwrap();
+        // Control: another member opens to its own copy.
+        let other = open_member(&cache, virtual_path(&zip_path, "other.txt"), &mut |_| true).unwrap();
+        assert_eq!(std::fs::read_to_string(other).unwrap(), "other");
+
+        // Opened again (preview pane and Quick Look at once): while that runs, the
+        // copy the first caller got is still there to read.
+        let mut during = None;
+        let second = open_member(&cache, path.clone(), &mut |_| {
+            during.get_or_insert_with(|| std::fs::read_to_string(&first).ok());
+            true
+        })
+        .unwrap();
+        println!("EXPECTED: during the second open Some(\"first\") (or not extracted again)");
+        println!("ACTUAL:   {during:?}");
+        assert!(!matches!(during, Some(None)), "the first copy was removed while the second open ran");
+        assert_eq!(second, first);
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "first");
+
+        // A changed archive is extracted again.
+        write_zip(&zip_path, &[("notes.txt", b"second edition"), ("other.txt", b"other")]);
+        let fresh = open_member(&cache, path.clone(), &mut |_| true).unwrap();
+        assert_eq!(std::fs::read_to_string(&fresh).unwrap(), "second edition");
+        // So is a copy an app saved over.
+        std::fs::write(&fresh, "edited in an app, longer").unwrap();
+        let again = open_member(&cache, path.clone(), &mut |_| true).unwrap();
+        assert_eq!(std::fs::read_to_string(&again).unwrap(), "second edition");
+        // And a copy that was deleted.
+        std::fs::remove_file(&again).unwrap();
+        let back = open_member(&cache, path.clone(), &mut |_| true).unwrap();
+        assert_eq!(std::fs::read_to_string(&back).unwrap(), "second edition");
+
+        // Two opens at once (gated): the first is held mid-extraction while the
+        // second starts; both end with the same, whole copy.
+        write_zip(&zip_path, &[("notes.txt", b"third"), ("other.txt", b"other")]);
+        let (in_tick, held) = std::sync::mpsc::channel();
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let (a, b) = std::thread::scope(|sc| {
+            let a = sc.spawn(|| {
+                let mut once = Some((in_tick, wait));
+                open_member(&cache, path.clone(), &mut |_| {
+                    if let Some((tx, rx)) = once.take() {
+                        tx.send(()).unwrap();
+                        rx.recv().unwrap();
+                    }
+                    true
+                })
+            });
+            held.recv().unwrap();
+            let b = sc.spawn(|| open_member(&cache, path.clone(), &mut |_| true));
+            release.send(()).unwrap();
+            (a.join().unwrap().unwrap(), b.join().unwrap().unwrap())
+        });
+        assert_eq!(a, b);
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "third");
     }
 }

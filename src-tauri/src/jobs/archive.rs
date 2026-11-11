@@ -310,8 +310,9 @@ fn unzip(
     password: Option<&str>,
     tick: &mut dyn FnMut(u64) -> bool,
     select: Select,
-) -> io::Result<()> {
+) -> io::Result<TopModes> {
     let mut zip = zip::ZipArchive::new(BufReader::new(File::open(archive)?)).map_err(io::Error::other)?;
+    let mut dirs: Vec<(PathBuf, u32)> = Vec::new();
     for i in 0..zip.len() {
         let entry = match password {
             Some(pw) => zip.by_index_decrypt(i, pw.as_bytes()),
@@ -332,6 +333,9 @@ fn unzip(
         let out = safe_join(staging, &rel)?;
         if entry.is_dir() {
             fs::create_dir_all(&out)?;
+            if let Some(mode) = entry.unix_mode() {
+                dirs.push((out, mode & 0o777));
+            }
             continue;
         }
         if let Some(parent) = out.parent() {
@@ -352,13 +356,13 @@ fn unzip(
         io::copy(&mut Progress { inner: &mut entry, tick: &mut *tick }, &mut file)?;
         // Permission bits only: never setuid/setgid from an archive.
         if let Some(mode) = entry.unix_mode() {
-            file.set_permissions(fs::Permissions::from_mode((mode & 0o777) | 0o200))?;
+            file.set_permissions(fs::Permissions::from_mode(mode & 0o777))?;
         }
         if let Some(t) = entry.last_modified().and_then(zip_to_system_time) {
             let _ = file.set_modified(t);
         }
     }
-    Ok(())
+    lock_dirs(dirs, staging)
 }
 
 /// A wrong or missing password reads as such, not as a generic zip error.
@@ -510,7 +514,13 @@ fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Resu
             dirs.push((out, mode));
         }
     }
-    // Deepest first, so a parent is locked only after its children are done.
+    Ok((lock_dirs(dirs, staging)?, links))
+}
+
+/// Gives extracted folders their mode once their contents are in: deepest first,
+/// so a parent is locked only after its children are done. Folders right inside
+/// `staging` are left to the caller (TopModes).
+fn lock_dirs(mut dirs: Vec<(PathBuf, u32)>, staging: &Path) -> io::Result<TopModes> {
     dirs.sort_by_key(|(p, _)| std::cmp::Reverse(p.components().count()));
     let mut top = TopModes::new();
     for (p, mode) in dirs {
@@ -519,7 +529,7 @@ fn untar<R: Read>(reader: R, staging: &Path, select: Option<Select>) -> io::Resu
             _ => fs::set_permissions(&p, fs::Permissions::from_mode(mode))?,
         }
     }
-    Ok((top, links))
+    Ok(top)
 }
 
 /// Writes the content of each hard link's target member to where the link goes.
@@ -549,7 +559,7 @@ fn fill_links<R: Read>(reader: R, links: &Links) -> io::Result<()> {
 }
 
 /// Removes a failed extraction, read-only folders included.
-fn remove_staging(staging: &Path) {
+pub(crate) fn remove_staging(staging: &Path) {
     fn unlock(dir: &Path) {
         let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
         for e in fs::read_dir(dir).into_iter().flatten().flatten() {
@@ -617,10 +627,7 @@ pub fn extract_to(
 
     let result = (|| {
         let top = match kind {
-            Kind::Zip => {
-                unzip(archive, &staging, password, tick, &|p| Some(p.to_path_buf()))?;
-                TopModes::new()
-            }
+            Kind::Zip => unzip(archive, &staging, password, tick, &|p| Some(p.to_path_buf()))?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 match kind {
@@ -758,10 +765,7 @@ pub fn extract_members(
     };
     let result = (|| {
         let top = match kind {
-            Kind::Zip => {
-                unzip(archive, &staging, known_password(archive).as_deref(), tick, &select)?;
-                TopModes::new()
-            }
+            Kind::Zip => unzip(archive, &staging, known_password(archive).as_deref(), tick, &select)?,
             _ => {
                 let raw = Progress { inner: BufReader::new(File::open(archive)?), tick: &mut *tick };
                 let (top, links) = match kind {
@@ -1312,5 +1316,49 @@ mod tests {
         let plain = tmp.path().join("plain.zip");
         compress(std::slice::from_ref(&src), &plain, ArchiveFormat::Zip, None, &mut |_| true).unwrap();
         assert!(unlock(&plain, "x").is_err());
+    }
+
+    #[test]
+    fn a_zip_keeps_its_file_and_folder_modes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = tmp.path().join("pack.zip");
+        {
+            let mut w = zip::ZipWriter::new(File::create(&zip_path).unwrap());
+            let opts = |mode| zip::write::SimpleFileOptions::default().unix_permissions(mode);
+            w.add_directory("pack/", opts(0o755)).unwrap();
+            w.add_directory("pack/ro/", opts(0o555)).unwrap();
+            w.start_file("pack/ro/locked.txt", opts(0o444)).unwrap();
+            w.write_all(b"locked").unwrap();
+            w.start_file("pack/plain.txt", opts(0o644)).unwrap();
+            w.write_all(b"plain").unwrap();
+            w.add_directory("private/", opts(0o700)).unwrap();
+            w.finish().unwrap();
+        }
+        let out = extract(&zip_path, None, &mut |_| true).unwrap();
+        let mode = |p: &str| fs::metadata(out.join(p)).unwrap().permissions().mode() & 0o777;
+        let modes = [mode("pack/plain.txt"), mode("pack/ro/locked.txt"), mode("pack/ro"), mode("private")];
+        println!("EXPECTED: [0o644, 0o444, 0o555, 0o700]");
+        println!("ACTUAL:   {:?}", modes.map(|m| format!("{m:#o}")));
+        for d in ["pack/ro", "private"] {
+            fs::set_permissions(out.join(d), fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        // Control: an ordinary file.
+        assert_eq!(modes[0], 0o644);
+        assert_eq!(modes, [0o644, 0o444, 0o555, 0o700]);
+
+        // Picked out of the zip (browsing): the read-only folder keeps its mode too.
+        let dest = tmp.path().join("picked");
+        fs::create_dir(&dest).unwrap();
+        let got = extract_members(&zip_path, &["pack/ro".into()], &dest, &mut |_| true).unwrap();
+        assert_eq!(got, [dest.join("ro")]);
+        let m = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!((m(&dest.join("ro")), m(&dest.join("ro/locked.txt"))), (0o555, 0o444));
+        // A failed extraction still cleans up read-only folders.
+        let staging = tmp.path().join("staging");
+        fs::create_dir_all(staging.join("ro")).unwrap();
+        fs::set_permissions(staging.join("ro"), fs::Permissions::from_mode(0o555)).unwrap();
+        remove_staging(&staging);
+        assert!(!staging.exists());
+        fs::set_permissions(dest.join("ro"), fs::Permissions::from_mode(0o755)).unwrap();
     }
 }
